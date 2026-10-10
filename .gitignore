@@ -1,6 +1,10 @@
 .pp/
 node_modules/
 *.pp-tmp
+desktop.ini
 
-
-library/**
+# Promptlar ayrı marketplace depolarında tutulur; araç reposuna girmez.
+/library/
+/plugins/
+/.claude-plugin/
+/pp.config.json
