@@ -14,14 +14,28 @@ Arayüz yalnızca bu bilgisayardan erişilebilir (127.0.0.1). Durdurmak için te
 
 ## İlk kullanım
 
-1. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Taslak olarak `library/gelen-kutusu` altına yazılır, orijinallere dokunulmaz.
-2. Promptları klasörlere taşı (sağ tık veya `⋯` menüsü), etiketle.
-3. **Git** > "Git deposunu başlat", sonra değişiklikleri commit et. Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
-4. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
+Promptlar araç klasörünün dışında, bir **library kökünde** tutulur. Kökün altındaki her klasör ayrı bir marketplace, yani ayrı bir git deposudur.
+
+1. İlk açılışta "Kuruluma devam et" ekranı çıkar. **Ayarlar**'ı aç, library kökünü seç. Windows'ta `D:\` sürücüsü varsa orada bir library klasörü önerilir. Klasör yoksa oluşturulmasını onaylarsın. Araç klasörünün içi seçilemez.
+2. Ayarlar'dan **Yeni marketplace** oluştur (örn. `ornek-promptlar`). Git deposu (dal `main`) ve iskelet dosyaları hazırlanır, otomatik commit atılmaz. Git deposu olmayan mevcut bir klasörü de seçip "Git'i başlat" diyebilirsin.
+3. Üst çubuktaki seçiciden etkin marketplace'i değiştirirsin. Git paneli her zaman etkin marketplace'in deposuna çalışır.
+4. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Taslak olarak `prompts/gelen-kutusu` altına yazılır, orijinallere dokunulmaz.
+5. Promptları klasörlere taşı (sağ tık veya `⋯` menüsü), etiketle.
+6. **Git** panelinden değişiklikleri commit et. Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
+7. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
+
+Kullanıcı ayarları (library kökü, etkin marketplace) şu dosyada tutulur; yolu Ayarlar penceresinde de görünür:
+
+1. Windows: `%APPDATA%\prompt-havuzu\config.json`
+2. macOS: `~/Library/Application Support/prompt-havuzu/config.json` (`XDG_CONFIG_HOME` varsa `$XDG_CONFIG_HOME/prompt-havuzu/config.json`)
+3. Linux: `$XDG_CONFIG_HOME/prompt-havuzu/config.json`, yoksa `~/.config/prompt-havuzu/config.json`
+4. `PP_CONFIG=<dosya>` ortam değişkeni bunların hepsini geçersiz kılar.
 
 ## Klasör yapısı
 
-1. `library/`: tek kaynak. Her prompt bir `.md` dosyası.
+Library kökü altında, her marketplace klasöründe (ayrı git deposu):
+
+1. `prompts/`: tek kaynak. Her prompt bir `.md` dosyası.
 2. `plugins/` ve `.claude-plugin/`: yayınlayınca otomatik üretilir. Elle düzenleme, kaynakta düzenle.
 3. `.pp/trash/`: silinenler buraya taşınır (git'e girmez).
 4. `pp.config.json`: marketplace ayarları (arayüz yazar).
@@ -41,10 +55,10 @@ Metin içinde `{{degisken}}` yazarsan **Kopyala** düğmesi değerleri sorar ve 
 
 Marketplace panelinde komutlar hazır gelir. Özeti:
 
-1. Bir kez: `claude plugin marketplace add <havuz klasörü>`
+1. Bir kez: `claude plugin marketplace add <marketplace klasörü>`
 2. Her projede: `claude plugin install <paket>@<marketplace>`
-3. Havuzu değiştirince: panelden yayınla, projelerde `claude plugin marketplace update <marketplace>`
-4. Doğrulamak için: `claude plugin validate <havuz klasörü>`
+3. Promptları değiştirince: panelden yayınla, projelerde `claude plugin marketplace update <marketplace>`
+4. Doğrulamak için: `claude plugin validate <marketplace klasörü>`
 
 Komut söz dizimi Claude Code sürümüne göre değişebilir. Şüphede `claude plugin --help` çalıştır.
 

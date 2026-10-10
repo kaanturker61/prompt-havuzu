@@ -1,0 +1,34 @@
+'use strict';
+/* Test yardımcıları: geçici klasörler ve izole git ortamı. Gerçek kullanıcı ayarlarına dokunmaz. */
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const gitAvailable = (() => { try { return spawnSync('git', ['--version']).status === 0; } catch (e) { return false; } })();
+
+function tmpDir(prefix = 'pp-test-') {
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+}
+
+function rmrf(dir) { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 }); }
+
+// GIT_CONFIG_GLOBAL/NOSYSTEM ile izole git ortamı. identity false ise kimlik tanımsız kalır.
+function gitEnv(dir, { identity = true } = {}) {
+  const cfg = path.join(dir, 'gitconfig');
+  fs.writeFileSync(cfg, identity ? '' : '[user]\n\tuseConfigOnly = true\n');
+  const env = { GIT_CONFIG_GLOBAL: cfg, GIT_CONFIG_NOSYSTEM: '1', HOME: dir, USERPROFILE: dir };
+  if (identity) {
+    Object.assign(env, {
+      GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com'
+    });
+  } else {
+    // Ortamdan kalıtılan kimlik değişkenlerini boşalt; yapılandırma da boş.
+    Object.assign(env, { GIT_AUTHOR_NAME: '', GIT_AUTHOR_EMAIL: '', GIT_COMMITTER_NAME: '', GIT_COMMITTER_EMAIL: '', EMAIL: '' });
+  }
+  return env;
+}
+
+module.exports = { gitAvailable, tmpDir, rmrf, gitEnv };
