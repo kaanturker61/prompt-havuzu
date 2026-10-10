@@ -17,6 +17,7 @@ const FM = require('./public/fm.js');
 const Rules = require('./public/rules.js');
 const { ConfigStore } = require('./lib/config-store');
 const { GitService, GitError } = require('./lib/git-service');
+const { VersionService, VersionError } = require('./lib/version-service');
 const { MarketplaceRegistry } = require('./lib/marketplace-registry');
 const { MarketplaceFactory } = require('./lib/marketplace-factory');
 const { SetupService, ROOT_BLOCKERS } = require('./lib/setup-service');
@@ -59,6 +60,13 @@ const gitService = new GitService({ forbiddenRoots: [TOOL_DIR] });
 const registry = new MarketplaceRegistry({ git: gitService, toolRoot: TOOL_DIR });
 const factory = new MarketplaceFactory({ git: gitService, templates, atomicWrite: (abs, data) => atomicWrite(abs, data, { mkdir: true }) });
 const setup = new SetupService({ configStore, registry, git: gitService, toolRoot: TOOL_DIR });
+const versions = new VersionService({
+  git: gitService,
+  files: { read: (a) => fsp.readFile(a), write: (a, d) => atomicWrite(a, d), stat: (a) => fsp.stat(a), utimes: (a, x, y) => fsp.utimes(a, x, y) },
+  decode,
+  listPrompts: async (_root, lib) => listMd(lib)
+});
+const vErr = (e) => (e instanceof VersionError ? httpErr(e.status, e.message, e.data) : e);
 
 const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v));
 const toList = (v) => (Array.isArray(v) ? v : String(v == null ? '' : v).split(','))
@@ -216,7 +224,7 @@ async function listDirs(relDir) {
   return out.sort((a, b) => a.localeCompare(b, 'tr'));
 }
 
-async function buildTree(abs, rel, libDir) {
+async function buildTree(abs, rel, libDir, vmap) {
   let ents;
   try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return []; }
   ents.sort((a, b) => (Number(b.isDirectory()) - Number(a.isDirectory())) || a.name.localeCompare(b.name, 'tr'));
@@ -226,7 +234,7 @@ async function buildTree(abs, rel, libDir) {
     const childRel = rel ? rel + '/' + e.name : e.name;
     const childAbs = path.join(abs, e.name);
     if (e.isDirectory()) {
-      out.push({ type: 'dir', name: e.name, path: childRel, children: await buildTree(childAbs, childRel, libDir) });
+      out.push({ type: 'dir', name: e.name, path: childRel, children: await buildTree(childAbs, childRel, libDir, vmap) });
     } else if (EDITABLE.has(path.extname(e.name).toLowerCase())) {
       const n = { type: 'file', name: e.name, path: childRel };
       try {
@@ -235,7 +243,8 @@ async function buildTree(abs, rel, libDir) {
           const inLib = !!libDir && childRel.startsWith(libDir + '/');
           n.meta = {
             baslik: str(it.meta.baslik), durum: str(it.meta.durum), tur: normTur(it.meta.tur),
-            uyari: inLib && it.check && it.check.level === 'warn' ? it.check.code : ''
+            uyari: inLib && it.check && it.check.level === 'warn' ? it.check.code : '',
+            surum: inLib ? ((vmap && vmap.get(childRel)) || '') : ''
           };
         }
       } catch (err) { /* okunamayan dosya: yalnızca ad */ }
@@ -573,7 +582,6 @@ async function importFiles(dirAbs, files, targetRel) {
     const p = FM.parse('');
     FM.set(p, 'baslik', titleFromName(base));
     FM.set(p, 'durum', 'taslak');
-    FM.set(p, 'versiyon', '1');
     FM.set(p, 'olusturma', st.mtime.toISOString().slice(0, 10));
     p.body = '\n' + text + '\n';
     const rel = await uniquePath(target.rel + '/' + FM.slug(base.replace(/\.[^.]+$/, '')) + '.md');
@@ -710,7 +718,8 @@ route('POST', '/api/marketplaces/git-init', async ({ body }) => {
 route('GET', '/api/tree', async () => {
   const cfg = await loadConfig();
   await fsp.mkdir(path.join(root(), cfg.libraryDir), { recursive: true });
-  return { libraryDir: cfg.libraryDir, tree: await buildTree(root(), '', cfg.libraryDir) };
+  const vmap = await versions.statusMap(root(), cfg.libraryDir).catch(() => new Map());
+  return { libraryDir: cfg.libraryDir, tree: await buildTree(root(), '', cfg.libraryDir, vmap) };
 });
 
 route('GET', '/api/facets', async () => facets());
@@ -759,7 +768,25 @@ route('PUT', '/api/file', async ({ body }) => {
   }
   await atomicWrite(abs, body.raw);
   const ns = await fsp.stat(abs);
-  return { ok: true, path: rel, mtime: Math.round(ns.mtimeMs) };
+  // Commit mesajı doluysa yalnızca bu dosya commit edilir (A.18); boşsa davranış eskisiyle aynıdır.
+  const msg = String(body.commitMessage || '').trim();
+  let commitInfo = {};
+  if (msg) {
+    try {
+      const gst = await gitService.status(root());
+      if (!gst.files.some((f) => f.path === rel)) commitInfo = { commit: null, commitSkipped: 'degisiklikYok' };
+      else commitInfo = { commit: await gitService.commitPaths(root(), msg, [rel]) };
+    } catch (e) {
+      await gitService.unstage(root(), [rel]).catch(() => {});
+      commitInfo = {
+        commit: null,
+        commitError: e instanceof GitError && e.isIdentityError
+          ? { error: 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', needIdentity: true }
+          : { error: e.message }
+      };
+    }
+  }
+  return { ok: true, path: rel, mtime: Math.round(ns.mtimeMs), ...commitInfo };
 });
 
 route('POST', '/api/file', async ({ body }) => {
@@ -858,6 +885,35 @@ route('GET', '/api/git/diff', async ({ q }) => {
     return { diff: cap(await gitService.showCommit(root(), hash, { path: rel })) };
   }
   return { diff: cap(await gitService.showCommit(root(), hash, { stat: true })) };
+});
+
+/* ---- sürüm ---- */
+
+// Yalnızca libraryDir altındaki .md/.markdown dosyaları için.
+async function promptPath(p) {
+  const { abs, rel } = safePath(p);
+  const cfg = await loadConfig();
+  if (!/.(md|markdown)$/i.test(rel) || !rel.startsWith(cfg.libraryDir + '/')) {
+    throw httpErr(400, 'Sürüm yalnızca prompt dosyaları için oluşturulur');
+  }
+  return { abs, rel, cfg };
+}
+
+route('GET', '/api/version', async ({ q }) => {
+  const { abs, rel, cfg } = await promptPath(q.get('path'));
+  const st = await fsp.stat(abs).catch(() => null);
+  if (!st || !st.isFile()) throw httpErr(404, 'Dosya bulunamadı');
+  try { return await versions.info(root(), cfg.libraryDir, rel, abs); } catch (e) { throw vErr(e); }
+});
+
+route('POST', '/api/version/bump', async ({ body }) => {
+  const { abs, rel, cfg } = await promptPath(body.path);
+  try {
+    return await versions.bump(root(), cfg.libraryDir, {
+      rel, abs, level: body.level, note: String(body.note || ''),
+      raw: typeof body.raw === 'string' ? body.raw : undefined, baseMtime: body.baseMtime
+    });
+  } catch (e) { throw vErr(e); }
 });
 
 /* ---- içe aktarma ---- */
@@ -1032,5 +1088,5 @@ process.on('unhandledRejection', (e) => console.error('Beklenmeyen hata:', e));
 if ('root' in ARGS) console.warn('Uyarı: --root artık desteklenmiyor. Library kökünü arayüzdeki Ayarlar bölümünden seç.');
 
 // Kök değişince arama önbelleği (köke göreli yollar) geçersiz olur.
-setup.onRootChange(() => cache.clear());
+setup.onRootChange(() => { cache.clear(); versions.clearCache(); });
 setup.evaluate().then(() => listen(PORT, 10));

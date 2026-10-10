@@ -55,3 +55,41 @@ test('publishCheck: tablo', () => {
   assert.equal(r.reason, 'Yayın alanları dolu (komut_adi) ama "tur" yok. Bu prompt yayınlanmayacak.');
   assert.equal(Rules.publishCheck({ meta: {} }).level, 'info');
 });
+
+test('coerceVersion: K3 tablosu', () => {
+  const eq = (v, e) => assert.deepEqual(Rules.coerceVersion(v), e, String(v));
+  eq(undefined, { version: '', legacy: false });
+  eq('', { version: '', legacy: false });
+  eq('1.0.2', { version: '1.0.2', legacy: false });
+  eq('1', { version: '1.0.0', legacy: true });
+  eq('1.2', { version: '1.2.0', legacy: true });
+  eq('v1.0.2', { version: '1.0.2', legacy: true });
+  eq('01.2', { version: '1.2.0', legacy: true });
+  eq('1.0.0-beta', null);
+  eq('taslak', null);
+  eq([1, 2], null);
+});
+
+test('bumpVersion ve compareVersions', () => {
+  assert.equal(Rules.bumpVersion('', 'buyuk'), '1.0.0');
+  assert.equal(Rules.bumpVersion('1', 'yama'), '1.0.1');
+  assert.equal(Rules.bumpVersion('1.2', 'kucuk'), '1.3.0');
+  assert.equal(Rules.bumpVersion('1.9.9', 'buyuk'), '2.0.0');
+  assert.equal(Rules.bumpVersion('1.0.0-beta', 'yama'), null);
+  assert.equal(Rules.bumpVersion('1.0.0', 'x'), null);
+  assert.equal(Rules.compareVersions('1.10.0', '1.9.9'), 1);
+  assert.equal(Rules.compareVersions('1.0.0', '1.0.0'), 0);
+  assert.equal(Rules.compareVersions('0.9.0', '1.0.0'), -1);
+});
+
+test('promptTagAd, promptTag, parsePromptTag', () => {
+  assert.equal(Rules.promptTagAd('prompts/Örnek Klasör/Merhaba Dünya.md', 'prompts'), 'ornek-klasor/merhaba-dunya');
+  assert.equal(Rules.promptTagAd('prompts/ornek/a.md', 'prompts'), 'ornek/a');
+  assert.equal(Rules.promptTagAd('plugins/x.md', 'prompts'), null);
+  const t = Rules.promptTag('ornek/a', '1.0.3');
+  assert.equal(t, 'prompt/ornek/a/v1.0.3');
+  assert.deepEqual(Rules.parsePromptTag(t), { ad: 'ornek/a', version: '1.0.3' });
+  assert.equal(Rules.parsePromptTag('prompt/a/v1.0'), null);
+  assert.equal(Rules.parsePromptTag('paket/a/v1.0.0'), null);
+  assert.match(Rules.MSG.surumGuncelDegil('1.0.2'), /v1\.0\.2/);
+});

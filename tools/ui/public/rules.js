@@ -17,6 +17,7 @@
     onYuzKapanmamis: 'Frontmatter kapanmamış (ikinci "---" satırı yok). Alanlar okunamıyor, bu prompt yayınlanmayacak.',
     dosyaBuyuk: 'Dosya 2 MB\'tan büyük. Dizinlenmiyor ve yayınlanmıyor.',
     yayinDisi: 'Tür seçilmemiş (yayın dışı).',
+    surumGuncelDegil: function (v) { return 'Son sürümden (v' + v + ') beri dosya değişti ama versiyon aynı. Yeni sürüm için +1\'e bas.'; },
     adUretilemedi: function (v) { return 'Ad üretilemedi ("' + v + '"), "adsiz" kullanılacak. "Ad" alanına harf veya rakam içeren bir değer yaz.'; }
   };
 
@@ -47,6 +48,63 @@
     return s || DEFAULT_VERSION;
   }
 
+  /* ---- prompt sürümü ve tag kuralları (Aşama 2) ---- */
+
+  const VERSION_LEVELS = ['buyuk', 'kucuk', 'yama'];
+  const LEVEL_LABEL = { buyuk: 'Büyük', kucuk: 'Küçük', yama: 'Yama' };
+  const PROMPT_TAG_PREFIX = 'prompt/';
+  const LEGACY_VER_RE = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/;
+  const PROMPT_TAG_RE = /^prompt\/(.+)\/v(\d+\.\d+\.\d+)$/;
+
+  // Ham `versiyon` değerini yorumlar. Alan boşsa { version: '' }, yorumlanamazsa null.
+  function coerceVersion(v) {
+    if (Array.isArray(v)) return null;
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return { version: '', legacy: false };
+    if (SEMVER_RE.test(s)) return { version: s, legacy: false };
+    const m = LEGACY_VER_RE.exec(s);
+    if (!m) return null;
+    return { version: [m[1], m[2] || '0', m[3] || '0'].map(function (x) { return String(parseInt(x, 10)); }).join('.'), legacy: true };
+  }
+
+  // v boşsa DEFAULT_VERSION döner. Yorumlanamazsa veya seviye geçersizse null.
+  function bumpVersion(v, level) {
+    if (VERSION_LEVELS.indexOf(level) < 0) return null;
+    const c = coerceVersion(v);
+    if (!c) return null;
+    if (!c.version) return DEFAULT_VERSION;
+    const n = c.version.split('.').map(Number);
+    if (level === 'buyuk') return (n[0] + 1) + '.0.0';
+    if (level === 'kucuk') return n[0] + '.' + (n[1] + 1) + '.0';
+    return n[0] + '.' + n[1] + '.' + (n[2] + 1);
+  }
+
+  function compareVersions(a, b) {
+    const x = String(a).split('.').map(Number); const y = String(b).split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+      if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1;
+    }
+    return 0;
+  }
+
+  // 'prompts/Örnek/Merhaba Dünya.md' -> 'ornek/merhaba-dunya'. Kitaplık dışındaysa null.
+  function promptTagAd(rel, libraryDir) {
+    const r = String(rel || '').replace(/\\/g, '/');
+    const lib = String(libraryDir || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!lib || r.indexOf(lib + '/') !== 0) return null;
+    const rest = r.slice(lib.length + 1).replace(/\.(md|markdown)$/i, '');
+    if (!rest) return null;
+    return rest.split('/').map(function (part) { return FM.slug(part); }).join('/');
+  }
+
+  function promptTag(ad, version) { return PROMPT_TAG_PREFIX + ad + '/v' + version; }
+
+  function parsePromptTag(name) {
+    const m = PROMPT_TAG_RE.exec(String(name));
+    if (!m || !SEMVER_RE.test(m[2])) return null;
+    return { ad: m[1], version: m[2] };
+  }
+
   // Yayına girmeyen prompt için neden. Yayına girebiliyorsa null.
   function publishCheck(o) {
     const meta = (o && o.meta) || {};
@@ -65,6 +123,9 @@
   return {
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
     DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, checkVersion: checkVersion,
-    normalizeVersion: normalizeVersion, MSG: MSG
+    normalizeVersion: normalizeVersion, MSG: MSG,
+    VERSION_LEVELS: VERSION_LEVELS, LEVEL_LABEL: LEVEL_LABEL, PROMPT_TAG_PREFIX: PROMPT_TAG_PREFIX,
+    coerceVersion: coerceVersion, bumpVersion: bumpVersion, compareVersions: compareVersions,
+    promptTagAd: promptTagAd, promptTag: promptTag, parsePromptTag: parsePromptTag
   };
 });

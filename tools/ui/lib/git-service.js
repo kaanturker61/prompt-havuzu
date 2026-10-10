@@ -7,6 +7,7 @@ const path = require('path');
 const { samePath, isInside } = require('./paths');
 
 const HASH_RE = /^[0-9a-f]{7,40}$/;
+const REF_RE = /^[a-z0-9][a-z0-9/._-]*$/;
 const IDENTITY_RE = /Author identity unknown|tell me who you are|empty ident/i;
 
 class GitError extends Error {
@@ -150,9 +151,10 @@ class GitService {
     return (await this.run(dir, ['rev-parse', '--short', 'HEAD'])).trim();
   }
 
-  async log(dir, { path: rel, limit = 60, follow = false } = {}) {
+  async log(dir, { path: rel, limit = 60, follow = false, range } = {}) {
+    if (range) { const [a, b] = String(range).split('..'); this._checkHash(a); if (b !== 'HEAD') this._checkHash(b); }
     const fmt = '--format=%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s';
-    const args = ['log', ...(follow ? ['--follow'] : []), ...(rel ? ['--name-only'] : []), '-n', String(limit), fmt, ...(rel ? ['--', rel] : [])];
+    const args = ['log', ...(follow ? ['--follow'] : []), ...(rel ? ['--name-only'] : []), '-n', String(limit), fmt, ...(range ? [range] : []), ...(rel ? ['--', rel] : [])];
     let out;
     try { out = await this.run(dir, args); } catch (e) {
       if (/does not have any commits|bad default revision|unknown revision/i.test(e.message)) return [];
@@ -163,6 +165,75 @@ class GitService {
 
   _checkHash(hash) {
     if (!HASH_RE.test(String(hash))) throw new GitError('Geçersiz commit');
+  }
+
+  _checkRef(name, { prefix = false } = {}) {
+    const n = String(name);
+    if (!REF_RE.test(n) || n.includes('..') || (!prefix && n.endsWith('/')) || n.endsWith('.lock')) throw new GitError('Geçersiz tag adı');
+  }
+
+  // HEAD'in tam hash'i; doğmamış dalda null.
+  async headCommit(dir) {
+    try { return (await this.run(dir, ['rev-parse', '--verify', '-q', 'HEAD'])).trim() || null; } catch (e) {
+      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      return null;
+    }
+  }
+
+  async createTag(dir, name, message, commit) {
+    this._checkRef(name); this._checkHash(commit);
+    await this.run(dir, ['tag', '-a', '--cleanup=whitespace', '-m', message, name, commit]);
+  }
+
+  async deleteTag(dir, name) {
+    this._checkRef(name);
+    await this.run(dir, ['tag', '-d', name]);
+  }
+
+  // [{ name, object, commit, date }]. prefix 'prompt/' gibi, '/' ile biten bir ad alanıdır.
+  async listTags(dir, prefix = '') {
+    if (prefix) this._checkRef(prefix, { prefix: true });
+    const fmt = '--format=%(refname:strip=2)%1f%(objectname)%1f%(*objectname)%1f%(creatordate:iso-strict)';
+    const out = await this.run(dir, ['for-each-ref', fmt, 'refs/tags/' + prefix]);
+    return out.split('\n').filter(Boolean).map((line) => {
+      const [name, object, peeled, date] = line.split('\x1f');
+      return { name, object, commit: peeled || object, date };
+    });
+  }
+
+  // commit'i CAS ile geri alır: HEAD artık o commit değilse hata verir.
+  async undoCommit(dir, { commit, parent } = {}) {
+    this._checkHash(commit);
+    if (parent) {
+      this._checkHash(parent);
+      await this.run(dir, ['update-ref', '-m', 'prompt-havuzu: sürüm geri alındı', 'HEAD', parent, commit]);
+      return;
+    }
+    const ref = (await this.run(dir, ['symbolic-ref', '-q', 'HEAD'])).trim();
+    if (!ref) throw new GitError('HEAD bir dala bağlı değil, ilk commit geri alınamadı');
+    await this.run(dir, ['update-ref', '-d', ref, commit]);
+  }
+
+  // Yolları index'ten çıkarır (çalışma ağacına dokunmaz).
+  async unstage(dir, paths) {
+    if (!paths || !paths.length) return;
+    if (await this.hasCommits(dir)) await this.run(dir, ['reset', '-q', '--', ...paths]);
+    else await this.run(dir, ['rm', '--cached', '-q', '--ignore-unmatch', '--', ...paths]);
+  }
+
+  // rev:rel blob'unun sha'sı; yoksa null.
+  async blobAt(dir, rev, rel) {
+    this._checkHash(rev);
+    try { return (await this.run(dir, ['rev-parse', '--verify', '-q', rev + ':' + rel])).trim() || null; } catch (e) {
+      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      return null;
+    }
+  }
+
+  // Çalışma ağacındaki dosyaların blob sha'ları (eol/gitattributes uygulanır); sırayla döner.
+  async hashFiles(dir, rels) {
+    if (!rels || !rels.length) return [];
+    return (await this.run(dir, ['hash-object', '--', ...rels])).split('\n').map((s) => s.trim()).filter(Boolean);
   }
 
   async showFile(dir, hash, rel) {

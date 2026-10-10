@@ -310,3 +310,73 @@ test('sunucu: yayına girmeyen promptlar nedeniyle raporlanır (D2)', { skip: !g
     rmrf(tmp);
   }
 });
+
+test('sunucu: kaydet-commit ve sürüm (Aşama 2)', { skip: !gitAvailable && 'git yok' }, async () => {
+  const tmp = tmpDir();
+  const srv = await start(tmp);
+  try {
+    const lib = path.join(tmp, 'PromptLibrary');
+    let r = await srv.call('PUT', '/api/settings', { libraryRoot: lib, create: true });
+    assert.equal(r.status, 200);
+    r = await srv.call('POST', '/api/marketplaces', { name: 'mp' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    const P = 'prompts/ornek/a.md';
+    const mpDir = path.join(lib, 'mp');
+    const RAW = '---\nbaslik: A\n---\n\nbir\n';
+    r = await srv.call('POST', '/api/file', { path: P, raw: RAW });
+    assert.equal(r.status, 200);
+    let mtime = r.data.mtime;
+
+    // Kaydet + commit
+    r = await srv.call('PUT', '/api/file', { path: P, raw: RAW, commitMessage: 'ilk' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.match(r.data.commit, /^[0-9a-f]{7,}$/);
+    r = await srv.call('GET', '/api/git/log?path=' + encodeURIComponent(P));
+    assert.equal(r.data.commits.length, 1);
+    r = await srv.call('PUT', '/api/file', { path: P, raw: RAW, commitMessage: 'tekrar' });
+    assert.equal(r.data.commitSkipped, 'degisiklikYok'); assert.equal(r.data.commit, null);
+    r = await srv.call('PUT', '/api/file', { path: P, raw: RAW });
+    assert.equal('commit' in r.data, false);
+    mtime = r.data.mtime;
+
+    // Sürüm
+    r = await srv.call('GET', '/api/version?path=' + encodeURIComponent(P));
+    assert.equal(r.status, 200);
+    assert.equal(r.data.ilkSurum, true); assert.equal(r.data.oneriler.yama, '1.0.0');
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'İlk sürüm', baseMtime: mtime });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.version, '1.0.0'); assert.equal(r.data.tag, 'prompt/ornek/a/v1.0.0');
+    assert.match(fs.readFileSync(path.join(mpDir, P), 'utf8'), /^versiyon: 1\.0\.0$/m);
+
+    // tutarlılık uyarısı
+    r = await srv.call('GET', '/api/file?path=' + encodeURIComponent(P));
+    const changed = r.data.raw + 'yeni satir\n';
+    r = await srv.call('PUT', '/api/file', { path: P, raw: changed });
+    const treeFile = (t) => { for (const n of t) { if (n.path === P) return n; if (n.children) { const f = treeFile(n.children); if (f) return f; } } return null; };
+    r = await srv.call('GET', '/api/tree');
+    assert.equal(treeFile(r.data.tree).meta.surum, 'surumGuncelDegil');
+    r = await srv.call('GET', '/api/version?path=' + encodeURIComponent(P));
+    assert.equal(r.data.uyari.code, 'surumGuncelDegil');
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'kucuk', note: 'ikinci' });
+    assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.version, '1.1.0');
+    r = await srv.call('GET', '/api/tree');
+    assert.equal(treeFile(r.data.tree).meta.surum, '');
+
+    // hatalar
+    const cur = fs.readFileSync(path.join(mpDir, P), 'utf8');
+    fs.writeFileSync(path.join(mpDir, P), cur.replace('versiyon: 1.1.0', 'versiyon: 1.0.0'));
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'n' });
+    assert.equal(r.status, 409); assert.equal(r.data.code, 'surumGeride');
+    fs.writeFileSync(path.join(mpDir, P), cur.replace('versiyon: 1.1.0', 'versiyon: abc'));
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'n' });
+    assert.equal(r.status, 400); assert.equal(r.data.field, 'versiyon');
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: '' });
+    assert.equal(r.status, 400); assert.equal(r.data.field, 'note');
+    r = await srv.call('POST', '/api/version/bump', { path: 'pp.config.json', level: 'yama', note: 'n' });
+    assert.equal(r.status, 400);
+    r = await srv.call('GET', '/api/version?path=pp.config.json');
+    assert.equal(r.status, 400);
+    r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'n', baseMtime: 12345 });
+    assert.equal(r.status, 409); assert.equal(r.data.conflict, true);
+  } finally { await srv.stop(); rmrf(tmp); }
+});

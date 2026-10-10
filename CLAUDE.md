@@ -29,7 +29,8 @@ Prompt havuzu: promptları library kökündeki marketplace klasörlerinde `.md` 
   - `paths.js`: ayar dosyası yolu, `samePath`/`isInside` (Windows büyük-küçük harf, `realpath`), kök önerisi.
   - `undo.js`: `UndoStack` (adımlar ters sırada, hatalar `AggregateError`).
   - `config-store.js`: `ConfigStore` (atomik yazma, bozuk dosyada `.bak`).
-  - `git-service.js`: `GitService`, `GitError`, `GitNotFoundError`.
+  - `git-service.js`: `GitService`, `GitError`, `GitNotFoundError`. Sürüm/tag için: `headCommit`, `listTags`, `createTag`, `deleteTag`, `undoCommit` (`update-ref` CAS), `unstage`, `blobAt`, `hashFiles`; `log` için `range` seçeneği.
+  - `version-service.js`: `VersionService` (`info`, `statusMap`, `bump`), `VersionError`. +1: dosyayı yaz, commit, annotated tag; her adımda `UndoStack` ile geri alma. Git komutu bilmez, yalnızca `GitService` metotlarını çağırır.
   - `marketplace-registry.js`, `marketplace-factory.js`, `templates.js`: marketplace keşfi, oluşturma (git init + iskelet, hata olursa geri alma), var olan klasörde git başlatma.
   - `setup-service.js`: `SetupService`, kurulum durumunu değerlendirir; kök değişince arama önbelleği temizlenir.
 - `tools/ui/public/fm.js`: frontmatter ayrıştırıcı/yazıcı; hem Node (`require`) hem tarayıcıda (`window.FM`) çalışır, sunucu ve arayüz aynı kodu paylaşır. Bilinmeyen anahtarları ve biçimlendirmeyi olduğu gibi korur, yalnızca değişen anahtarın satırını yeniden yazar (git farkları küçük kalsın diye). Yeni standart alanlar `CANON` sırasına eklenir. `fold` (Türkçe karakter/büyük-küçük harf yok sayan arama) ve `slug` da burada.
@@ -47,4 +48,5 @@ Prompt havuzu: promptları library kökündeki marketplace klasörlerinde `.md` 
 - Dosya erişimi `safePath` üzerinden geçmeli (etkin marketplace kökü dışına ve `.git`'e çıkışı engeller). Yazmalar `atomicWrite` (tmp + rename), silmeler `toTrash` ile yapılır.
 - `IGNORE` kümesi (`.git`, `node_modules`, `.pp`, `tools`) ağaç ve aramadan dışlanır; arama dizini `cache` içinde mtime/size ile tutulur (kök değişince temizlenir).
 - Dosya okuma `decode` ile UTF-8, UTF-16 ve windows-1254 (eski Türkçe ANSI) destekler; yeni okuma yolları doğrudan `toString('utf8')` yerine bunu kullanmalı.
-- Yeni marketplace iskeleti `.gitattributes` ile `*.md` ve `*.json` için LF zorlar. Otomatik ilk commit yoktur; commit'i kullanıcı Git panelinden atar.
+- Yeni marketplace iskeleti `.gitattributes` ile `*.md` ve `*.json` için LF zorlar. Otomatik ilk commit yoktur. Commit iki yoldan atılır: Git paneli ya da Kaydet sırasında dolu commit mesajı (`PUT /api/file` + `commitMessage`, yalnızca o dosya commit edilir; mesaj boşsa yalnızca diske yazılır).
+- Prompt sürümü: `versiyon` alanı `X.Y.Z` olmalı. `Rules.coerceVersion` eski biçimleri (`1`, `1.2`, `v1.0.2`) yorumlar, `Rules.bumpVersion(v, seviye)` (`buyuk|kucuk|yama`) artırır; alan boşsa ilk +1 `1.0.0` üretir. Yeni prompt ve içe aktarma `versiyon` yazmaz. +1 (`POST /api/version/bump`) dosyayı yazar, yalnızca o dosyayı commit eder ve `prompt/<ad>/vX.Y.Z` annotated tag'ini sürüm notuyla atar; `<ad>` = `Rules.promptTagAd` (libraryDir'e göre göreli yol, parça parça `FM.slug`). Son sürümden beri içerik değişip `versiyon` aynıysa `surumGuncelDegil` uyarısı verilir (`meta.surum`, `GET /api/version`). Push yok.

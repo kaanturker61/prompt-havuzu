@@ -21,7 +21,7 @@ Promptlar araç klasörünün dışında, bir **library kökünde** tutulur. Kö
 3. Üst çubuktaki seçiciden etkin marketplace'i değiştirirsin. Git paneli her zaman etkin marketplace'in deposuna çalışır.
 4. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Taslak olarak `prompts/gelen-kutusu` altına yazılır, orijinallere dokunulmaz.
 5. Promptları klasörlere taşı (sağ tık veya `⋯` menüsü), etiketle.
-6. **Git** panelinden değişiklikleri commit et. Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
+6. Editörde **Commit mesajı** kutusunu doldurup Kaydet'e basarsan dosya kaydedilir ve yalnızca o dosya commit edilir; kutu boşsa yalnızca kaydedilir ("Commit bekliyor" görünür). **Git** panelinden de commit atabilirsin. **+1** düğmesi `versiyon` alanını artırır, commit ve `prompt/<ad>/vX.Y.Z` tag'i atar (sürüm notu zorunlu). Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
 7. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
 
 Kullanıcı ayarları (library kökü, etkin marketplace) şu dosyada tutulur; yolu Ayarlar penceresinde de görünür:
@@ -44,7 +44,7 @@ Library kökü altında, her marketplace klasöründe (ayrı git deposu):
 
 Hepsi isteğe bağlı. Tanımadığımız alanlara dokunulmaz.
 
-1. `baslik`, `etiketler`, `projeler`, `durum` (taslak, kararlı, arşiv), `versiyon`, `olusturma`
+1. `baslik`, `etiketler`, `projeler`, `durum` (taslak, kararlı, arşiv), `versiyon` (yayınlanan son sürüm, +1 ile artar; boşsa ilk +1 `1.0.0` olur), `olusturma`
 2. `tur`: `komut`, `ajan` veya `skill` yazarsan yayınlanabilir olur
 3. `paket`: hangi pluginin içine gireceği. Projelere sadece ihtiyacın olan paketi kurmak için kullan
 4. `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model`: Claude Code dosyasına dönüştürülür

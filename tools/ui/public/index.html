@@ -133,6 +133,11 @@ mark { background: color-mix(in srgb, var(--pool) 28%, transparent); color: inhe
 .grid2 label.chk { display: flex; }
 .inline { display: flex; gap: 8px; align-items: center; }
 .inline input { flex: 1; }
+.commitbar { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.commitbar input { flex: 1; }
+#verWarn { margin-left: 8px; }
+.bumpopts { border: 1px solid var(--line); border-radius: 5px; padding: 8px 12px; }
+.bumpopts label { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; background: var(--card); min-height: 34px; }
 .chips:focus-within { border-color: var(--pool); }
 .chip { display: inline-flex; align-items: center; background: var(--pool-tint); color: var(--pool-deep); border-radius: 999px; padding: 0 3px 0 10px; font-size: 12.5px; }
@@ -408,7 +413,16 @@ async function loadGit() {
   if (!setupOk()) { S.git = { isRepo: false, error: firstError() }; renderGitBadge(); return S.git; }
   try { S.git = await get('/api/git/status'); } catch (e) { S.git = { isRepo: false, error: e.message }; }
   renderGitBadge();
+  syncCommitBar();
   return S.git;
+}
+// Git durumu değişince commit çubuğunu, +1 ve Kaydet düğmelerini günceller.
+function syncCommitBar() {
+  if (!S.cur) return;
+  const repo = !!(S.git && S.git.isRepo);
+  const bar = $('#commitBar'); if (bar) bar.hidden = !repo;
+  const b = $('#btnBump'); if (b) b.disabled = !repo;
+  updateDirty();
 }
 async function loadRecent() { try { S.recent = (await get('/api/search?q=')).results.slice(0, 8); } catch (e) { S.recent = []; } }
 
@@ -447,7 +461,7 @@ function nodeHtml(n, depth) {
   const m = n.meta;
   const label = m && m.baslik ? m.baslik : n.name;
   return `<div class="row file${active}" role="treeitem" tabindex="0" data-act="open" data-path="${esc(n.path)}" style="--d:${depth}" title="${esc(n.path)}">
-    <span class="dot ${m ? durumClass(m.durum) : ''}"></span><span class="name">${esc(label)}</span>${m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : ''}${m && m.uyari ? '<span class="pill warn" title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>' : ''}
+    <span class="dot ${m ? durumClass(m.durum) : ''}"></span><span class="name">${esc(label)}</span>${m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : ''}${m && m.uyari ? '<span class="pill warn" title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>' : ''}${m && m.surum ? '<span class="pill warn" title="Son sürümden beri değişti, versiyon aynı" aria-label="Sürüm uyarısı">v</span>' : ''}
     <button class="more" data-act="menu" data-path="${esc(n.path)}" data-type="file" aria-label="${esc(label)} için işlemler">⋯</button></div>`;
 }
 
@@ -599,10 +613,19 @@ function syncFromDom() {
     if (t) { const p = FM.parse(t.value); p.eol = c.eol; p.bom = c.bom; c.parsed = p; c.lead = leadOf(p); }
   }
 }
+const uncommitted = (p) => !!(S.git && S.git.isRepo && S.git.files.some((f) => f.path === p));
+function saveLabel() {
+  const c = S.cur; const msg = c.commitMsg.trim();
+  if (c.dirty) return msg ? 'Kaydet ve commit et' : 'Kaydet';
+  if (msg && uncommitted(c.path)) return 'Commit et';
+  return 'Kaydet';
+}
 function updateDirty() {
   const c = S.cur; if (!c) return;
   c.dirty = computeRaw() !== c.savedRaw;
-  const b = $('#btnSave'); if (b) b.disabled = !c.dirty;
+  const b = $('#btnSave');
+  if (b) { b.disabled = !(c.dirty || (uncommitted(c.path) && c.commitMsg.trim())); b.textContent = saveLabel(); }
+  const cp = $('#commitPill'); if (cp) cp.hidden = !(uncommitted(c.path) && !c.dirty);
   document.title = (c.dirty ? '• ' : '') + 'Prompt havuzu';
   const n = $('#dirtyNote'); if (n) n.hidden = !c.dirty;
 }
@@ -628,11 +651,12 @@ async function openFile(p, o) {
   S.cur = {
     path: r.path, parsed, savedRaw: r.raw, mtime: r.mtime, isPrompt: r.isPrompt, isMd: r.isMd,
     generatedFrom: r.generatedFrom, publish: r.publish, eol: parsed.eol, bom: parsed.bom, lead: leadOf(parsed),
-    tab: o.tab || (r.isPrompt ? 'edit' : 'raw'), hist: null, dirty: false, external: false
+    tab: o.tab || (r.isPrompt ? 'edit' : 'raw'), hist: null, dirty: false, external: false, commitMsg: (o.reload && S.cur && S.cur.path === p) ? S.cur.commitMsg : '', ver: null
   };
   ls.set(lsKey('last'), r.path);
   expandParents(r.path);
   closeSide(); renderList(); renderMain();
+  loadVersion();
   if (S.cur.tab === 'hist') loadHistory();
   document.title = 'Prompt havuzu';
 }
@@ -684,8 +708,9 @@ function editPaneHtml() {
       ${dOpt.map((d) => `<option value="${d[0]}" ${fold(d[0]) === durumVal ? 'selected' : ''}>${d[1]}</option>`).join('')}
       ${durumVal && !known ? `<option value="${esc(str(m.durum))}" selected>${esc(str(m.durum))}</option>` : ''}
     </select>
-    <label for="fVer">Versiyon</label>
-    <div class="inline"><input id="fVer" data-f="versiyon" value="${esc(str(m.versiyon))}" placeholder="1"><button type="button" class="btn sm" data-act="bump" title="Versiyonu bir artır">+1</button></div>
+    <label for="fVer">Sürüm</label>
+    <div><div class="inline"><input id="fVer" data-f="versiyon" value="${esc(str(m.versiyon))}" placeholder="Henüz sürüm yok (+1 ile 1.0.0)" aria-describedby="verHint"><button type="button" class="btn sm" id="btnBump" data-act="bump" title="Yeni sürüm oluştur: versiyon artar, commit ve tag atılır" ${S.git && S.git.isRepo ? '' : 'disabled'}>+1</button><span id="verWarn" class="pill warn" role="status" hidden></span></div>
+    <div id="verHint" class="hint" hidden></div></div>
     <label>Projeler</label>${chipsHtml('projeler', toList(m.projeler), 'Hangi projelerde kullanılıyor?')}
   </div>
   <details class="pub" id="pubBox" ${pubOpen ? 'open' : ''}>
@@ -734,7 +759,7 @@ function histPaneHtml() {
   const items = [];
   if (h.working && (h.working.diff || h.working.untracked)) items.push(`<li data-act="hist-select" data-hash="working" class="${h.sel === 'working' ? 'on' : ''}"><div class="s">Commit edilmemiş değişiklikler</div><div class="hint">${h.working.untracked ? 'Dosya henüz git\'e eklenmedi' : 'Son commit ile fark'}</div></li>`);
   for (const k of h.commits) items.push(`<li data-act="hist-select" data-hash="${k.hash}" class="${h.sel === k.hash ? 'on' : ''}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`);
-  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Değişikliklerini Git panelinden commit et.</p>';
+  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Kaydederken commit mesajı yazarsan commit edilir.</p>';
   return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">Bir kayıt seç.</pre></div></div>`;
 }
 
@@ -764,7 +789,12 @@ function renderMainInner() {
   main.innerHTML = `<section class="card">
     <div class="crumbs">${crumbs}</div>
     <div class="titlebar">${title}
-      <div class="tbtns">${c.isMd ? '<button class="btn" data-act="copy" title="Prompt metnini panoya kopyala">Kopyala</button>' : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty ? '' : 'disabled'} title="Ctrl+S">Kaydet</button></div>
+      <div class="tbtns">${c.isMd ? '<button class="btn" data-act="copy" title="Prompt metnini panoya kopyala">Kopyala</button>' : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty || (uncommitted(c.path) && c.commitMsg.trim()) ? '' : 'disabled'} title="Ctrl+S">${esc(saveLabel())}</button></div>
+    </div>
+    <div class="commitbar" id="commitBar" ${S.git && S.git.isRepo ? '' : 'hidden'}>
+      <label for="commitMsg" class="hint">Commit mesajı</label>
+      <input id="commitMsg" value="${esc(c.commitMsg)}" placeholder="Ne değişti, neden? (boşsa yalnızca kaydedilir)" autocomplete="off">
+      <span id="commitPill" class="pill warn" ${uncommitted(c.path) && !c.dirty ? '' : 'hidden'}>Commit bekliyor</span>
     </div>
     ${banner}${ext}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
@@ -772,6 +802,7 @@ function renderMainInner() {
   if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
   if (c.tab === 'hist') paintHist();
+  paintVerHint(); paintVerWarn();
 }
 
 function startHtml() {
@@ -794,6 +825,36 @@ function setField(key, value) {
     const pb = $('#pubBox button[data-act="publish-now"]'); if (pb) pb.disabled = !normTur(value);
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
+  if (key === 'versiyon') paintVerHint();
+}
+
+// Sürüm alanı yorumlanamıyorsa ya da eski biçimdeyse ipucu gösterir.
+function paintVerHint() {
+  const c = S.cur; const h = $('#verHint'); if (!c || !h) return;
+  const raw = str(FM.meta(c.parsed).versiyon).trim();
+  const v = Rules.coerceVersion(raw);
+  let t = '';
+  if (v === null) t = 'Sürüm yorumlanamadı. X.Y.Z biçiminde yaz (örnek: 1.0.0).';
+  else if (v.legacy) t = 'Eski biçim: "' + raw + '", ' + v.version + ' olarak yorumlanır.';
+  h.hidden = !t; h.textContent = t;
+}
+
+async function loadVersion() {
+  const c = S.cur; if (!c || !c.isPrompt) return;
+  try {
+    const v = await get('/api/version?' + qs({ path: c.path }));
+    if (S.cur === c) { c.ver = v; paintVerWarn(); }
+  } catch (e) { /* sessiz */ }
+}
+
+function paintVerWarn() {
+  const c = S.cur; const w = $('#verWarn'); if (!c || !w) return;
+  const u = c.ver && c.ver.uyari;
+  w.hidden = !u;
+  if (u) {
+    w.textContent = 'v' + c.ver.sonSurum.version + '\'dan beri değişti';
+    w.title = u.message; w.setAttribute('aria-label', u.message);
+  }
 }
 
 function refreshPubWarn() {
@@ -825,15 +886,6 @@ function removeChip(key, val) {
   refreshChips(key);
 }
 
-function bumpVersion(v) {
-  v = String(v || '').trim();
-  if (!v) return '1';
-  if (/^\d+$/.test(v)) return String(Number(v) + 1);
-  const m = v.match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
-  if (m) return m[3] !== undefined ? m[1] + '.' + m[2] + '.' + (Number(m[3]) + 1) : m[1] + '.' + (Number(m[2]) + 1);
-  return v + '.1';
-}
-
 function setTab(tab) {
   const c = S.cur; if (!c || c.tab === tab) return;
   syncFromDom();
@@ -842,9 +894,8 @@ function setTab(tab) {
   if (tab === 'hist') loadHistory();
 }
 
-async function save(force) {
-  const c = S.cur; if (!c) return false;
-  syncFromDom();
+// "tur" kaldırılıyorsa onay ister. false dönerse işlem iptal edilmiştir.
+async function confirmTurRemoval(c, force) {
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
   if (c.isPrompt && before && !Rules.normTur(FM.meta(c.parsed).tur) && !c.turClearedExplicitly && !force) {
     const a = await askChoice({
@@ -858,18 +909,169 @@ async function save(force) {
       renderMain();
     }
   }
-  const raw = FM.stringify(c.parsed);
+  return true;
+}
+
+// Git kimliği penceresi. Kimlik kaydedilirse true döner.
+function askIdentity() {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    const idn = (S.git && S.git.identity) || {};
+    const opener = document.activeElement;
+    openModal({
+      title: 'Git kimliği',
+      html: `<form class="stack" id="idForm"><p>Git, commit yazarını bilmiyor. Bu marketplace için ad ve e-posta gir.</p>
+        <label>Ad Soyad<input id="idName" value="${esc(idn.name || '')}" autocomplete="name"></label>
+        <label>E-posta<input id="idMail" type="email" value="${esc(idn.email || '')}" autocomplete="email"></label>
+        <div id="idErr" class="issue error" role="alert" hidden></div>
+        <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div></form>`,
+      onMount: (b) => {
+        $('#idForm', b).addEventListener('submit', async (e) => {
+          e.preventDefault();
+          try {
+            await api('POST', '/api/git/identity', { name: $('#idName', b).value, email: $('#idMail', b).value });
+            await loadGit();
+            fin(true); closeModal();
+          } catch (err) { const er = $('#idErr', b); er.textContent = err.message; er.hidden = false; }
+        });
+      },
+      onClose: () => { fin(false); if (opener && opener.isConnected && opener.focus) opener.focus(); else { const sb = $('#btnSave'); if (sb) sb.focus(); } }
+    });
+  });
+}
+
+// Yalnızca commit: dosya zaten kaydedilmiş, mesaj dolu.
+async function commitOnly() {
+  const c = S.cur; if (!c) return false;
+  const message = c.commitMsg.trim();
+  if (!message) return false;
   try {
-    const r = await api('PUT', '/api/file', { path: c.path, raw, baseMtime: force ? undefined : c.mtime });
+    const r = await api('POST', '/api/git/commit', { message, paths: [c.path] });
+    c.commitMsg = ''; const i = $('#commitMsg'); if (i) i.value = '';
+    toast('Commit edildi (' + r.commit + ')');
+    updateDirty();
+    afterWrite();
+    return true;
+  } catch (e) {
+    if (e.data && e.data.needIdentity) {
+      if (await askIdentity()) return commitOnly();
+      return false;
+    }
+    fail(e); return false;
+  }
+}
+
+// +1: sürüm penceresi. Sunucu dosyayı yazar, commit eder ve tag atar; hata olursa her şeyi geri alır.
+async function openBump() {
+  const c = S.cur; if (!c || !c.isPrompt) return;
+  syncFromDom();
+  let v;
+  try { v = await get('/api/version?' + qs({ path: c.path })); } catch (e) { fail(e); return; }
+  c.ver = v; paintVerWarn();
+  const opener = document.activeElement;
+  const m = FM.meta(c.parsed);
+  const curRaw = str(m.versiyon).trim();
+  const cv = Rules.coerceVersion(curRaw);
+  const last = v.sonSurum;
+  const base = cv ? (cv.version || (last ? last.version : '')) : null;
+  const first = !!cv && !base;
+  const sug = cv ? { buyuk: Rules.bumpVersion(base, 'buyuk'), kucuk: Rules.bumpVersion(base, 'kucuk'), yama: Rules.bumpVersion(base, 'yama') } : null;
+  const note0 = [c.commitMsg.trim(), v.notOnerisi].filter(Boolean).join('\n\n');
+  const desc = { yama: 'düzeltme, küçük metin değişikliği', kucuk: 'geriye uyumlu yeni davranış', buyuk: 'davranış veya kullanım biçimi değişti' };
+  const levels = first
+    ? `<p><b>İlk sürüm: ${esc(Rules.DEFAULT_VERSION)}</b></p>`
+    : `<fieldset class="bumpopts"><legend>Seviye</legend>${['yama', 'kucuk', 'buyuk'].map((l, i) => `<label><input type="radio" name="bumpLevel" value="${l}" ${i === 0 ? 'checked autofocus' : ''} ${sug ? '' : 'disabled'}> ${Rules.LEVEL_LABEL[l]}${sug ? ': ' + esc(sug[l]) : ''} (${desc[l]})</label>`).join('')}</fieldset>`;
+  const hintTxt = cv === null ? '<p class="issue error">Sürüm yorumlanamadı. X.Y.Z biçiminde yaz (örnek: 1.0.0).</p>' : '';
+  const html = `<form class="stack" id="bumpForm">
+    <p>Şu anki sürüm: <b>${esc(curRaw || 'yok')}</b>. ${last ? 'Son sürüm: <b>v' + esc(last.version) + '</b> (' + esc(fmtDate(last.date)) + ')' : 'Henüz sürüm yok'}</p>
+    ${levels}${hintTxt}
+    <label>Sürüm notu<textarea id="bumpNote" rows="5" required ${first ? 'autofocus' : ''}>${esc(note0)}</textarea></label>
+    <p class="hint">Tag: <code id="bumpTag"></code></p>
+    ${c.dirty ? '<p class="issue warn">Kaydedilmemiş değişiklikler de bu sürüme dahil edilecek.</p>' : ''}
+    ${v.degisti === false ? '<p class="hint">Son sürümden beri içerik değişmedi; yalnızca sürüm numarası artacak.</p>' : ''}
+    <div id="bumpErr" class="issue error" role="alert" hidden></div>
+    <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary" id="bumpOk">Sürümü oluştur</button></div></form>`;
+  openModal({
+    title: 'Yeni sürüm', html,
+    onClose: () => { if (opener && opener.isConnected && opener.focus) opener.focus(); },
+    onMount: (b) => {
+      const level = () => { const r = $('input[name="bumpLevel"]:checked', b); return r ? r.value : 'yama'; };
+      const paintTag = () => { $('#bumpTag', b).textContent = v.tagOnek + 'v' + (first ? Rules.DEFAULT_VERSION : sug ? sug[level()] : 'X.Y.Z'); };
+      paintTag();
+      $$('input[name="bumpLevel"]', b).forEach((r) => r.addEventListener('change', paintTag));
+      const showErr = (msg, extra) => {
+        const er = $('#bumpErr'); if (!er) { toast(msg, 'error'); return; }
+        er.textContent = msg; er.hidden = false;
+        if (extra) { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn sm'; bt.dataset.act = extra.act; bt.textContent = extra.label; er.appendChild(document.createTextNode(' ')); er.appendChild(bt); }
+      };
+      const send = async (force, pick) => {
+        const body = { path: c.path, level: pick.level, note: pick.note,
+          raw: c.dirty ? FM.stringify(c.parsed) : undefined, baseMtime: force ? undefined : c.mtime };
+        try {
+          const r = await api('POST', '/api/version/bump', body);
+          c.parsed = FM.parse(r.raw); c.savedRaw = r.raw; c.mtime = r.mtime; c.lead = leadOf(c.parsed); c.dirty = false; c.commitMsg = '';
+          closeModal(); renderMain();
+          toast('Sürüm ' + r.version + ' oluşturuldu (' + r.tag + ')');
+          afterWrite();
+          return;
+        } catch (e) {
+          const d = e.data || {};
+          if (d.needIdentity) { if (await askIdentity()) return send(force, pick); return; }
+          if (e.status === 409 && d.conflict) {
+            const a = await askChoice({
+              title: 'Dosya diskte değişmiş', text: 'Bu dosya sen açtıktan sonra başka bir yerde değiştirilmiş. Ne yapalım?',
+              choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'reload', label: 'Diskteki sürümü yükle' }, { id: 'force', label: 'Diskteki sürümün üstüne yaz', kind: 'danger' }]
+            });
+            if (a === 'force') return send(true, pick);
+            if (a === 'reload') { c.dirty = false; closeModal(); await openFile(c.path, { reload: true, tab: c.tab }); }
+            return;
+          }
+          if (d.rollbackFailed) showErr(e.message, { act: 'git', label: 'Git panelini aç' });
+          else showErr(e.message);
+          const ok = $('#bumpOk'); if (ok) ok.disabled = false;
+        }
+      };
+      $('#bumpForm', b).addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const note = $('#bumpNote', b).value.trim();
+        const er = $('#bumpErr', b);
+        if (!note) { er.textContent = 'Sürüm notu boş olamaz'; er.hidden = false; $('#bumpNote', b).focus(); return; }
+        er.hidden = true;
+        if (c.dirty && !(await confirmTurRemoval(c, false))) return;
+        $('#bumpOk', b).disabled = true;
+        await send(false, { level: level(), note });
+      });
+    }
+  });
+}
+
+async function save(force) {
+  const c = S.cur; if (!c) return false;
+  syncFromDom();
+  if (!c.dirty && c.commitMsg.trim() && uncommitted(c.path)) return commitOnly();
+  const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
+  if (!(await confirmTurRemoval(c, force))) return false;
+  const raw = FM.stringify(c.parsed);
+  const msg = c.commitMsg.trim();
+  try {
+    const r = await api('PUT', '/api/file', { path: c.path, raw, baseMtime: force ? undefined : c.mtime, commitMessage: msg || undefined });
     c.savedRaw = raw; c.mtime = r.mtime; c.dirty = false; c.external = false;
     c.turClearedExplicitly = false;
-    toast('Kaydedildi');
+    let needId = false;
+    if (r.commit) {
+      toast('Kaydedildi ve commit edildi (' + r.commit + ')');
+      c.commitMsg = ''; const i = $('#commitMsg'); if (i) i.value = '';
+    } else if (r.commitSkipped) toast('Kaydedildi. Commit edilecek değişiklik yoktu.');
+    else if (r.commitError && r.commitError.needIdentity) { toast('Kaydedildi'); needId = true; }
+    else if (r.commitError) toast('Kaydedildi ama commit atılamadı: ' + r.commitError.error, 'error');
+    else toast(S.git && S.git.isRepo ? 'Kaydedildi (commit edilmedi)' : 'Kaydedildi');
     if (c.isPrompt && !before) {
       const chk = Rules.publishCheck({ meta: FM.meta(c.parsed), hasFm: c.parsed.hasFm, fmBroken: Rules.isFmBroken(raw, c.parsed.hasFm) });
       if (chk && (chk.code === 'turYok' || chk.code === 'turGecersiz')) toast(chk.reason, 'warn', 7000);
     }
     updateDirty();
-    afterWrite();
+    const aw = afterWrite();
+    if (needId) { await aw; if (await askIdentity()) await commitOnly(); }
     return true;
   } catch (e) {
     if (e.status === 409 && e.data && e.data.conflict) {
@@ -891,6 +1093,7 @@ async function afterWrite() {
   if (isFiltering()) runSearch();
   const c = S.cur;
   if (c && c.isPrompt) {
+    loadVersion();
     try { const r = await get('/api/file?' + qs({ path: c.path })); c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r.publish.paket)}:${esc(r.publish.ad)}</code>`; } catch (e) { /* sessiz */ }
   }
 }
@@ -1007,7 +1210,7 @@ function openNewPrompt(folder) {
         const p = FM.parse('');
         FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
-        FM.set(p, 'durum', 'taslak'); FM.set(p, 'versiyon', '1'); FM.set(p, 'olusturma', today());
+        FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = TEMPLATES[f.get('tpl')] || TEMPLATES.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
         p.body = '\n' + t.body;
@@ -1528,7 +1731,7 @@ document.addEventListener('click', async (ev) => {
     case 'tab': setTab(el.dataset.tab); break;
     case 'save': await save(); break;
     case 'copy': await copyBody(); break;
-    case 'bump': { const i = $('#fVer'); i.value = bumpVersion(i.value); setField('versiyon', i.value); break; }
+    case 'bump': await openBump(); break;
     case 'chip-x': removeChip(el.dataset.key, el.dataset.val); break;
     case 'tag': { const t = el.dataset.tag; const i = S.f.tags.findIndex((x) => fold(x) === fold(t)); if (i >= 0) S.f.tags.splice(i, 1); else S.f.tags.push(t); renderFilters(); runSearch(); break; }
     case 'tags-all': S.tagsAll = !S.tagsAll; renderFilters(); break;
@@ -1602,6 +1805,7 @@ document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'q') { S.f.q = t.value; runSearch(); return; }
   if (!S.cur) return;
+  if (t.id === 'commitMsg') { S.cur.commitMsg = t.value; updateDirty(); return; }
   if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
   if (t.id === 'fBody') {
     S.cur.parsed.body = S.cur.lead + t.value;
@@ -1626,6 +1830,7 @@ document.addEventListener('keydown', (ev) => {
   const t = ev.target;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); document.body.classList.add('side-open'); $('#q').focus(); $('#q').select(); return; }
+  if (ev.key === 'Enter' && t.id === 'commitMsg' && S.cur) { ev.preventDefault(); save(); return; }
   if (ev.key === 'Escape') { if (!$('#overlay').hidden) closeModal(); closeMenu(); if (t.id === 'q') t.blur(); return; }
   if (t.classList && t.classList.contains('chip-in') && S.cur) {
     const key = t.dataset.chipIn;
