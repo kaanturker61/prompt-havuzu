@@ -165,6 +165,32 @@ details.pub .meta { padding: 8px 12px 12px; margin: 0; }
 .dl.del { background: color-mix(in srgb, var(--red) 17%, transparent); }
 .dl.hunk { color: var(--pool-deep); }
 .dl.meta { color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 0 0 12px; }
+.seg button { border: 0; background: var(--card); padding: 5px 12px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--pool-tint); color: var(--pool-deep); font-weight: 600; }
+.timeline li { padding: 0; cursor: default; }
+.timeline .tl { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; font: inherit; color: inherit; cursor: pointer; }
+.timeline .tl:hover, .timeline .tl[aria-current="true"] { background: var(--pool-tint); }
+.timeline .tl .s { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.vbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.vbar label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+.vcard { border: 1px solid var(--line2); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 6px; }
+.vcard .note { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fdiff { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.fdiff caption { text-align: left; font-weight: 600; padding: 4px 0; }
+.fdiff th, .fdiff td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--line2); overflow-wrap: anywhere; }
+.fdiff .chip { padding: 0 10px; margin: 0 4px 4px 0; }
+ins.wd, ins.chip { text-decoration: none; background: color-mix(in srgb, var(--green) 25%, transparent); color: inherit; }
+del.wd, del.chip { text-decoration: line-through; background: color-mix(in srgb, var(--red) 25%, transparent); color: inherit; }
+ins, del { text-decoration-thickness: 1px; }
+.restorebar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.gfile { border-bottom: 1px solid var(--line2); padding: 6px 8px; }
+.gfile summary { cursor: pointer; overflow-wrap: anywhere; }
+.gfile .gcs { display: grid; gap: 2px; padding: 6px 0 6px 14px; }
+.gfile .gcs button.link { text-align: left; }
+.gfile .link.on { font-weight: 600; }
+.gfilelist { border: 1px solid var(--line2); border-radius: 6px; max-height: 62vh; overflow: auto; }
 
 /* başlangıç ekranı */
 .start { max-width: 760px; margin: 6vh auto 0; }
@@ -358,7 +384,7 @@ const normTur = Rules.normTur;
 const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'taslak' : f === 'kararli' ? 'kararli' : f === 'arsiv' ? 'arsiv' : ''; };
 
 // Etkin marketplace gerektiren rotalar: bu isteklere X-PP-MP başlığı eklenir (başka sekmede geçiş yapıldıysa sunucu reddeder).
-const MP_GUARDED = /^\/api\/(file|rename|mkdir|git\/|version|import\/|marketplace\/|package|prompts\/)/;
+const MP_GUARDED = /^\/api\/(file|rename|mkdir|git\/|version|import\/|marketplace\/|package|prompts\/|history\/)/;
 async function api(method, url, body) {
   const headers = { 'Content-Type': 'application/json', 'X-PP': '1' };
   if (S.info && S.info.activeMarketplace && MP_GUARDED.test(url)) headers['X-PP-MP'] = encodeURIComponent(S.info.activeMarketplace);
@@ -1045,16 +1071,46 @@ function rawPaneHtml() {
   <div class="bodyinfo"><span>Tüm dosya, frontmatter dahil. Biçimi bozmadan düzenle.</span><span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>Kaydedilmemiş değişiklik var</span></div>`;
 }
 
+const HIST_STALE = () => { const c = S.cur; return `<p class="issue warn">Bu dosya ${esc(c.mp)} marketplace'ine ait ama etkin marketplace ${esc(activeName() || 'yok')}. Geçmişi görmek için dosyayı ağaçtan yeniden aç.</p>`; };
+
+function histModeBar(h) {
+  if (!h.ver) return '';
+  const b = (m, t) => `<button type="button" data-act="hist-mode" data-mode="${m}" aria-pressed="${h.mode === m}">${t}</button>`;
+  return `<div class="seg" role="group" aria-label="Geçmiş görünümü">${b('ver', 'Sürümler')}${b('commit', "Commit'ler")}</div>`;
+}
+
+function histCommitHtml(h) {
+  const cm = h.commit;
+  if (!cm) return '<p class="hint">Geçmiş yükleniyor…</p>';
+  const items = [];
+  const li = (hash, cls, inner) => `<li role="button" tabindex="0" data-act="hist-select" data-hash="${hash}" class="${cls}">${inner}</li>`;
+  if (cm.working && (cm.working.diff || cm.working.untracked)) items.push(li('working', cm.sel === 'working' ? 'on' : '', `<div class="s">Commit edilmemiş değişiklikler</div><div class="hint">${cm.working.untracked ? 'Dosya henüz git\'e eklenmedi' : 'Son commit ile fark'}</div>`));
+  for (const k of cm.commits) items.push(li(k.hash, cm.sel === k.hash ? 'on' : '', `<div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div>`));
+  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Kaydederken commit mesajı yazarsan commit edilir.</p>';
+  return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">Bir kayıt seç.</pre></div></div>`;
+}
+
+const verLabel = (ref, version) => (ref === 'HEAD' ? 'Son commit' : 'v' + version);
+const verByTag = (v, tag) => v.data.versions.find((x) => x.tag === tag);
+
+function histVerHtml(h) {
+  const v = h.ver; const d = v.data;
+  if (!d.tracked) return `<p class="hint">Bu dosya henüz commit edilmedi. Sürüm geçmişi ilk commit'ten sonra oluşur.</p><p class="hint">Dosya taşındıysa, eski ve yeni yolu birlikte commit edersen geçmiş bağlanır.</p>`;
+  if (!d.versions.length) return `<p class="hint">Bu prompt için henüz sürüm yok. Sürüm, Düzenle sekmesindeki +1 düğmesiyle oluşturulur.</p><p><button class="btn" data-act="hist-mode" data-mode="commit">Commit'leri göster</button></p>${d.ignoredTags ? `<p class="issue info">${d.ignoredTags} tag sürüm biçimine uymadığı için atlandı.</p>` : ''}`;
+  const opts = [`<option value="HEAD">Son commit</option>`].concat(d.versions.map((x) => `<option value="${esc(x.tag)}">v${esc(x.version)}${x.renamed ? ' (eski ad)' : ''}</option>`)).join('');
+  const tl = '<ol class="commits timeline" id="verTL" aria-label="Sürüm zaman çizelgesi"></ol>';
+  return `<div class="hist">${tl}<div>
+    <div class="vbar"><label>Eski <select id="verA">${opts}</select></label> <span aria-hidden="true">→</span> <label>Yeni <select id="verB">${opts}</select></label></div>
+    <div id="verMain" aria-live="polite"></div></div></div>`;
+}
+
 function histPaneHtml() {
   const h = S.cur.hist;
   if (!h || h.loading) return '<p class="hint">Geçmiş yükleniyor…</p>';
+  if (h.stale) return HIST_STALE();
   if (h.noRepo) return '<p>Geçmiş kaydı için havuzun bir git deposu olması gerekir.</p><p><button class="btn primary" data-act="git">Git panelini aç</button></p>';
   if (h.error) return `<p class="issue error">${esc(h.error)}</p>`;
-  const items = [];
-  if (h.working && (h.working.diff || h.working.untracked)) items.push(`<li data-act="hist-select" data-hash="working" class="${h.sel === 'working' ? 'on' : ''}"><div class="s">Commit edilmemiş değişiklikler</div><div class="hint">${h.working.untracked ? 'Dosya henüz git\'e eklenmedi' : 'Son commit ile fark'}</div></li>`);
-  for (const k of h.commits) items.push(`<li data-act="hist-select" data-hash="${k.hash}" class="${h.sel === k.hash ? 'on' : ''}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`);
-  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Kaydederken commit mesajı yazarsan commit edilir.</p>';
-  return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">Bir kayıt seç.</pre></div></div>`;
+  return histModeBar(h) + (h.mode === 'ver' ? histVerHtml(h) : histCommitHtml(h));
 }
 
 function renderMain() {
@@ -1093,6 +1149,7 @@ function renderMainInner() {
   const banner = c.generatedFrom
     ? `<div class="banner">Bu dosya <b>${esc(c.generatedFrom)}</b> kaynağından otomatik üretildi. Burada yaptığın değişiklik bir sonraki yayında ezilir.<button class="btn sm" data-act="open" data-path="${esc(c.generatedFrom)}">Kaynağa git</button></div>` : '';
   const ext = c.external ? '<div class="banner">Bu dosya, sen açtıktan sonra diskte değişti. Kaydedersen ne yapmak istediğini soracağım.</div>' : '';
+  const restore = c.restoredFrom ? `<div class="banner"><span class="restorebar">Editörde ${esc(c.restoredFrom.what)} içeriği var (kaydedilmedi). Kaydedersen dosya bu içerikle değişir.<button class="btn sm" data-act="ver-restore-cancel">Geri al</button></span></div>` : '';
   let pane = '';
   if (c.tab === 'edit' && c.isPrompt) pane = editPaneHtml();
   else if (c.tab === 'hist') pane = histPaneHtml();
@@ -1107,7 +1164,7 @@ function renderMainInner() {
       <input id="commitMsg" value="${esc(c.commitMsg)}" placeholder="Ne değişti, neden? (boşsa yalnızca kaydedilir)" autocomplete="off">
       <span id="commitPill" class="pill warn" ${uncommitted(c.path) && !c.dirty ? '' : 'hidden'}>Commit bekliyor</span>
     </div>
-    ${staleBanner}${banner}${ext}
+    ${staleBanner}${banner}${ext}${restore}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
   if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
@@ -1382,6 +1439,7 @@ async function save(force) {
   try {
     const r = await api('PUT', '/api/file', { path: c.path, raw, baseMtime: force ? undefined : c.mtime, commitMessage: msg || undefined });
     c.savedRaw = raw; c.mtime = r.mtime; c.dirty = false; c.external = false;
+    c.restoredFrom = null; c.autoMsg = null;
     c.turClearedExplicitly = false;
     let needId = false;
     if (r.commit) {
@@ -1453,16 +1511,63 @@ async function copyBody() {
 }
 
 /* ------------------------------------------------------------------- geçmiş */
+// Durum: c.hist = { mode: 'ver'|'commit', ver, commit } ya da { loading | stale | noRepo | error }.
+async function loadCommitData(c, h) {
+  const gen = S.gen;
+  const [log, wd] = await Promise.all([get('/api/git/log?' + qs({ path: c.path })), get('/api/git/diff?' + qs({ path: c.path, working: 1 }))]);
+  if (gen !== S.gen || S.cur !== c || c.hist !== h) return false;
+  h.commit = { commits: log.commits, working: wd, sel: (wd.diff || wd.untracked) ? 'working' : (log.commits[0] ? log.commits[0].hash : null), diffs: {} };
+  return true;
+}
+
+// Varsayılan seçim: en yeni iki sürüm; tek sürüm varsa o sürüm ile son commit; `pre` verilmişse o sürüm ve bir öncesi.
+function newVerState(d, pre) {
+  const vs = d.versions;
+  const v = { data: d, a: null, b: null, sel: null, view: null, cmp: null, cache: {} };
+  if (!vs.length) return v;
+  const i = pre ? vs.findIndex((x) => x.tag === pre) : -1;
+  if (i >= 0) { v.sel = vs[i].tag; v.b = vs[i].tag; v.a = vs[i + 1] ? vs[i + 1].tag : vs[i].tag; }
+  else if (vs.length >= 2) { v.sel = vs[0].tag; v.b = vs[0].tag; v.a = vs[1].tag; }
+  else { v.sel = vs[0].tag; v.a = vs[0].tag; v.b = 'HEAD'; }
+  return v;
+}
+
 async function loadHistory() {
-  const c = S.cur; const gen = S.gen; c.hist = { loading: true }; paintHist();
+  const c = S.cur; if (!c) return;
+  const gen = S.gen;
+  const pre = S.histPreselect; S.histPreselect = null;
+  c.hist = { loading: true }; paintHist();
+  if (c.mp !== activeName()) { c.hist = { stale: true }; paintHist(); return; }
+  const live = () => gen === S.gen && S.cur === c;
   try {
     const st = S.git || await loadGit();
+    if (!live()) return;
     if (!st.isRepo) { c.hist = { noRepo: true }; paintHist(); return; }
-    const [log, wd] = await Promise.all([get('/api/git/log?' + qs({ path: c.path })), get('/api/git/diff?' + qs({ path: c.path, working: 1 }))]);
-    if (gen !== S.gen || S.cur !== c) return;
-    c.hist = { commits: log.commits, working: wd, sel: (wd.diff || wd.untracked) ? 'working' : (log.commits[0] ? log.commits[0].hash : null), diffs: {} };
+    const h = { mode: 'commit', ver: null, commit: null };
+    if (c.isPrompt) {
+      const d = await get('/api/history/versions?' + qs({ path: c.path }));
+      if (!live()) return;
+      if (d.ad) {
+        h.ver = newVerState(d, pre);
+        h.mode = pre ? 'ver' : (S.histMode || (d.versions.length ? 'ver' : 'commit'));
+      }
+    }
+    c.hist = h;
+    if (h.mode === 'commit' && !(await loadCommitData(c, h))) return;
     paintHist();
-  } catch (e) { c.hist = { error: e.message }; paintHist(); }
+    if (h.mode === 'ver') loadCompare();
+  } catch (e) { if (S.cur === c) { c.hist = { error: e.message }; paintHist(); } }
+}
+
+async function setHistMode(mode) {
+  const c = S.cur; const h = c && c.hist;
+  if (!h || !h.ver || h.mode === mode) return;
+  S.histMode = mode; h.mode = mode;
+  try {
+    if (mode === 'commit' && !h.commit) { paintHist(); if (!(await loadCommitData(c, h))) return; }
+  } catch (e) { if (S.cur === c) { c.hist = { error: e.message }; paintHist(); } return; }
+  paintHist();
+  if (mode === 'ver') loadCompare();
 }
 
 function diffHtml(d) {
@@ -1476,35 +1581,200 @@ function diffHtml(d) {
   }).join('');
 }
 
+const FIELD_LABEL = { baslik: 'Başlık', etiketler: 'Etiketler', projeler: 'Projeler', durum: 'Durum', versiyon: 'Versiyon', olusturma: 'Oluşturma', tur: 'Tür', paket: 'Paket', komut_adi: 'Ad', aciklama: 'Açıklama', arguman_ipucu: 'Argüman ipucu', izinli_araclar: 'İzinli araçlar', model: 'Model' };
+
+function verTimelineHtml(v) {
+  return v.data.versions.map((x, i) => `<li><button type="button" class="tl" data-act="ver-pick" data-tag="${esc(x.tag)}" aria-current="${x.tag === v.sel}"><div class="s"><b>v${esc(x.version)}</b>${i === 0 ? ' <span class="pill ok">Son sürüm</span>' : ''}${x.renamed ? ` <span class="pill">Eski ad: ${esc(base(x.pathAtTag))}</span>` : ''}${x.annotated ? '' : ' <span class="pill">Notsuz</span>'}</div><div class="hint">${esc(fmtDate(x.date))}</div>${x.subject ? `<div>${esc(x.subject)}</div>` : ''}</button></li>`).join('');
+}
+
+function verCardHtml(v, x) {
+  const i = v.data.versions.indexOf(x);
+  const prev = v.data.versions[i + 1];
+  return `<div class="vcard"><div><code>${esc(x.tag)}</code> <span class="hint">${esc(fmtDate(x.date))}</span></div>
+    <div class="hint">${x.tagger ? 'Sürümü oluşturan: ' + esc(x.tagger) + ', ' : ''}commit ${esc(x.short)}</div>
+    ${x.note ? `<div class="note">${esc(x.note)}</div>` : '<div class="hint">Bu sürümde not yok.</div>'}
+    <div class="btns"><button class="btn sm" data-act="ver-view" data-tag="${esc(x.tag)}">Görüntüle</button><button class="btn sm" data-act="ver-load" data-tag="${esc(x.tag)}">Bu sürümü editöre al</button>${prev ? `<button class="btn sm" data-act="ver-prev" data-tag="${esc(x.tag)}">Bir öncekiyle karşılaştır</button>` : ''}</div></div>`;
+}
+
+function verViewHtml(v) {
+  const w = v.view;
+  if (w.loading) return '<p class="hint">Sürüm yükleniyor…</p>';
+  if (w.error) return `<p class="issue error">${esc(w.error)}</p><p><button class="btn sm" data-act="ver-view-close">Kapat</button></p>`;
+  return `<div class="diffhead"><span><b>v${esc(w.version)}</b> <span class="hint">(${esc(fmtDate(w.date))}), salt okunur</span></span><button class="btn sm" data-act="ver-load" data-tag="${esc(w.tag)}">Bu sürümü editöre al</button><button class="btn sm" data-act="ver-view-close">Kapat</button></div>
+    <pre class="diff" aria-label="Sürümün içeriği">${w.raw.replace(/\r\n/g, '\n').split('\n').map((l) => `<span class="dl">${esc(l) || ' '}</span>`).join('')}</pre>`;
+}
+
+function fieldCellsHtml(f) {
+  if (f.list) {
+    const a = f.from.map((x) => (f.removed.includes(x) ? `<del class="chip"><span class="sr">silinen: </span>−${esc(x)}</del>` : `<span class="chip">${esc(x)}</span>`)).join('');
+    const b = f.to.map((x) => (f.added.includes(x) ? `<ins class="chip"><span class="sr">eklenen: </span>+${esc(x)}</ins>` : `<span class="chip">${esc(x)}</span>`)).join('');
+    return [a || '—', (b || '—') + (f.kind === 'sira' ? '<div class="hint">Yalnızca sıra değişti</div>' : '')];
+  }
+  return [f.from == null ? '—' : `<del>${esc(f.from)}</del>`, f.to == null ? '—' : `<ins>${esc(f.to)}</ins>`];
+}
+
+function wordDiffHtml(hunks) {
+  const tok = (t) => (t.t === '=' ? esc(t.s) : t.t === '-' ? `<del class="wd"><span class="sr">silinen: </span>${esc(t.s)}</del>` : `<ins class="wd"><span class="sr">eklenen: </span>${esc(t.s)}</ins>`);
+  return hunks.map((h) => `<span class="dl hunk">@@ satır ${h.newStart} @@</span>` + h.lines.map((ln) => `<span class="dl">${ln.map(tok).join('') || ' '}</span>`).join('')).join('');
+}
+
+function verCompareHtml(v) {
+  if (!v.a || !v.b) return '';
+  if (v.a === v.b) return '<p class="hint">Karşılaştırılacak önceki sürüm yok (ilk sürüm) ya da iki seçim aynı. Farklı iki sürüm seç.</p>';
+  const s = v.cmp;
+  if (!s || s.loading) return '<p class="hint">Fark yükleniyor…</p>';
+  if (s.error) return `<p class="issue ${s.code === 'ayniSurum' ? 'info' : 'error'}">${esc(s.code === 'ayniSurum' ? 'Karşılaştırılacak fark yok: seçilen iki sürüm aynı içeriğe işaret ediyor.' : s.error)}</p>`;
+  const c = s.data;
+  const la = verLabel(c.a.ref, c.a.version); const lb = verLabel(c.b.ref, c.b.version);
+  let h = '';
+  if (v.data.versions.length === 1 && v.b === 'HEAD') h += '<p class="hint">Karşılaştırmak için ikinci bir sürüm yok; tek sürüm son commit ile karşılaştırılıyor.</p>';
+  if (c.renamed) h += `<p class="hint">Dosya bu aralıkta yeniden adlandırıldı: ${esc(c.a.pathAtRef)} → ${esc(c.b.pathAtRef)}</p>`;
+  if (c.fmBroken.a || c.fmBroken.b) {
+    if (c.fmBroken.a) h += `<p class="issue warn">${esc(la)} sürümünde frontmatter kapanmamış; alanlar karşılaştırılamadı.</p>`;
+    if (c.fmBroken.b) h += `<p class="issue warn">${esc(lb)} sürümünde frontmatter kapanmamış; alanlar karşılaştırılamadı.</p>`;
+  } else if (!c.fields.length) h += '<p class="hint">Frontmatter alanlarında değişiklik yok.</p>';
+  else {
+    h += `<table class="fdiff"><caption>Frontmatter alanları</caption><thead><tr><th scope="col">Alan</th><th scope="col">${esc(la)}</th><th scope="col">${esc(lb)}</th></tr></thead><tbody>${c.fields.map((f) => { const [x, y] = fieldCellsHtml(f); return `<tr><th scope="row">${FIELD_LABEL[f.key] ? esc(FIELD_LABEL[f.key]) : `<code>${esc(f.key)}</code>`}</th><td>${x}</td><td>${y}</td></tr>`; }).join('')}</tbody></table>`;
+  }
+  h += c.body.same ? '<p class="hint">Gövdede değişiklik yok.</p>' : `<pre class="diff wdiff" aria-label="Gövde farkı">${wordDiffHtml(c.body.hunks)}</pre>`;
+  if (c.body.truncated) h += '<p class="hint">Fark çok büyük, kısaltıldı.</p>';
+  if (c.commits.length) {
+    h += `<details><summary>Bu aralıktaki commit'ler (${c.commits.length}${c.commitsTruncated ? '+' : ''})</summary><ul class="commits" style="max-height:30vh">${c.commits.map((k) => `<li role="button" tabindex="0" data-act="ver-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path || '')}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="verCDiff" hidden></pre></details>`;
+  }
+  return h + '<p class="hint">Kaydedilmemiş ve commit edilmemiş değişiklikler karşılaştırmaya dahil değildir.</p>';
+}
+
+function verMainHtml(v) {
+  if (v.view) return verViewHtml(v);
+  const x = v.sel && verByTag(v, v.sel);
+  return (x ? verCardHtml(v, x) : '') + `<div id="verCmp" tabindex="-1" aria-label="Sürüm karşılaştırması">${verCompareHtml(v)}</div>`;
+}
+
+function paintVer() {
+  const c = S.cur; if (!c || c.tab !== 'hist') return;
+  const h = c.hist; if (!h || h.mode !== 'ver' || !h.ver) return;
+  const v = h.ver; const tl = $('#verTL'); const m = $('#verMain'); if (!tl || !m) return;
+  if (!tl.firstChild) tl.innerHTML = verTimelineHtml(v);
+  else $$('.tl', tl).forEach((b) => b.setAttribute('aria-current', String(b.dataset.tag === v.sel)));
+  m.innerHTML = verMainHtml(v);
+  const a = $('#verA'); const b = $('#verB');
+  if (a && v.a) a.value = v.a;
+  if (b && v.b) b.value = v.b;
+}
+
+async function loadCompare() {
+  const c = S.cur; const h = c && c.hist; if (!h || !h.ver) return;
+  const v = h.ver; const gen = S.gen;
+  if (!v.a || !v.b || v.a === v.b) { v.cmp = null; paintVer(); return; }
+  const key = v.a + '|' + v.b;
+  if (v.cache[key]) { v.cmp = v.cache[key]; paintVer(); return; }
+  v.cmp = { loading: true }; paintVer();
+  let res;
+  try { res = { data: await get('/api/history/compare?' + qs({ path: c.path, a: v.a, b: v.b })) }; } catch (e) { res = { error: e.message, code: e.data && e.data.code }; }
+  if (gen !== S.gen || S.cur !== c || c.hist !== h) return;
+  if (!res.error || res.code === 'ayniSurum') v.cache[key] = res;
+  if (v.a + '|' + v.b === key) { v.cmp = res; paintVer(); }
+}
+
+function verPick(tag) {
+  const h = S.cur && S.cur.hist; const v = h && h.ver; if (!v) return;
+  const vs = v.data.versions; const i = vs.findIndex((x) => x.tag === tag); if (i < 0) return;
+  v.sel = tag; v.view = null; v.b = tag; v.a = vs[i + 1] ? vs[i + 1].tag : tag;
+  paintVer(); loadCompare();
+}
+
+function verSelChange() {
+  const h = S.cur && S.cur.hist; const v = h && h.ver; if (!v) return;
+  const vs = v.data.versions;
+  const rank = (t) => (t === 'HEAD' ? -1 : vs.findIndex((x) => x.tag === t));
+  let a = $('#verA').value; let b = $('#verB').value;
+  if (rank(a) < rank(b)) [a, b] = [b, a]; // eski olan A, yeni olan B (HEAD her zaman en yeni)
+  v.a = a; v.b = b; v.view = null;
+  if (b !== 'HEAD') v.sel = b;
+  paintVer(); loadCompare();
+}
+
+async function verView(tag) {
+  const c = S.cur; const h = c && c.hist; const v = h && h.ver; if (!v) return;
+  v.view = { tag, loading: true }; paintVer();
+  let w;
+  try { const r = await get('/api/history/show?' + qs({ path: c.path, tag })); w = { tag, version: r.version, date: r.date, raw: r.raw }; } catch (e) { w = { tag, error: e.message }; }
+  if (S.cur !== c || c.hist !== h || !v.view || v.view.tag !== tag) return;
+  v.view = w; paintVer();
+  const b = $('#verMain button'); if (b) b.focus();
+}
+
+async function loadVersionIntoEditor(tag) {
+  const c = S.cur; const h = c && c.hist; const v = h && h.ver; if (!v) return;
+  if (staleGuard()) return;
+  let r = v.view && v.view.tag === tag && v.view.raw != null ? v.view : null;
+  if (!r) { try { r = await get('/api/history/show?' + qs({ path: c.path, tag })); } catch (e) { fail(e); return; } }
+  if (S.cur !== c) return;
+  await loadRawIntoEditor(r.raw, { what: 'v' + r.version + ' sürümünün', msg: 'v' + r.version + ' sürümüne geri dönüldü' });
+}
+
 async function paintHist() {
   const c = S.cur; if (!c || c.tab !== 'hist') return;
   const pane = $('#pane'); if (!pane) return;
   pane.innerHTML = histPaneHtml();
-  const h = c.hist; if (!h || !h.sel || !$('#diffBox')) return;
+  const h = c.hist; if (!h) return;
+  if (h.mode === 'ver' && h.ver) { paintVer(); return; }
+  const cm = h.commit; if (!cm || !cm.sel || !$('#diffBox')) return;
   const head = $('#diffHead'); const box = $('#diffBox');
-  if (h.sel === 'working') {
-    if (h.working.untracked) { box.textContent = 'Bu dosya henüz git\'e eklenmedi. Git panelinden commit edebilirsin.'; head.innerHTML = ''; return; }
-    box.innerHTML = diffHtml(h.working.diff); head.innerHTML = '<span class="hint">Son commit ile şu anki dosya arasındaki fark</span>';
+  if (cm.sel === 'working') {
+    if (cm.working.untracked) { box.textContent = 'Bu dosya henüz git\'e eklenmedi. Git panelinden commit edebilirsin.'; head.innerHTML = ''; return; }
+    box.innerHTML = diffHtml(cm.working.diff); head.innerHTML = '<span class="hint">Son commit ile şu anki dosya arasındaki fark</span>';
     return;
   }
-  const k = h.commits.find((x) => x.hash === h.sel); if (!k) return;
+  const k = cm.commits.find((x) => x.hash === cm.sel); if (!k) return;
   head.innerHTML = `<span><b>${esc(k.subject)}</b> <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.author)}</span></span><button class="btn sm" data-act="hist-load" data-hash="${k.hash}">Bu sürümü editöre al</button>`;
   try {
-    if (!h.diffs[k.hash]) h.diffs[k.hash] = (await get('/api/git/diff?' + qs({ hash: k.hash, path: k.path || c.path }))).diff;
-    if (c.hist === h && h.sel === k.hash) box.innerHTML = diffHtml(h.diffs[k.hash] || '(fark yok)');
+    if (!cm.diffs[k.hash]) cm.diffs[k.hash] = (await get('/api/git/diff?' + qs({ hash: k.hash, path: k.path || c.path }))).diff;
+    if (c.hist === h && cm.sel === k.hash) box.innerHTML = diffHtml(cm.diffs[k.hash] || '(fark yok)');
   } catch (e) { box.textContent = e.message; }
 }
 
 async function loadOldVersion(hash) {
-  const c = S.cur; const k = c.hist.commits.find((x) => x.hash === hash); if (!k) return;
-  try {
-    const r = await get('/api/git/show?' + qs({ hash, path: k.path || c.path }));
-    const p = FM.parse(r.raw); p.eol = c.eol; p.bom = c.bom;
-    c.parsed = p; c.lead = leadOf(p);
-    c.tab = c.isPrompt ? 'edit' : 'raw';
-    renderMain(); updateDirty();
-    toast('Eski sürüm editöre alındı. Kaydedene kadar dosya değişmez.');
-  } catch (e) { fail(e); }
+  const c = S.cur; const k = c && c.hist && c.hist.commit && c.hist.commit.commits.find((x) => x.hash === hash); if (!k) return;
+  if (staleGuard()) return;
+  let r;
+  try { r = await get('/api/git/show?' + qs({ hash, path: k.path || c.path })); } catch (e) { fail(e); return; }
+  if (S.cur !== c) return;
+  await loadRawIntoEditor(r.raw, { what: k.short + ' commit\'inin', msg: k.short + ' commit\'ine geri dönüldü' });
+}
+
+// Eski bir içeriği yalnızca editöre koyar (diske yazmaz). Kaydedilmemiş değişiklik varsa önce sorar.
+// c.savedRaw ve c.mtime değişmez: dirty olur, 409 çakışma koruması sürer. `versiyon` geriye gitmez.
+async function loadRawIntoEditor(raw, { what, msg }) {
+  const c = S.cur; if (!c) return false;
+  if (staleGuard()) return false;
+  if (isDirty()) {
+    const a = await askChoice({
+      title: 'Kaydedilmemiş değişiklikler var',
+      text: '"' + base(c.path) + '" dosyasındaki kaydedilmemiş değişiklikler, ' + what + ' içeriğiyle değiştirilecek.',
+      choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'discard', label: 'Değişiklikleri at ve yükle', kind: 'danger' }, { id: 'save', label: 'Önce kaydet', kind: 'primary' }]
+    });
+    if (a === 'save') { if (!(await save())) return false; } else if (a !== 'discard') return false;
+    if (S.cur !== c) return false;
+  }
+  const p = FM.parse(raw); p.eol = c.eol; p.bom = c.bom;
+  if (c.isPrompt) FM.set(p, 'versiyon', FM.meta(FM.parse(c.savedRaw)).versiyon);
+  c.parsed = p; c.lead = leadOf(p);
+  c.restoredFrom = { what };
+  if (!c.commitMsg.trim()) { c.commitMsg = msg; c.autoMsg = msg; }
+  c.tab = c.isPrompt ? 'edit' : 'raw';
+  renderMain(); updateDirty();
+  toast('Eski içerik editöre alındı. Kaydedene kadar dosya değişmez.');
+  return true;
+}
+
+function cancelRestore() {
+  const c = S.cur; if (!c || !c.restoredFrom) return;
+  c.parsed = FM.parse(c.savedRaw); c.lead = leadOf(c.parsed);
+  c.restoredFrom = null;
+  if (c.autoMsg && c.commitMsg === c.autoMsg) c.commitMsg = '';
+  c.autoMsg = null;
+  renderMain(); updateDirty();
 }
 
 /* --------------------------------------------------- yeni marketplace, plugin, prompt */
@@ -1866,6 +2136,7 @@ const gitTitle = () => 'Git: ' + (S.info.activeMarketplace || 'marketplace seçi
 const gitTarget = () => `<p class="hint" style="margin:0">Commit bu depoya atılır: <b>${esc(S.info.activeMarketplace)}</b> <code>${esc(S.info.root || '')}</code></p>`;
 
 async function openGit(tab) {
+  S.gitLogLimit = 300;
   if (!setupOk()) {
     openModal({
       title: 'Git',
@@ -1911,16 +2182,56 @@ function paintGit() {
     </div><div><pre class="diff" id="gDiff">Bir dosya adına tıkla, farkı burada gör.</pre></div></div>`;
 }
 
+const GITLOG_MODES = ['file', 'commit', 'version'];
+
+function gitLogBar(mode) {
+  const b = (m, t) => `<button type="button" data-act="gitlog-mode" data-mode="${m}" aria-pressed="${mode === m}">${t}</button>`;
+  return `<div class="seg" role="group" aria-label="Geçmiş görünümü">${b('file', 'Dosyaya göre')}${b('commit', "Commit'e göre")}${b('version', 'Sürüme göre')}</div> <span class="hint">Etkin depo: <b>${esc(S.info.activeMarketplace)}</b></span>`;
+}
+
 async function paintGitLog() {
   const body = $('#mBody');
   if (!S.git.isRepo) return paintGit();
-  body.innerHTML = gitTabs('log') + '<p class="hint">Yükleniyor…</p>';
+  let mode = ls.get('pp.gitLogMode', 'file'); if (!GITLOG_MODES.includes(mode)) mode = 'file';
+  const tok = S.glTok = (S.glTok || 0) + 1;
+  const head = gitTabs('log') + gitLogBar(mode);
+  body.innerHTML = head + '<div id="glBody"><p class="hint">Yükleniyor…</p></div>';
+  const live = () => tok === S.glTok && $('#glBody');
+  const fill = (html) => { if (live()) $('#glBody').innerHTML = html; };
   try {
-    const r = await get('/api/git/log');
-    body.innerHTML = gitTabs('log') + (r.commits.length
-      ? `<div class="hist"><ul class="commits" style="max-height:62vh">${r.commits.map((k) => `<li data-act="git-show" data-hash="${k.hash}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="gDiff">Bir kayıt seç.</pre></div>`
-      : '<p>Henüz commit yok.</p>');
-  } catch (e) { body.innerHTML = gitTabs('log') + `<p class="issue error">${esc(e.message)}</p>`; }
+    if (mode === 'commit') {
+      const r = await get('/api/git/log');
+      fill(r.commits.length
+        ? `<div class="hist"><ul class="commits" style="max-height:62vh">${r.commits.map((k) => `<li role="button" tabindex="0" data-act="git-show" data-hash="${k.hash}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="gDiff">Bir kayıt seç.</pre></div>`
+        : '<p>Henüz commit yok.</p>');
+    } else if (mode === 'file') {
+      const r = await get('/api/history/changes?' + qs({ group: 'file', limit: S.gitLogLimit || 300 }));
+      if (!r.files.length) { fill('<p>Henüz commit yok.</p>'); return; }
+      const files = r.files.map((f) => `<details class="gfile"><summary>${esc(f.path)} <span class="hint">${f.count} commit · son: ${esc(fmtDate(f.last.date))}</span>${f.status === 'D' ? ' <span class="pill bad">Silindi</span>' : ''}${f.oldPaths.length ? ' <span class="pill">Yeniden adlandırıldı</span>' : ''}</summary>
+        <div class="gcs">${f.exists ? `<div><button class="btn sm" data-act="open-close" data-mp="${esc(r.mp)}" data-path="${esc(f.path)}">Dosyayı aç</button></div>` : ''}${f.commits.map((k) => `<button type="button" class="link" data-act="gitlog-file-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path)}">${esc(k.subject)} <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}${k.oldPath ? ', ' + esc(k.oldPath) + ' → ' + esc(k.path) : ''}</span></button>`).join('')}</div></details>`).join('');
+      const more = r.hasMore && (S.gitLogLimit || 300) < 3000 ? '<p><button class="btn sm" data-act="gitlog-more">Daha eski kayıtları yükle</button></p>' : (r.hasMore ? '<p class="hint">Daha eski kayıtlar için sınıra ulaşıldı (3000 commit).</p>' : '');
+      fill(`<div class="hist"><div><div class="gfilelist">${files}</div>${more}</div><pre class="diff" id="gDiff">Soldan bir dosyayı aç, sonra bir commit seç; o commit'in o dosyadaki farkı burada görünür.</pre></div>`);
+    } else {
+      const r = await get('/api/history/changes?group=version');
+      if (!r.prompts.length && !r.unmatched.length) { fill("<p>Bu marketplace'te henüz hiç sürüm oluşturulmadı.</p>"); return; }
+      const ver = (p, v) => `<li><button type="button" class="link" data-act="gitlog-ver" data-path="${esc(p)}" data-tag="${esc(v.tag)}">v${esc(v.version)}</button> <span class="hint">${esc(fmtDate(v.date))}${v.subject ? ', ' + esc(v.subject) : ''}</span></li>`;
+      fill(`<div class="gfilelist">${r.prompts.map((p) => `<details class="gfile"><summary>${esc(p.ad)} <span class="hint">son sürüm: v${esc(p.versions[0].version)}</span></summary><ul>${p.versions.map((v) => ver(p.path, v)).join('')}</ul></details>`).join('')}</div>`
+        + (r.unmatched.length ? `<h3>Dosyası bulunamayan sürümler</h3><ul>${r.unmatched.map((u) => `<li><code>${esc(u.ad)}</code>: ${u.versions.map((v) => 'v' + esc(v.version)).join(', ')}</li>`).join('')}</ul>` : ''));
+    }
+  } catch (e) { fill(`<p class="issue error">${esc(e.message)}</p>`); }
+}
+
+// "Sürüme göre" listesinden bir sürüme gidiş: dosyayı Geçmiş sekmesinde, o sürüm seçili açar.
+async function openVersionInHistory(path, tag) {
+  closeModal();
+  S.histPreselect = tag;
+  try {
+    const c = S.cur;
+    if (c && c.path === path && c.mp === activeName()) {
+      // Dosya zaten açık: openFile erken döndüğü için sekme doğrudan değiştirilir.
+      if (c.tab === 'hist') loadHistory(); else setTab('hist');
+    } else await openIn(activeName(), path, { tab: 'hist' });
+  } finally { S.histPreselect = null; }
 }
 
 async function gitDiffFor(p) {
@@ -1948,7 +2259,7 @@ async function gitCommit() {
     S.gitMsg = ''; S.gitSel = null; S.gitSelTouched = false;
     toast('Commit oluşturuldu (' + r.commit + ')');
     await loadGit(); paintGit(); loadRecent();
-    if (S.cur && S.cur.tab === 'hist') S.cur.hist = null;
+    if (S.cur && S.cur.tab === 'hist') loadHistory();
   } catch (e) {
     if (e.data && e.data.needIdentity) { const d = $('#gitId'); if (d) d.open = true; }
     fail(e);
@@ -2463,7 +2774,21 @@ document.addEventListener('click', async (ev) => {
       if (cl.paket) { setField('paket', cl.paket); renderMainKeepEdits(); }
       break;
     }
-    case 'hist-select': if (S.cur && S.cur.hist) { S.cur.hist.sel = el.dataset.hash; paintHist(); } break;
+    case 'hist-select': if (S.cur && S.cur.hist && S.cur.hist.commit) { S.cur.hist.commit.sel = el.dataset.hash; await paintHist(); const li = $$('.commits li').find((x) => x.dataset.hash === el.dataset.hash); if (li) li.focus(); } break;
+    case 'hist-mode': await setHistMode(el.dataset.mode); break;
+    case 'ver-pick': { verPick(el.dataset.tag); const b = $$('#verTL .tl').find((x) => x.dataset.tag === el.dataset.tag); if (b) b.focus(); break; }
+    case 'ver-prev': { verPick(el.dataset.tag); const k = $('#verCmp'); if (k) { k.scrollIntoView({ block: 'start' }); k.focus({ preventScroll: true }); } break; }
+    case 'ver-view': await verView(el.dataset.tag); break;
+    case 'ver-view-close': { const v = S.cur && S.cur.hist && S.cur.hist.ver; if (v) { v.view = null; paintVer(); } break; }
+    case 'ver-load': await loadVersionIntoEditor(el.dataset.tag); break;
+    case 'ver-restore-cancel': cancelRestore(); break;
+    case 'ver-commit': {
+      const c = S.cur; const box = $('#verCDiff'); if (!c || !box) break;
+      $$('.commits li', box.parentElement).forEach((x) => x.classList.toggle('on', x === el));
+      box.hidden = false; box.textContent = 'Fark yükleniyor…';
+      try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path || c.path }))).diff || '(fark yok)'); } catch (e) { box.textContent = e.message; }
+      break;
+    }
     case 'hist-load': await loadOldVersion(el.dataset.hash); break;
     case 'publish-now': { if (await save()) await mkPublishCurrent(); break; }
     case 'copy-text': { const ok = await copyText(el.dataset.text); toast(ok ? 'Kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
@@ -2477,6 +2802,10 @@ document.addEventListener('click', async (ev) => {
     case 'git-selall': { S.gitSelTouched = true; const all = S.git.files.every((f) => S.gitSel.has(f.path)); S.gitSel = new Set(all ? [] : S.git.files.map((f) => f.path)); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); break; }
     case 'git-identity': try { await api('POST', '/api/git/identity', { name: $('#gName').value, email: $('#gMail').value }); await loadGit(); toast('Kimlik kaydedildi'); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); } catch (e) { fail(e); } break;
     case 'git-commit': await gitCommit(); break;
+    case 'gitlog-mode': ls.set('pp.gitLogMode', el.dataset.mode); await paintGitLog(); break;
+    case 'gitlog-more': S.gitLogLimit = Math.min(3000, (S.gitLogLimit || 300) + 300); await paintGitLog(); break;
+    case 'gitlog-ver': await openVersionInHistory(el.dataset.path, el.dataset.tag); break;
+    case 'gitlog-file-commit': { const box = $('#gDiff'); if (!box) break; $$('.gfile .gcs .link').forEach((x) => x.classList.toggle('on', x === el)); box.textContent = 'Fark yükleniyor…'; try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path }))).diff || '(fark yok)'); } catch (e) { box.textContent = e.message; } break; }
     case 'git-show': { $$('.commits li').forEach((x) => x.classList.toggle('on', x === el)); const box = $('#gDiff'); try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash }))).diff); } catch (e) { box.textContent = e.message; } break; }
     case 'market': openMarket(); break;
     case 'mk-init': {
@@ -2539,6 +2868,7 @@ document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
   else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
+  else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
   else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
   else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
@@ -2561,7 +2891,7 @@ document.addEventListener('keydown', (ev) => {
     else if (ev.key === 'Backspace' && !t.value) { const l = toList(FM.meta(S.cur.parsed)[key]); if (l.length) { removeChip(key, l[l.length - 1]); const i = $('[data-chip-in="' + key + '"]'); if (i) i.focus(); } }
     return;
   }
-  if ((ev.key === 'Enter' || ev.key === ' ') && t.matches && t.matches('#list [role="treeitem"], #list .res, .recent .res')) { ev.preventDefault(); t.click(); }
+  if ((ev.key === 'Enter' || ev.key === ' ') && t.matches && t.matches('#list [role="treeitem"], #list .res, .recent .res, .commits li[role="button"]')) { ev.preventDefault(); t.click(); }
   if (ev.key === 'Tab' && t.id === 'fBody') { /* Tab ile odak ilerlesin; girinti için boşluk kullan */ }
 });
 

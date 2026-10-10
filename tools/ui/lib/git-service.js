@@ -64,6 +64,72 @@ function parseLogOutput(out) {
   return commits;
 }
 
+// `for-each-ref` çıktısını ayrıştırır (saf fonksiyon). Kayıt ayırıcı \x1e, alan ayırıcı \x1f.
+// İlk dört alan (name, object, commit, date) eskisiyle aynıdır; yenileri sona eklenir.
+function parseTagRefs(out) {
+  const tags = [];
+  for (const rec of String(out).split('\x1e')) {
+    const r = rec.replace(/\r/g, '').replace(/^\n+/, '');
+    if (!r.trim()) continue;
+    const [name, object, peeled, date, type, tagger, subject, body] = r.split('\x1f');
+    const annotated = type === 'tag';
+    tags.push({
+      name, object, commit: peeled || object, date,
+      annotated, tagger: annotated ? (tagger || '') : '',
+      subject: annotated ? (subject || '') : '', body: annotated ? (body || '').replace(/\n+$/, '') : ''
+    });
+  }
+  return tags;
+}
+
+// `log --name-status` çıktısını ayrıştırır (saf fonksiyon). Tırnaklı (sekmeli/özel karakterli) yollar atlanır.
+function parseChangeLog(out) {
+  const commits = [];
+  for (const chunk of String(out).split('\x1e')) {
+    if (!chunk.trim()) continue;
+    const lines = chunk.replace(/\r/g, '').split('\n');
+    const head = lines[0].split('\x1f');
+    const files = [];
+    for (const line of lines.slice(1)) {
+      if (!line.trim()) continue;
+      const parts = line.split('\t');
+      const status = (parts[0] || '')[0];
+      if (!/[AMDRCT]/.test(status || '')) continue;
+      const paths = parts.slice(1);
+      if (paths.some((x) => x.startsWith('"'))) continue;
+      if ((status === 'R' || status === 'C') && paths.length >= 2) files.push({ status, path: paths[1], oldPath: paths[0] });
+      else if (paths.length >= 1) files.push({ status, path: paths[0] });
+    }
+    commits.push({ hash: head[0], short: head[1], author: head[2], date: head[3], subject: head[4], files });
+  }
+  return commits;
+}
+
+// `diff --word-diff=porcelain` çıktısını ayrıştırır (saf fonksiyon).
+function parseWordDiff(out) {
+  const hunks = [];
+  let h = null; let line = [];
+  for (const raw of String(out).split('\n')) {
+    const l = raw.replace(/\r$/, '');
+    const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(l);
+    if (m) {
+      if (h && line.length) { h.lines.push(line); line = []; }
+      h = { oldStart: +m[1], oldLines: m[2] === undefined ? 1 : +m[2], newStart: +m[3], newLines: m[4] === undefined ? 1 : +m[4], lines: [] };
+      hunks.push(h); line = [];
+      continue;
+    }
+    if (!h) continue;
+    if (l.startsWith('\\')) continue; // \ No newline at end of file
+    if (l === '~') { h.lines.push(line); line = []; continue; }
+    const c = l[0];
+    if (c === ' ') line.push({ t: '=', s: l.slice(1) });
+    else if (c === '-') line.push({ t: '-', s: l.slice(1) });
+    else if (c === '+') line.push({ t: '+', s: l.slice(1) });
+  }
+  if (h && line.length) h.lines.push(line);
+  return { hunks };
+}
+
 class GitService {
   constructor({ bin = 'git', runner = execFile, env = {}, forbiddenRoots = [] } = {}) {
     this.bin = bin;
@@ -190,15 +256,36 @@ class GitService {
     await this.run(dir, ['tag', '-d', name]);
   }
 
-  // [{ name, object, commit, date }]. prefix 'prompt/' gibi, '/' ile biten bir ad alanıdır.
+  // [{ name, object, commit, date, annotated, tagger, subject, body }]. prefix 'prompt/' gibi, '/' ile biten bir ad alanıdır.
   async listTags(dir, prefix = '') {
     if (prefix) this._checkRef(prefix, { prefix: true });
-    const fmt = '--format=%(refname:strip=2)%1f%(objectname)%1f%(*objectname)%1f%(creatordate:iso-strict)';
+    const fmt = '--format=%(refname:strip=2)%1f%(objectname)%1f%(*objectname)%1f%(creatordate:iso-strict)%1f%(objecttype)%1f%(taggername)%1f%(contents:subject)%1f%(contents:body)%1e';
     const out = await this.run(dir, ['for-each-ref', fmt, 'refs/tags/' + prefix]);
-    return out.split('\n').filter(Boolean).map((line) => {
-      const [name, object, peeled, date] = line.split('\x1f');
-      return { name, object, commit: peeled || object, date };
-    });
+    return parseTagRefs(out);
+  }
+
+  // Salt okunur: name-status'lu log (rename dahil). from/to verilirse `from..to` aralığı.
+  async changeLog(dir, { path: rel, follow = false, limit = 300, from, to } = {}) {
+    if (from !== undefined || to !== undefined) { this._checkHash(from); this._checkHash(to); }
+    const n = Number(limit);
+    if (!Number.isInteger(n) || n < 1) throw new GitError('Geçersiz limit');
+    const fmt = '--format=%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s';
+    const args = ['log', ...(follow ? ['--follow'] : []), '-M', '--name-status', '-n', String(n), fmt,
+      ...(from ? [from + '..' + to] : []), ...(rel ? ['--', rel] : [])];
+    let out;
+    try { out = await this.run(dir, args); } catch (e) {
+      if (/does not have any commits|bad default revision|unknown revision/i.test(e.message)) return [];
+      throw e;
+    }
+    return parseChangeLog(out);
+  }
+
+  // Salt okunur: iki blob arasında kelime bazlı fark (ham porcelain çıktısı). a/b: { hash, path }.
+  async wordDiff(dir, a, b, { context = 3 } = {}) {
+    this._checkHash(a.hash); this._checkHash(b.hash);
+    for (const p of [a.path, b.path]) if (!p || String(p).startsWith('-')) throw new GitError('Geçersiz yol');
+    const u = Math.max(0, Math.min(50, Number(context) | 0));
+    return this.run(dir, ['diff', '--no-color', '--no-ext-diff', '--word-diff=porcelain', '-U' + u, a.hash + ':' + a.path, b.hash + ':' + b.path]);
   }
 
   // commit'i CAS ile geri alır: HEAD artık o commit değilse hata verir.
@@ -258,4 +345,4 @@ class GitService {
   }
 }
 
-module.exports = { GitService, GitError, GitNotFoundError, parseStatus, parseLogOutput, HASH_RE };
+module.exports = { GitService, GitError, GitNotFoundError, parseStatus, parseLogOutput, parseTagRefs, parseChangeLog, parseWordDiff, HASH_RE };

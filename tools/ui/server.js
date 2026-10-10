@@ -16,7 +16,7 @@ const { spawn } = require('child_process');
 const FM = require('./public/fm.js');
 const Rules = require('./public/rules.js');
 const { ConfigStore } = require('./lib/config-store');
-const { GitService, GitError } = require('./lib/git-service');
+const { GitService, GitError, HASH_RE } = require('./lib/git-service');
 const { VersionService, VersionError } = require('./lib/version-service');
 const { MarketplaceRegistry } = require('./lib/marketplace-registry');
 const { MarketplaceFactory } = require('./lib/marketplace-factory');
@@ -27,6 +27,7 @@ const ppConfig = require('./lib/pp-config');
 const { PromptIndex } = require('./lib/prompt-index');
 const { LibraryCatalog } = require('./lib/library-catalog');
 const { PackageService, PackageError } = require('./lib/package-service');
+const { PromptHistory, HistoryError } = require('./lib/prompt-history');
 const { UndoStack } = require('./lib/undo');
 
 /* ------------------------------------------------------------------ ayarlar */
@@ -72,6 +73,8 @@ const catalog = new LibraryCatalog({
 const packages = new PackageService({
   fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt, Rules, FM
 });
+const history = new PromptHistory({ git: gitService, FM, Rules });
+const histErr = (e) => (e instanceof HistoryError ? httpErr(e.status, e.message, { code: e.code }) : e);
 const pkgErr = (e) => (e instanceof PackageError ? httpErr(e.status, e.message, e.data) : e);
 const vErr = (e) => (e instanceof VersionError ? httpErr(e.status, e.message, e.data) : e);
 
@@ -154,8 +157,6 @@ const indexFile = (rel, abs) => index.indexFile(root(), rel, abs);
 const listMd = (relDir, opts) => index.listMd(root(), relDir, opts);
 
 /* ------------------------------------------------------------------------- git */
-
-const HASH_RE = /^[0-9a-f]{7,40}$/;
 
 /* ------------------------------------------------------------------ marketplace */
 
@@ -816,6 +817,43 @@ route('GET', '/api/git/diff', async ({ q }) => {
   return { diff: cap(await gitService.showCommit(root(), hash, { stat: true })) };
 });
 
+/* ---- geçmiş (yalnızca etkin marketplace; X-PP-MP korumalı) ---- */
+
+route('GET', '/api/history/versions', async ({ q }) => {
+  const { rel } = safePath(q.get('path'));
+  const cfg = await loadConfig();
+  try { return await history.timeline(root(), rel, { libraryDir: cfg.libraryDir }); } catch (e) { throw histErr(e); }
+});
+
+route('GET', '/api/history/compare', async ({ q }) => {
+  const { rel } = safePath(q.get('path'));
+  const cfg = await loadConfig();
+  try { return await history.compare(root(), rel, q.get('a') || '', q.get('b') || '', { libraryDir: cfg.libraryDir }); } catch (e) { throw histErr(e); }
+});
+
+route('GET', '/api/history/show', async ({ q }) => {
+  const { rel } = safePath(q.get('path'));
+  const cfg = await loadConfig();
+  try { return await history.show(root(), rel, q.get('tag') || '', { libraryDir: cfg.libraryDir }); } catch (e) { throw histErr(e); }
+});
+
+route('GET', '/api/history/changes', async ({ q }) => {
+  const group = q.get('group') || 'file';
+  if (group !== 'file' && group !== 'version') throw httpErr(400, 'Geçersiz gruplama');
+  const mp = setup.current.activeMarketplace;
+  const cfg = await loadConfig();
+  try {
+    if (group === 'version') {
+      const currentPaths = (await index.listMd(root(), cfg.libraryDir, { includeBig: true })).map((i) => i.path);
+      return { mp, ...(await history.versionsByPrompt(root(), { libraryDir: cfg.libraryDir, currentPaths })) };
+    }
+    const raw = q.get('limit');
+    const limit = raw === null || raw === '' ? 300 : Number(raw);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 3000) throw httpErr(400, 'Geçersiz limit');
+    return { mp, ...(await history.changesByFile(root(), { limit, exists: (r) => exists(path.join(root(), r)) })) };
+  } catch (e) { throw histErr(e); }
+});
+
 /* ---- sürüm ---- */
 
 // Yalnızca libraryDir altındaki .md/.markdown dosyaları için.
@@ -1028,5 +1066,5 @@ if ('root' in ARGS) console.warn('Uyarı: --root artık desteklenmiyor. Library 
 // Kök değişince arama önbelleği (köke göreli yollar) geçersiz olur.
 // Kök (library) değişince tüm dizin ve sürüm önbellekleri geçersiz olur. Etkin marketplace değişince
 // temizlenmez: önbellekler marketplace klasörüne göre ayrılmıştır.
-setup.onLibraryChange(() => { index.clear(); versions.clearCache(); catalog.invalidate(); });
+setup.onLibraryChange(() => { index.clear(); versions.clearCache(); catalog.invalidate(); history.clear(); });
 setup.evaluate().then(() => listen(PORT, 10));
