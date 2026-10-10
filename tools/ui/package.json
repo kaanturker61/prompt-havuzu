@@ -1,0 +1,9 @@
+{
+  "name": "prompt-havuzu-ui",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Prompt havuzu için yerel arayüz (bağımlılıksız)",
+  "scripts": { "start": "node server.js --open" },
+  "engines": { "node": ">=18" }
+}

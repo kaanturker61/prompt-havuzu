@@ -1,0 +1,1336 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Prompt havuzu</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B7C84'/%3E%3Cpath d='M5 13c3-3 6-3 9 0s6 3 9 0M5 20c3-3 6-3 9 0s6 3 9 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --paper: #E8EDF0; --panel: #F7FAFA; --card: #FFFFFF; --ink: #12252E; --muted: #587080;
+  --line: #CCD7DD; --line2: #DCE5E9; --code: #F0F4F6;
+  --pool: #0B7C84; --pool-ink: #FFFFFF; --pool-tint: #D5ECEE; --pool-deep: #075A61;
+  --amber: #9A6005; --green: #2B7A4B; --red: #B3361F;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Code", "SF Mono", Consolas, ui-monospace, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0C181E; --panel: #10212A; --card: #142730; --ink: #E1EDF0; --muted: #8CA5B0;
+    --line: #25414D; --line2: #1D3540; --code: #0E1D24;
+    --pool: #46BFC6; --pool-ink: #052A2E; --pool-tint: #133C43; --pool-deep: #7FDDE2;
+    --amber: #E0A53C; --green: #5CC389; --red: #F0806B;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+body.noscroll { overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--pool); outline-offset: 2px; }
+[hidden] { display: none !important; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+.hint { color: var(--muted); font-size: 12.5px; }
+.grow { flex: 1; }
+
+/* üst çubuk */
+.top { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 9px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+.brand { font: 600 20px/1 var(--serif); display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.brand svg { color: var(--pool); }
+.searchbox { flex: 1 1 260px; max-width: 560px; }
+.searchbox input { width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.only-narrow { display: none; }
+
+/* düğmeler */
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 5px; padding: 6px 13px; line-height: 1.4; }
+.btn:hover:not(:disabled) { border-color: var(--pool); color: var(--pool-deep); }
+.btn.primary { background: var(--pool); border-color: var(--pool); color: var(--pool-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); color: var(--pool-ink); }
+.btn.danger { color: var(--red); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.sm { padding: 2px 9px; font-size: 12.5px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.link { border: 0; background: none; padding: 0; color: var(--pool-deep); text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--pool); color: var(--pool-ink); font-size: 11.5px; text-align: center; margin-left: 4px; }
+.badge.warn { background: var(--amber); color: #fff; }
+
+/* yerleşim */
+.shell { display: grid; grid-template-columns: minmax(270px, 340px) minmax(0, 1fr); height: calc(100vh - 54px); }
+aside { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+main { overflow: auto; padding: 22px 28px 70px; min-width: 0; }
+.filters { padding: 12px 12px 6px; border-bottom: 1px solid var(--line2); }
+.frow { display: flex; gap: 8px; }
+.frow select { flex: 1; min-width: 0; padding: 5px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+.chk { display: flex; align-items: center; gap: 7px; margin: 8px 0 2px; color: var(--muted); font-size: 12.5px; }
+.tagbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 4px; }
+.tagbtn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 0 9px; font-size: 12.5px; color: var(--muted); }
+.tagbtn:hover { border-color: var(--pool); }
+.tagbtn.on { background: var(--pool); border-color: var(--pool); color: var(--pool-ink); }
+.tagbtn .n { opacity: .7; margin-left: 3px; }
+.listhead { display: flex; align-items: center; gap: 4px; padding: 8px 12px 4px; color: var(--muted); font-size: 12.5px; }
+.list { overflow: auto; flex: 1; padding-bottom: 40px; }
+.empty { padding: 14px 14px; color: var(--muted); }
+
+/* ağaç */
+.row { display: flex; align-items: center; gap: 7px; padding: 5px 6px 5px calc(12px + var(--d, 0) * 16px); cursor: pointer; border-left: 3px solid transparent; }
+.row:hover { background: var(--pool-tint); }
+.row.active { background: var(--pool-tint); border-left-color: var(--pool); }
+.row.active .name { font-weight: 600; }
+.row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row.dir .name { color: var(--muted); font-weight: 600; }
+.row .cnt { color: var(--muted); font-size: 12px; }
+.more { opacity: 0; margin-left: auto; border: 0; background: none; color: var(--muted); padding: 0 8px; border-radius: 4px; }
+.row:hover .more, .row:focus-within .more, .row.active .more { opacity: 1; }
+@media (hover: none) { .more { opacity: 1; } }
+.caret { flex: none; width: 0; height: 0; border-left: 5px solid var(--muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .12s; margin: 0 3px 0 1px; }
+.caret.open { transform: rotate(90deg); }
+.sect { display: flex; align-items: center; gap: 7px; padding: 12px 12px 4px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.dot.taslak { background: var(--amber); }
+.dot.kararli { background: var(--green); }
+.dot.arsiv { background: var(--muted); opacity: .55; }
+.pill { display: inline-block; font-size: 11.5px; line-height: 1.5; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill.ok { border-color: var(--green); color: var(--green); }
+.pill.warn { border-color: var(--amber); color: var(--amber); }
+.pill.bad { border-color: var(--red); color: var(--red); }
+
+/* arama sonuçları */
+.res { padding: 8px 12px 9px; border-left: 3px solid transparent; cursor: pointer; border-bottom: 1px solid var(--line2); }
+.res:hover, .res.active { background: var(--pool-tint); }
+.res.active { border-left-color: var(--pool); }
+.rt { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.rp { color: var(--muted); font-size: 12px; margin-left: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs { margin: 3px 0 0 15px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rtags { margin: 4px 0 0 15px; display: flex; flex-wrap: wrap; gap: 4px; }
+mark { background: color-mix(in srgb, var(--pool) 28%, transparent); color: inherit; border-radius: 2px; }
+
+/* kart (editör) */
+.card { max-width: 980px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 22px 26px 26px; }
+.crumbs { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; word-break: break-all; }
+.crumbs .sep { margin: 0 5px; opacity: .6; }
+.titlebar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.title { flex: 1 1 320px; min-width: 0; font: 600 29px/1.2 var(--serif); border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 2px 0 8px; margin: 0; border-radius: 0; }
+.title:focus { outline: 0; border-bottom-color: var(--pool); }
+.title.static { border-bottom-color: transparent; overflow-wrap: anywhere; }
+.tbtns { display: flex; gap: 8px; padding-bottom: 6px; }
+.tabs { display: flex; gap: 2px; margin: 16px 0 0; border-bottom: 1px solid var(--line); }
+.tab { border: 0; background: none; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--ink); }
+.tab.on { color: var(--pool-deep); border-bottom-color: var(--pool); font-weight: 600; }
+.pane { padding-top: 16px; }
+.banner { border: 1px solid var(--line); border-left: 3px solid var(--amber); background: var(--code); padding: 8px 12px; border-radius: 5px; margin: 14px 0 0; }
+.banner .btn { margin-left: 8px; }
+.meta { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px 14px; align-items: center; padding-bottom: 14px; }
+.meta > label { color: var(--muted); }
+.meta input:not([type=checkbox]), .meta select, .stack input:not([type=checkbox]), .stack select, .stack textarea,
+.grid2 input:not([type=checkbox]), .grid2 select, .gitleft textarea, .gitleft input:not([type=checkbox]) {
+  width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+.grid2 label.chk { display: flex; }
+.inline { display: flex; gap: 8px; align-items: center; }
+.inline input { flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; background: var(--card); min-height: 34px; }
+.chips:focus-within { border-color: var(--pool); }
+.chip { display: inline-flex; align-items: center; background: var(--pool-tint); color: var(--pool-deep); border-radius: 999px; padding: 0 3px 0 10px; font-size: 12.5px; }
+.chip button { border: 0; background: none; color: inherit; padding: 0 6px; line-height: 1.4; font-size: 15px; }
+.meta .chips input.chip-in, .chips input.chip-in { border: 0; outline: 0; background: transparent; flex: 1; min-width: 100px; width: auto; padding: 2px 4px; }
+details.pub { border: 1px solid var(--line2); border-radius: 6px; margin: 4px 0 16px; background: var(--code); }
+details.pub summary { padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+details.pub .meta { padding: 8px 12px 12px; margin: 0; }
+.pubfoot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 12px 12px; }
+.bodywrap textarea, #fRaw { width: 100%; min-height: 300px; resize: vertical; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); font: 13.5px/1.65 var(--mono); tab-size: 2; }
+.bodywrap textarea:focus, #fRaw:focus { outline: 0; border-color: var(--pool); }
+.bodyinfo { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+
+/* geçmiş / fark */
+.hist { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; }
+.commits { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line2); border-radius: 6px; max-height: 60vh; overflow: auto; }
+.commits li { padding: 8px 10px; border-bottom: 1px solid var(--line2); cursor: pointer; }
+.commits li:last-child { border-bottom: 0; }
+.commits li:hover, .commits li.on { background: var(--pool-tint); }
+.commits .s { font-weight: 600; overflow-wrap: anywhere; }
+.diffhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.diff { font: 12.5px/1.55 var(--mono); background: var(--code); border: 1px solid var(--line2); border-radius: 6px; padding: 10px 0; overflow: auto; max-height: 62vh; margin: 0; }
+.dl { display: block; padding: 0 12px; white-space: pre; }
+.dl.add { background: color-mix(in srgb, var(--green) 17%, transparent); }
+.dl.del { background: color-mix(in srgb, var(--red) 17%, transparent); }
+.dl.hunk { color: var(--pool-deep); }
+.dl.meta { color: var(--muted); }
+
+/* başlangıç ekranı */
+.start { max-width: 760px; margin: 6vh auto 0; }
+.start h1 { font: 600 34px/1.15 var(--serif); margin-bottom: 8px; }
+.start p { color: var(--muted); max-width: 56ch; }
+.start .btns { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 30px; }
+.start h2 { font-size: 15px; margin-bottom: 8px; }
+.recent { border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.recent .res { cursor: pointer; }
+.recent .res:last-child { border-bottom: 0; }
+
+/* modal */
+.overlay { position: fixed; inset: 0; background: rgba(8, 20, 26, .55); display: flex; align-items: flex-start; justify-content: center; padding: 5vh 14px; z-index: 50; overflow: auto; }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: 10px; width: min(640px, 100%); box-shadow: 0 24px 70px rgba(0, 0, 0, .38); }
+.modal.wide { width: min(1080px, 100%); }
+.mhead { display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line2); }
+.mhead h2 { font: 600 20px/1.2 var(--serif); flex: 1; }
+.mbody { padding: 18px 20px 20px; }
+.stack { display: grid; gap: 12px; }
+.stack label, .grid2 label { display: grid; gap: 4px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.span2 { grid-column: 1 / -1; }
+.foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.foot-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mbody h3 { font-size: 15px; margin: 22px 0 8px; }
+.mbody h3:first-child { margin-top: 0; }
+.ftable { border: 1px solid var(--line2); border-radius: 6px; max-height: 38vh; overflow: auto; }
+.frowi { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line2); }
+.frowi:last-child { border-bottom: 0; }
+.frowi .pv { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line2); }
+.mkrow:last-child { border-bottom: 0; }
+.mklist { border: 1px solid var(--line2); border-radius: 6px; }
+.mkbtns { display: flex; gap: 6px; }
+.issue { font-size: 12.5px; }
+.issue.error { color: var(--red); } .issue.warn { color: var(--amber); } .issue.info { color: var(--muted); }
+.cmd { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.cmd code { flex: 1; background: var(--code); border: 1px solid var(--line2); border-radius: 5px; padding: 5px 10px; overflow-x: auto; white-space: nowrap; }
+.gitgrid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 18px; }
+.gitleft { display: grid; gap: 10px; align-content: start; }
+.gf { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--line2); }
+.gf:last-child { border-bottom: 0; }
+.gf .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gf.on { background: var(--pool-tint); }
+details summary { cursor: pointer; }
+
+/* açılır menü, bildirimler */
+.menu { position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); padding: 4px; min-width: 190px; }
+.menu .mi { display: block; width: 100%; border: 0; background: none; text-align: left; padding: 6px 12px; border-radius: 4px; }
+.menu .mi:hover { background: var(--pool-tint); }
+.menu .mi.danger { color: var(--red); }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 70; max-width: min(420px, calc(100vw - 32px)); }
+.toast { background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); transition: opacity .25s, transform .25s; }
+.toast.error { background: var(--red); color: #fff; }
+.toast.out { opacity: 0; transform: translateY(6px); }
+
+.fab { position: fixed; left: 12px; bottom: 14px; z-index: 40; background: var(--pool); color: var(--pool-ink); border-color: var(--pool); font-weight: 600; box-shadow: 0 4px 14px rgba(0, 0, 0, .28); }
+@media (max-width: 900px) {
+  .only-narrow { display: inline-block; }
+  .top { position: static; }
+  .shell { display: block; height: auto; }
+  aside { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 90vw); z-index: 30; transform: translateX(-102%); transition: transform .18s; box-shadow: 0 0 40px rgba(0, 0, 0, .3); visibility: hidden; }
+  body.side-open aside { transform: none; visibility: visible; }
+  body.side-open .fab { display: none; }
+  main { overflow: visible; padding: 14px 12px 90px; }
+  .card { padding: 16px 14px 20px; }
+  .hist, .gitgrid, .grid2 { grid-template-columns: 1fr; }
+  .meta { grid-template-columns: 1fr; gap: 4px; }
+  .meta > label { margin-top: 8px; }
+  .mkrow { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 12c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0M3 20c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
+    Prompt havuzu
+  </div>
+  <div class="searchbox"><input id="q" type="search" placeholder="Prompt ara (Ctrl+K)" autocomplete="off" aria-label="Prompt ara"></div>
+  <nav class="actions" aria-label="İşlemler">
+    <button class="btn primary" data-act="new-prompt">Yeni prompt</button>
+    <button class="btn" data-act="import">İçe aktar</button>
+    <button class="btn" data-act="git">Git<span id="gitBadge" class="badge" hidden></span></button>
+    <button class="btn" data-act="market">Marketplace</button>
+  </nav>
+</header>
+<button class="btn only-narrow fab" data-act="side" aria-label="Prompt listesini aç">Liste</button>
+
+<div class="shell">
+  <aside id="side">
+    <div class="filters">
+      <button class="btn sm only-narrow" data-act="side" style="margin-bottom:8px">Listeyi kapat</button>
+      <div class="frow">
+        <select id="fDurum" aria-label="Duruma göre filtrele">
+          <option value="">Tüm durumlar</option><option value="taslak">Taslak</option><option value="kararlı">Kararlı</option><option value="arşiv">Arşiv</option>
+        </select>
+        <select id="fTur" aria-label="Türe göre filtrele">
+          <option value="">Tüm türler</option><option value="komut">Komut</option><option value="ajan">Ajan</option><option value="skill">Skill</option><option value="yok">Yayın dışı</option>
+        </select>
+      </div>
+      <label class="chk"><input type="checkbox" id="fScope"> Marketplace dosyalarında da ara</label>
+      <div id="tagbar" class="tagbar"></div>
+    </div>
+    <div class="listhead">
+      <span id="listTitle">Promptlar</span><span class="grow"></span>
+      <button class="btn ghost sm" id="btnClear" data-act="clear-filters" hidden>Filtreyi temizle</button>
+      <button class="btn ghost sm" data-act="new-prompt-lib" title="Yeni prompt">+ Prompt</button>
+      <button class="btn ghost sm" data-act="new-dir-lib" title="Yeni klasör">+ Klasör</button>
+    </div>
+    <div id="list" class="list" role="tree" aria-label="Prompt listesi"></div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="mhead"><h2 id="mTitle"></h2><button class="btn ghost sm" data-act="close">Kapat</button></div>
+    <div class="mbody" id="mBody"></div>
+  </div>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<datalist id="dl-etiketler"></datalist><datalist id="dl-projeler"></datalist><datalist id="dl-paket"></datalist>
+
+<script src="/fm.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ---------------------------------------------------------------- yardımcılar */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fold = FM.fold;
+const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v));
+const toList = (v) => (Array.isArray(v) ? v : String(v == null ? '' : v).split(',')).map((s) => String(s).trim()).filter(Boolean);
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* özel pencere */ } }
+};
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const today = () => new Date().toLocaleDateString('sv-SE');
+const fmtDate = (iso) => { try { return new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso; } };
+const base = (p) => p.split('/').pop();
+const stem = (p) => base(p).replace(/\.[^.]+$/, '');
+const normTur = (v) => { const t = fold(str(v)).trim(); return ['komut', 'command', 'slash'].includes(t) ? 'komut' : ['ajan', 'agent', 'subagent'].includes(t) ? 'ajan' : ['skill', 'beceri'].includes(t) ? 'skill' : ''; };
+const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'taslak' : f === 'kararli' ? 'kararli' : f === 'arsiv' ? 'arsiv' : ''; };
+
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-PP': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch (e) { /* gövde yok */ }
+  if (!r.ok) { const e = new Error(j.error || ('İstek başarısız (' + r.status + ')')); e.status = r.status; e.data = j; throw e; }
+  return j;
+}
+const get = (u) => api('GET', u);
+const qs = (o) => Object.keys(o).filter((k) => o[k] !== '' && o[k] != null && o[k] !== false).map((k) => k + '=' + encodeURIComponent(o[k])).join('&');
+
+function toast(msg, kind, ms) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (kind || 'ok');
+  t.textContent = msg;
+  $('#toasts').appendChild(t);
+  const d = ms || (kind === 'error' ? 7000 : 3000);
+  setTimeout(() => t.classList.add('out'), d);
+  setTimeout(() => t.remove(), d + 300);
+}
+const fail = (e) => toast(e && e.message ? e.message : String(e), 'error');
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* eski tarayıcı */ }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+function hl(text, tokens) {
+  if (!tokens.length) return esc(text);
+  const f = fold(text); const marks = [];
+  for (const t of tokens) { let i = 0; while ((i = f.indexOf(t, i)) >= 0) { marks.push([i, i + t.length]); i += t.length; } }
+  if (!marks.length) return esc(text);
+  marks.sort((a, b) => a[0] - b[0]);
+  const merged = [marks[0]];
+  for (const m of marks.slice(1)) { const l = merged[merged.length - 1]; if (m[0] <= l[1]) l[1] = Math.max(l[1], m[1]); else merged.push(m); }
+  let out = ''; let pos = 0;
+  for (const [a, b] of merged) { out += esc(text.slice(pos, a)) + '<mark>' + esc(text.slice(a, b)) + '</mark>'; pos = b; }
+  return out + esc(text.slice(pos));
+}
+
+function autosize(el) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(300, el.scrollHeight + 4) + 'px'; }
+
+/* --------------------------------------------------------------------- durum */
+const S = {
+  info: null, tree: [], libraryDir: 'library',
+  facets: { tags: [], durum: [], tur: [], projeler: [], pakets: [], folders: [], total: 0 },
+  expanded: new Set(ls.get('pp.expanded', [])),
+  f: { q: '', tags: [], durum: '', tur: '', scope: 'library' },
+  results: null, cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null
+};
+
+const isFiltering = () => !!(S.f.q.trim() || S.f.tags.length || S.f.durum || S.f.tur);
+const saveExpanded = () => ls.set('pp.expanded', Array.from(S.expanded));
+
+/* ------------------------------------------------------------------- yükleme */
+async function loadTree() { const r = await get('/api/tree'); S.tree = r.tree; S.libraryDir = r.libraryDir; }
+async function loadFacets() { S.facets = await get('/api/facets'); }
+async function loadGit() {
+  try { S.git = await get('/api/git/status'); } catch (e) { S.git = { isRepo: false, error: e.message }; }
+  renderGitBadge();
+  return S.git;
+}
+async function loadRecent() { try { S.recent = (await get('/api/search?q=')).results.slice(0, 8); } catch (e) { S.recent = []; } }
+
+async function refreshAll() {
+  await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]);
+  renderFilters(); renderList();
+  if (isFiltering()) runSearch();
+  if (!S.cur) renderMain();
+}
+
+/* -------------------------------------------------------------- sol kenar çubuğu */
+function renderFilters() {
+  const tags = S.facets.tags;
+  const shown = S.tagsAll ? tags : tags.slice(0, 14);
+  let h = shown.map((t) => `<button class="tagbtn ${S.f.tags.some((x) => fold(x) === fold(t.name)) ? 'on' : ''}" data-act="tag" data-tag="${esc(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('');
+  if (tags.length > 14) h += `<button class="tagbtn" data-act="tags-all">${S.tagsAll ? 'Daha az göster' : 'Tüm etiketler (' + tags.length + ')'}</button>`;
+  $('#tagbar').innerHTML = h;
+  const opt = (arr) => arr.map((x) => `<option value="${esc(x)}">`).join('');
+  $('#dl-etiketler').innerHTML = opt(tags.map((t) => t.name));
+  $('#dl-projeler').innerHTML = opt(S.facets.projeler.map((t) => t.name));
+  $('#dl-paket').innerHTML = opt(S.facets.pakets.concat(S.info ? [S.info.config.marketplace.plugin] : []));
+}
+
+function countFiles(n) { return n.children.reduce((a, c) => a + (c.type === 'dir' ? countFiles(c) : (/\.md$/i.test(c.name) ? 1 : 0)), 0); }
+
+function nodeHtml(n, depth) {
+  const active = S.cur && S.cur.path === n.path ? ' active' : '';
+  if (n.type === 'dir') {
+    const open = S.expanded.has(n.path);
+    return `<div class="row dir" role="treeitem" aria-expanded="${open}" tabindex="0" data-act="toggle" data-path="${esc(n.path)}" style="--d:${depth}">
+      <span class="caret ${open ? 'open' : ''}"></span><span class="name">${esc(n.name)}</span><span class="cnt">${countFiles(n)}</span>
+      <button class="more" data-act="menu" data-path="${esc(n.path)}" data-type="dir" aria-label="${esc(n.name)} için işlemler">⋯</button></div>`
+      + (open ? n.children.map((c) => nodeHtml(c, depth + 1)).join('') : '');
+  }
+  const m = n.meta;
+  const label = m && m.baslik ? m.baslik : n.name;
+  return `<div class="row file${active}" role="treeitem" tabindex="0" data-act="open" data-path="${esc(n.path)}" style="--d:${depth}" title="${esc(n.path)}">
+    <span class="dot ${m ? durumClass(m.durum) : ''}"></span><span class="name">${esc(label)}</span>${m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : ''}
+    <button class="more" data-act="menu" data-path="${esc(n.path)}" data-type="file" aria-label="${esc(label)} için işlemler">⋯</button></div>`;
+}
+
+function treeHtml() {
+  const lib = S.tree.find((n) => n.path === S.libraryDir);
+  const others = S.tree.filter((n) => n !== lib);
+  let h = '';
+  if (lib) {
+    if (!lib.children.length) h += '<div class="empty">Havuz boş. Yeni bir prompt oluştur veya .txt dosyalarını içe aktar.</div>';
+    h += lib.children.map((c) => nodeHtml(c, 0)).join('');
+  }
+  if (others.length) {
+    const open = S.expanded.has('__others');
+    h += `<div class="sect" role="button" tabindex="0" data-act="toggle" data-path="__others"><span class="caret ${open ? 'open' : ''}"></span>Marketplace ve diğer dosyalar</div>`;
+    if (open) h += others.map((c) => nodeHtml(c, 0)).join('');
+  }
+  return h;
+}
+
+function resultsHtml() {
+  const tokens = fold(S.f.q).split(/\s+/).filter(Boolean);
+  if (!S.results.length) return '<div class="empty">Eşleşen prompt yok. Filtreleri veya arama sözcüklerini değiştir.</div>';
+  return S.results.map((r) => `<div class="res ${S.cur && S.cur.path === r.path ? 'active' : ''}" role="treeitem" tabindex="0" data-act="open" data-path="${esc(r.path)}">
+    <div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${hl(r.baslik, tokens)}</span>${r.tur ? `<span class="pill">${esc(r.tur)}</span>` : ''}</div>
+    <div class="rp">${esc(r.path)}</div>
+    ${r.snippet ? `<div class="rs">${hl(r.snippet, tokens)}</div>` : ''}
+    ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`).join('');
+}
+
+function renderList() {
+  if (S.results) {
+    $('#list').innerHTML = resultsHtml();
+    $('#listTitle').textContent = 'Sonuçlar (' + S.results.length + ')';
+  } else {
+    $('#list').innerHTML = treeHtml();
+    $('#listTitle').textContent = 'Promptlar (' + S.facets.total + ')';
+  }
+  $('#btnClear').hidden = !isFiltering();
+}
+
+const runSearch = debounce(async () => {
+  if (!isFiltering()) { S.results = null; renderList(); return; }
+  try {
+    S.results = (await get('/api/search?' + qs({ q: S.f.q, tags: S.f.tags.join(','), durum: S.f.durum, tur: S.f.tur, scope: S.f.scope }))).results;
+  } catch (e) { fail(e); }
+  renderList();
+}, 140);
+
+function expandParents(p) {
+  const parts = p.split('/'); let acc = '';
+  for (let i = 0; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; S.expanded.add(acc); }
+  if (!p.startsWith(S.libraryDir + '/')) S.expanded.add('__others');
+  saveExpanded();
+}
+
+/* ------------------------------------------------------------------ modal'lar */
+let modalState = null;
+function openModal(o) {
+  if ($('#overlay').hidden === false) closeModal();
+  $('#mTitle').textContent = o.title;
+  $('#mBody').innerHTML = o.html;
+  $('.modal').className = 'modal' + (o.wide ? ' wide' : '');
+  $('#overlay').hidden = false;
+  document.body.classList.add('noscroll');
+  modalState = { onClose: o.onClose };
+  if (o.onMount) o.onMount($('#mBody'));
+  const f = $('#mBody [autofocus]') || $('#mBody input:not([type=checkbox]):not([type=hidden])') || $('#mBody textarea');
+  if (f && !o.noFocus) f.focus();
+}
+function closeModal() {
+  if ($('#overlay').hidden) return;
+  $('#overlay').hidden = true;
+  $('#mBody').innerHTML = '';
+  document.body.classList.remove('noscroll');
+  const s = modalState; modalState = null;
+  if (s && s.onClose) s.onClose();
+}
+
+function askText(o) {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    openModal({
+      title: o.title,
+      html: `<form class="stack" id="askForm"><label>${esc(o.label)}<input id="askIn" value="${esc(o.value || '')}" autocomplete="off"></label>
+        ${o.hint ? `<p class="hint">${esc(o.hint)}</p>` : ''}
+        <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">${esc(o.ok || 'Tamam')}</button></div></form>`,
+      onMount: (b) => {
+        $('#askForm', b).addEventListener('submit', (e) => { e.preventDefault(); fin($('#askIn', b).value.trim() || null); closeModal(); });
+        $('#askIn', b).select();
+      },
+      onClose: () => fin(null)
+    });
+  });
+}
+
+function askChoice(o) {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    openModal({
+      title: o.title,
+      html: `<p>${esc(o.text)}</p><div class="foot">${o.choices.map((c) => `<button class="btn ${c.kind || ''}" data-choice="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>`,
+      onMount: (b) => { $$('[data-choice]', b).forEach((x) => x.addEventListener('click', () => { fin(x.dataset.choice); closeModal(); })); },
+      onClose: () => fin(null)
+    });
+  });
+}
+
+/* açılır menü */
+let menuOff = null;
+function closeMenu() {
+  $$('.menu').forEach((m) => m.remove());
+  if (menuOff) { document.removeEventListener('click', menuOff); menuOff = null; }
+}
+function showMenu(x, y, items) {
+  closeMenu();
+  const m = document.createElement('div');
+  m.className = 'menu'; m.setAttribute('role', 'menu');
+  m.innerHTML = items.map((i) => `<button class="mi ${i.danger ? 'danger' : ''}" role="menuitem" data-act="${i.act}" data-path="${esc(i.path)}">${esc(i.label)}</button>`).join('');
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+  menuOff = () => closeMenu();
+  setTimeout(() => { if (menuOff) document.addEventListener('click', menuOff); }, 0);
+}
+function menuFor(path, type, x, y) {
+  const items = type === 'dir'
+    ? [{ label: 'Yeni prompt burada', act: 'new-prompt-in', path }, { label: 'Yeni klasör', act: 'new-dir', path }, { label: 'Yeniden adlandır veya taşı', act: 'rename', path }, { label: 'Sil (çöp kutusuna taşı)', act: 'delete', path, danger: true }]
+    : [{ label: 'Yeniden adlandır veya taşı', act: 'rename', path }, { label: 'Sil (çöp kutusuna taşı)', act: 'delete', path, danger: true }];
+  showMenu(x, y, items);
+}
+
+/* ------------------------------------------------------------------ dosya açma */
+const leadOf = (p) => (p.hasFm && /^\n/.test(p.body) ? '\n' : '');
+const isDirty = () => !!(S.cur && S.cur.dirty);
+
+function computeRaw() {
+  const c = S.cur;
+  if (c.tab === 'raw') {
+    const t = $('#fRaw');
+    if (t) { const p = FM.parse(t.value); p.eol = c.eol; p.bom = c.bom; return FM.stringify(p); }
+  }
+  return FM.stringify(c.parsed);
+}
+function syncFromDom() {
+  const c = S.cur; if (!c) return;
+  if (c.tab === 'raw') {
+    const t = $('#fRaw');
+    if (t) { const p = FM.parse(t.value); p.eol = c.eol; p.bom = c.bom; c.parsed = p; c.lead = leadOf(p); }
+  }
+}
+function updateDirty() {
+  const c = S.cur; if (!c) return;
+  c.dirty = computeRaw() !== c.savedRaw;
+  const b = $('#btnSave'); if (b) b.disabled = !c.dirty;
+  document.title = (c.dirty ? '• ' : '') + 'Prompt havuzu';
+  const n = $('#dirtyNote'); if (n) n.hidden = !c.dirty;
+}
+
+async function confirmDiscard() {
+  if (!isDirty()) return true;
+  const a = await askChoice({
+    title: 'Kaydedilmemiş değişiklikler var', text: '"' + base(S.cur.path) + '" dosyasında kaydetmediğin değişiklikler var.',
+    choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'discard', label: 'Değişiklikleri at', kind: 'danger' }, { id: 'save', label: 'Kaydet ve devam et', kind: 'primary' }]
+  });
+  if (a === 'save') return save();
+  if (a === 'discard') { S.cur.dirty = false; return true; }
+  return false;
+}
+
+async function openFile(p, o) {
+  o = o || {};
+  if (S.cur && S.cur.path === p && !o.reload) { closeSide(); return; }
+  if (!(await confirmDiscard())) return;
+  let r;
+  try { r = await get('/api/file?' + qs({ path: p })); } catch (e) { if (!o.quiet) fail(e); if (e.status === 404) ls.set('pp.last', null); renderMain(); return; }
+  const parsed = FM.parse(r.raw);
+  S.cur = {
+    path: r.path, parsed, savedRaw: r.raw, mtime: r.mtime, isPrompt: r.isPrompt, isMd: r.isMd,
+    generatedFrom: r.generatedFrom, publish: r.publish, eol: parsed.eol, bom: parsed.bom, lead: leadOf(parsed),
+    tab: o.tab || (r.isPrompt ? 'edit' : 'raw'), hist: null, dirty: false, external: false
+  };
+  ls.set('pp.last', r.path);
+  expandParents(r.path);
+  closeSide(); renderList(); renderMain();
+  if (S.cur.tab === 'hist') loadHistory();
+  document.title = 'Prompt havuzu';
+}
+
+function closeSide() { document.body.classList.remove('side-open'); }
+
+/* --------------------------------------------------------------------- ana alan */
+function chipsHtml(key, list, ph) {
+  return `<div class="chips" data-chips="${key}">${list.map((t) => `<span class="chip">${esc(t)}<button type="button" data-act="chip-x" data-key="${key}" data-val="${esc(t)}" aria-label="${esc(t)} değerini kaldır">×</button></span>`).join('')}<input class="chip-in" data-chip-in="${key}" list="dl-${key}" placeholder="${esc(ph)}" autocomplete="off" aria-label="${esc(ph)}"></div>`;
+}
+
+function pubPill() {
+  const c = S.cur; const m = FM.meta(c.parsed); const tur = normTur(m.tur);
+  if (!tur) return '<span class="pill">Yayın dışı</span>';
+  const p = c.publish;
+  if (!p) return '<span class="pill warn">Kaydedince yayınlanabilir</span>';
+  if (p.state === 'guncel') return '<span class="pill ok">Yayında, güncel</span>';
+  if (p.state === 'eski') return '<span class="pill warn">Yayında, kaynak değişti</span>';
+  return '<span class="pill warn">Henüz yayınlanmadı</span>';
+}
+
+function editPaneHtml() {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const tur = normTur(m.tur);
+  const shownBody = c.parsed.body.slice(c.lead.length);
+  const pubOpen = ls.get('pp.pubOpen', false) || !!tur;
+  const durumVal = fold(str(m.durum));
+  const dOpt = [['taslak', 'Taslak'], ['kararlı', 'Kararlı'], ['arşiv', 'Arşiv']];
+  const known = dOpt.some((d) => fold(d[0]) === durumVal);
+  const mk = S.info.config.marketplace;
+  const usage = c.publish ? (c.publish.tur === 'ajan'
+    ? `Ajan adı: <code>${esc(c.publish.ad)}</code>`
+    : `Claude Code'da çağır: <code>/${esc(c.publish.paket)}:${esc(c.publish.ad)}</code>`) : '';
+  return `
+  <div class="meta">
+    <label>Etiketler</label>${chipsHtml('etiketler', toList(m.etiketler), 'Etiket ekle, Enter')}
+    <label for="fDurum2">Durum</label>
+    <select id="fDurum2" data-f="durum">
+      <option value="">Belirsiz</option>
+      ${dOpt.map((d) => `<option value="${d[0]}" ${fold(d[0]) === durumVal ? 'selected' : ''}>${d[1]}</option>`).join('')}
+      ${durumVal && !known ? `<option value="${esc(str(m.durum))}" selected>${esc(str(m.durum))}</option>` : ''}
+    </select>
+    <label for="fVer">Versiyon</label>
+    <div class="inline"><input id="fVer" data-f="versiyon" value="${esc(str(m.versiyon))}" placeholder="1"><button type="button" class="btn sm" data-act="bump" title="Versiyonu bir artır">+1</button></div>
+    <label>Projeler</label>${chipsHtml('projeler', toList(m.projeler), 'Hangi projelerde kullanılıyor?')}
+  </div>
+  <details class="pub" id="pubBox" ${pubOpen ? 'open' : ''}>
+    <summary><b>Claude Code yayın ayarları</b><span id="pubPill">${pubPill()}</span></summary>
+    <div class="meta">
+      <label for="pTur">Tür</label>
+      <select id="pTur" data-f="tur">
+        <option value="">Yayın dışı</option>
+        <option value="komut" ${tur === 'komut' ? 'selected' : ''}>Komut (slash command)</option>
+        <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>Ajan (subagent)</option>
+        <option value="skill" ${tur === 'skill' ? 'selected' : ''}>Skill</option>
+      </select>
+      <label for="pPaket">Paket</label><input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(mk.plugin)}">
+      <label for="pAd">Ad</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
+      <label for="pAcik">Açıklama</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?">
+      <label for="pArg">Argüman ipucu</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="[dosya yolu]">
+      <label for="pArac">İzinli araçlar</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
+      <label for="pModel">Model</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
+    </div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="publish-now" ${tur ? '' : 'disabled'}>Kaydet ve yayınla</button><span class="hint" id="pubUsage">${usage}</span></div>
+  </details>
+  <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="Prompt metni" placeholder="Prompt metnini buraya yaz. {{degisken}} biçiminde yer tutucular kullanabilirsin.">${esc(shownBody)}</textarea></div>
+  <div class="bodyinfo" id="bodyInfo"></div>`;
+}
+
+function bodyInfoText() {
+  const c = S.cur; const b = c.parsed.body.slice(c.lead.length);
+  const words = (b.trim().match(/\S+/g) || []).length;
+  const vars = FM.placeholders(b);
+  return `<span>${words} kelime, ${b.length} karakter</span>${vars.length ? `<span>Değişkenler: ${vars.map((v) => '<code>' + esc(v) + '</code>').join(' ')}</span>` : ''}<span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>Kaydedilmemiş değişiklik var</span>`;
+}
+
+function rawPaneHtml() {
+  const c = S.cur;
+  return `<textarea id="fRaw" spellcheck="false" aria-label="Dosya içeriği">${esc(FM.stringify(c.parsed).replace(/\r\n/g, '\n'))}</textarea>
+  <div class="bodyinfo"><span>Tüm dosya, frontmatter dahil. Biçimi bozmadan düzenle.</span><span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>Kaydedilmemiş değişiklik var</span></div>`;
+}
+
+function histPaneHtml() {
+  const h = S.cur.hist;
+  if (!h || h.loading) return '<p class="hint">Geçmiş yükleniyor…</p>';
+  if (h.noRepo) return '<p>Geçmiş kaydı için havuzun bir git deposu olması gerekir.</p><p><button class="btn primary" data-act="git">Git panelini aç</button></p>';
+  if (h.error) return `<p class="issue error">${esc(h.error)}</p>`;
+  const items = [];
+  if (h.working && (h.working.diff || h.working.untracked)) items.push(`<li data-act="hist-select" data-hash="working" class="${h.sel === 'working' ? 'on' : ''}"><div class="s">Commit edilmemiş değişiklikler</div><div class="hint">${h.working.untracked ? 'Dosya henüz git\'e eklenmedi' : 'Son commit ile fark'}</div></li>`);
+  for (const k of h.commits) items.push(`<li data-act="hist-select" data-hash="${k.hash}" class="${h.sel === k.hash ? 'on' : ''}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`);
+  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Değişikliklerini Git panelinden commit et.</p>';
+  return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">Bir kayıt seç.</pre></div></div>`;
+}
+
+function renderMain() {
+  const main = $('#main');
+  const c = S.cur;
+  if (!c) { main.innerHTML = startHtml(); return; }
+  const tabs = c.isPrompt ? [['edit', 'Düzenle'], ['raw', 'Ham metin'], ['hist', 'Geçmiş']] : [['raw', 'Düzenle'], ['hist', 'Geçmiş']];
+  const crumbs = c.path.split('/').map((s) => esc(s)).join('<span class="sep">/</span>');
+  const m = FM.meta(c.parsed);
+  const title = c.isPrompt
+    ? `<input class="title" data-f="baslik" value="${esc(str(m.baslik))}" placeholder="${esc(stem(c.path))}" aria-label="Başlık">`
+    : `<h1 class="title static">${esc(base(c.path))}</h1>`;
+  const banner = c.generatedFrom
+    ? `<div class="banner">Bu dosya <b>${esc(c.generatedFrom)}</b> kaynağından otomatik üretildi. Burada yaptığın değişiklik bir sonraki yayında ezilir.<button class="btn sm" data-act="open" data-path="${esc(c.generatedFrom)}">Kaynağa git</button></div>` : '';
+  const ext = c.external ? '<div class="banner">Bu dosya, sen açtıktan sonra diskte değişti. Kaydedersen ne yapmak istediğini soracağım.</div>' : '';
+  let pane = '';
+  if (c.tab === 'edit' && c.isPrompt) pane = editPaneHtml();
+  else if (c.tab === 'hist') pane = histPaneHtml();
+  else pane = rawPaneHtml();
+  main.innerHTML = `<section class="card">
+    <div class="crumbs">${crumbs}</div>
+    <div class="titlebar">${title}
+      <div class="tbtns">${c.isMd ? '<button class="btn" data-act="copy" title="Prompt metnini panoya kopyala">Kopyala</button>' : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty ? '' : 'disabled'} title="Ctrl+S">Kaydet</button></div>
+    </div>
+    ${banner}${ext}
+    <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
+    <div class="pane" id="pane">${pane}</div></section>`;
+  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); }
+  if (c.tab === 'raw') autosize($('#fRaw'));
+  if (c.tab === 'hist') paintHist();
+}
+
+function startHtml() {
+  const n = S.facets.total;
+  const recent = S.recent.length
+    ? `<h2>Son değişenler</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.path)}</div></div>`).join('')}</div>` : '';
+  return `<div class="start"><h1>${n ? 'Bir prompt seç' : 'Havuz henüz boş'}</h1>
+    <p>${n ? `Havuzunda ${n} prompt var. Soldaki listeden veya arama kutusundan birini aç. Sık kopyaladıklarını etiketle, değiştirdiklerini git ile kaydet.` : 'Eski .txt dosyalarını içe aktararak başlayabilir ya da sıfırdan yeni bir prompt yazabilirsin.'}</p>
+    <div class="btns"><button class="btn primary" data-act="new-prompt">Yeni prompt</button><button class="btn" data-act="import">.txt dosyalarını içe aktar</button></div>${recent}</div>`;
+}
+
+/* ---------------------------------------------------------------- düzenleme */
+function setField(key, value) {
+  const c = S.cur;
+  FM.set(c.parsed, key, typeof value === 'string' ? value.trim() : value);
+  c.lead = c.lead || leadOf(c.parsed);
+  updateDirty();
+  if (['tur'].includes(key)) {
+    const pb = $('#pubBox button[data-act="publish-now"]'); if (pb) pb.disabled = !normTur(value);
+    const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill();
+  }
+}
+
+function refreshChips(key) {
+  const c = S.cur; const el = $('[data-chips="' + key + '"]'); if (!el) return;
+  const ph = key === 'etiketler' ? 'Etiket ekle, Enter' : 'Hangi projelerde kullanılıyor?';
+  const wrap = document.createElement('div');
+  wrap.innerHTML = chipsHtml(key, toList(FM.meta(c.parsed)[key]), ph);
+  el.replaceWith(wrap.firstElementChild);
+}
+function addChips(key, raw, keepFocus) {
+  const c = S.cur; const list = toList(FM.meta(c.parsed)[key]);
+  for (const v of toList(raw)) if (!list.some((x) => fold(x) === fold(v))) list.push(v);
+  setField(key, list); refreshChips(key);
+  if (keepFocus) { const i = $('[data-chip-in="' + key + '"]'); if (i) i.focus(); }
+}
+function removeChip(key, val) {
+  const c = S.cur;
+  setField(key, toList(FM.meta(c.parsed)[key]).filter((x) => x !== val));
+  refreshChips(key);
+}
+
+function bumpVersion(v) {
+  v = String(v || '').trim();
+  if (!v) return '1';
+  if (/^\d+$/.test(v)) return String(Number(v) + 1);
+  const m = v.match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
+  if (m) return m[3] !== undefined ? m[1] + '.' + m[2] + '.' + (Number(m[3]) + 1) : m[1] + '.' + (Number(m[2]) + 1);
+  return v + '.1';
+}
+
+function setTab(tab) {
+  const c = S.cur; if (!c || c.tab === tab) return;
+  syncFromDom();
+  c.tab = tab;
+  renderMain();
+  if (tab === 'hist') loadHistory();
+}
+
+async function save(force) {
+  const c = S.cur; if (!c) return false;
+  syncFromDom();
+  const raw = FM.stringify(c.parsed);
+  try {
+    const r = await api('PUT', '/api/file', { path: c.path, raw, baseMtime: force ? undefined : c.mtime });
+    c.savedRaw = raw; c.mtime = r.mtime; c.dirty = false; c.external = false;
+    toast('Kaydedildi');
+    updateDirty();
+    afterWrite();
+    return true;
+  } catch (e) {
+    if (e.status === 409 && e.data && e.data.conflict) {
+      const a = await askChoice({
+        title: 'Dosya diskte değişmiş', text: 'Bu dosya sen açtıktan sonra başka bir yerde (örneğin Claude Code veya editör) değiştirilmiş. Ne yapalım?',
+        choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'reload', label: 'Diskteki sürümü yükle', kind: '' }, { id: 'force', label: 'Diskteki sürümün üstüne yaz', kind: 'danger' }]
+      });
+      if (a === 'force') return save(true);
+      if (a === 'reload') { c.dirty = false; await openFile(c.path, { reload: true, tab: c.tab }); }
+      return false;
+    }
+    fail(e); return false;
+  }
+}
+
+async function afterWrite() {
+  await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]);
+  renderFilters(); renderList();
+  if (isFiltering()) runSearch();
+  const c = S.cur;
+  if (c && c.isPrompt) {
+    try { const r = await get('/api/file?' + qs({ path: c.path })); c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r.publish.paket)}:${esc(r.publish.ad)}</code>`; } catch (e) { /* sessiz */ }
+  }
+}
+
+/* --------------------------------------------------------------- kopyalama */
+async function copyBody() {
+  const c = S.cur; if (!c) return;
+  syncFromDom();
+  const body = c.parsed.body.replace(/^\n+/, '').replace(/\s+$/, '') + '\n';
+  const vars = FM.placeholders(body);
+  if (!vars.length) { const ok = await copyText(body); toast(ok ? 'Panoya kopyalandı (' + body.length + ' karakter)' : 'Kopyalanamadı, metni elle seç', ok ? 'ok' : 'error'); return; }
+  const mem = ls.get('pp.vars', {});
+  openModal({
+    title: 'Değişkenleri doldur',
+    html: `<form class="stack" id="varForm"><p class="hint">Bu promptta ${vars.length} değişken var. Boş bıraktıkların <code>{{ad}}</code> olarak kalır. Değerler bir sonraki sefer için hatırlanır.</p>
+      ${vars.map((v, i) => `<label>${esc(v)}<input data-var="${esc(v)}" value="${esc(mem[v] || '')}" ${i === 0 ? 'autofocus' : ''} autocomplete="off"></label>`).join('')}
+      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button type="button" class="btn" data-act="copy-raw-vars">Değişkenleri doldurmadan kopyala</button><button class="btn primary">Doldur ve kopyala</button></div></form>`,
+    onMount: (b) => {
+      const collect = () => { const o = {}; $$('[data-var]', b).forEach((i) => { o[i.dataset.var] = i.value; }); return o; };
+      $('#varForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const vals = collect(); ls.set('pp.vars', { ...mem, ...vals });
+        const ok = await copyText(FM.fill(body, vals));
+        closeModal(); toast(ok ? 'Panoya kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error');
+      });
+      $('[data-act="copy-raw-vars"]', b).addEventListener('click', async (e) => { e.stopPropagation(); const ok = await copyText(body); closeModal(); toast(ok ? 'Panoya kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); });
+    }
+  });
+}
+
+/* ------------------------------------------------------------------- geçmiş */
+async function loadHistory() {
+  const c = S.cur; c.hist = { loading: true }; paintHist();
+  try {
+    const st = S.git || await loadGit();
+    if (!st.isRepo) { c.hist = { noRepo: true }; paintHist(); return; }
+    const [log, wd] = await Promise.all([get('/api/git/log?' + qs({ path: c.path })), get('/api/git/diff?' + qs({ path: c.path, working: 1 }))]);
+    c.hist = { commits: log.commits, working: wd, sel: (wd.diff || wd.untracked) ? 'working' : (log.commits[0] ? log.commits[0].hash : null), diffs: {} };
+    paintHist();
+  } catch (e) { c.hist = { error: e.message }; paintHist(); }
+}
+
+function diffHtml(d) {
+  return d.split('\n').map((l) => {
+    let k = '';
+    if (/^(\+\+\+|---|diff |index |new file|deleted file)/.test(l)) k = 'meta';
+    else if (l.startsWith('@@')) k = 'hunk';
+    else if (l[0] === '+') k = 'add';
+    else if (l[0] === '-') k = 'del';
+    return `<span class="dl ${k}">${esc(l) || ' '}</span>`;
+  }).join('');
+}
+
+async function paintHist() {
+  const c = S.cur; if (!c || c.tab !== 'hist') return;
+  const pane = $('#pane'); if (!pane) return;
+  pane.innerHTML = histPaneHtml();
+  const h = c.hist; if (!h || !h.sel || !$('#diffBox')) return;
+  const head = $('#diffHead'); const box = $('#diffBox');
+  if (h.sel === 'working') {
+    if (h.working.untracked) { box.textContent = 'Bu dosya henüz git\'e eklenmedi. Git panelinden commit edebilirsin.'; head.innerHTML = ''; return; }
+    box.innerHTML = diffHtml(h.working.diff); head.innerHTML = '<span class="hint">Son commit ile şu anki dosya arasındaki fark</span>';
+    return;
+  }
+  const k = h.commits.find((x) => x.hash === h.sel); if (!k) return;
+  head.innerHTML = `<span><b>${esc(k.subject)}</b> <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.author)}</span></span><button class="btn sm" data-act="hist-load" data-hash="${k.hash}">Bu sürümü editöre al</button>`;
+  try {
+    if (!h.diffs[k.hash]) h.diffs[k.hash] = (await get('/api/git/diff?' + qs({ hash: k.hash, path: k.path || c.path }))).diff;
+    if (c.hist === h && h.sel === k.hash) box.innerHTML = diffHtml(h.diffs[k.hash] || '(fark yok)');
+  } catch (e) { box.textContent = e.message; }
+}
+
+async function loadOldVersion(hash) {
+  const c = S.cur; const k = c.hist.commits.find((x) => x.hash === hash); if (!k) return;
+  try {
+    const r = await get('/api/git/show?' + qs({ hash, path: k.path || c.path }));
+    const p = FM.parse(r.raw); p.eol = c.eol; p.bom = c.bom;
+    c.parsed = p; c.lead = leadOf(p);
+    c.tab = c.isPrompt ? 'edit' : 'raw';
+    renderMain(); updateDirty();
+    toast('Eski sürüm editöre alındı. Kaydedene kadar dosya değişmez.');
+  } catch (e) { fail(e); }
+}
+
+/* --------------------------------------------------------- yeni prompt, klasör */
+const TEMPLATES = {
+  bos: { label: 'Boş', meta: {}, body: '' },
+  rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
+  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
+  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
+};
+
+function openNewPrompt(folder) {
+  const folders = S.facets.folders.length ? S.facets.folders : [S.libraryDir];
+  const sel = folder && folders.includes(folder) ? folder : S.libraryDir;
+  openModal({
+    title: 'Yeni prompt',
+    html: `<form class="stack" id="newForm">
+      <label>Başlık<input name="title" required autofocus placeholder="Örn. C# kod inceleme" autocomplete="off"></label>
+      <div class="grid2">
+        <label>Klasör<select name="folder">${folders.map((f) => `<option value="${esc(f)}" ${f === sel ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
+        <label>Yeni alt klasör (isteğe bağlı)<input name="sub" placeholder="Örn. mstest" autocomplete="off"></label>
+      </div>
+      <label>Etiketler (virgülle ayır)<input name="tags" list="dl-etiketler" placeholder="csharp, kod-inceleme" autocomplete="off"></label>
+      <label>Şablon<select name="tpl">${Object.keys(TEMPLATES).map((k) => `<option value="${k}">${esc(TEMPLATES[k].label)}</option>`).join('')}</select></label>
+      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+    onMount: (b) => {
+      $('#newForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        const title = String(f.get('title')).trim(); if (!title) return;
+        let dir = String(f.get('folder'));
+        const sub = String(f.get('sub')).trim(); if (sub) dir += '/' + FM.slug(sub);
+        const p = FM.parse('');
+        FM.set(p, 'baslik', title);
+        const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
+        FM.set(p, 'durum', 'taslak'); FM.set(p, 'versiyon', '1'); FM.set(p, 'olusturma', today());
+        const t = TEMPLATES[f.get('tpl')] || TEMPLATES.bos;
+        Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
+        p.body = '\n' + t.body;
+        closeModal();
+        if (!(await confirmDiscard())) return;
+        try {
+          const r = await api('POST', '/api/file', { path: dir + '/' + FM.slug(title) + '.md', raw: FM.stringify(p), unique: true });
+          await afterWrite();
+          await openFile(r.path);
+          const bd = $('#fBody'); if (bd) bd.focus();
+          toast('Prompt oluşturuldu');
+        } catch (err) { fail(err); }
+      });
+    }
+  });
+}
+async function newDir(parent) {
+  const name = await askText({ title: 'Yeni klasör', label: 'Klasör adı', hint: parent + ' içinde oluşturulur.', ok: 'Oluştur' });
+  if (!name) return;
+  try { const r = await api('POST', '/api/mkdir', { path: parent + '/' + FM.slug(name) }); S.expanded.add(parent); S.expanded.add(r.path); saveExpanded(); await afterWrite(); toast('Klasör oluşturuldu'); } catch (e) { fail(e); }
+}
+
+async function renameItem(p) {
+  const to = await askText({ title: 'Yeniden adlandır veya taşı', label: 'Yeni yol', value: p, hint: 'Başka bir klasöre taşımak için yolu düzenle.', ok: 'Uygula' });
+  if (!to || to === p) return;
+  try {
+    const r = await api('POST', '/api/rename', { from: p, to });
+    if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) { S.cur.path = r.path + S.cur.path.slice(p.length); ls.set('pp.last', S.cur.path); }
+    expandParents(r.path); await afterWrite(); renderMain();
+    toast('Taşındı. Yayınlanmışsa eski hedef Marketplace panelinde "kaynağı kalmayan dosyalar" altında görünür.', 'ok', 5000);
+  } catch (e) { fail(e); }
+}
+
+async function deleteItem(p) {
+  const a = await askChoice({ title: 'Silinsin mi?', text: '"' + p + '" çöp kutusuna (.pp/trash) taşınır. Git ile takip ediliyorsa geçmişte de durur.', choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Sil', kind: 'danger' }] });
+  if (a !== 'yes') return;
+  try {
+    await api('DELETE', '/api/file?' + qs({ path: p }));
+    if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) { S.cur = null; ls.set('pp.last', null); }
+    await afterWrite(); renderMain(); toast('Çöp kutusuna taşındı');
+  } catch (e) { fail(e); }
+}
+
+/* ---------------------------------------------------------- içe aktarma */
+function openImport() {
+  openModal({
+    title: '.txt dosyalarını içe aktar', wide: true,
+    html: `<div class="stack"><form class="grid2" id="impForm">
+      <label class="span2">Klasör yolu<input name="dir" value="${esc(ls.get('pp.impDir', ''))}" placeholder="C:\\Users\\sen\\promptlar veya ~/promptlar" autocomplete="off" autofocus></label>
+      <label>Hedef klasör<input name="target" value="${esc(S.libraryDir)}/gelen-kutusu" autocomplete="off"></label>
+      <label class="chk" style="align-self:end"><input type="checkbox" name="rec"> Alt klasörleri de tara</label>
+      <div class="span2 foot-left"><button class="btn primary">Tara</button><span class="hint">Orijinal dosyalara dokunulmaz. Eski Türkçe kodlamalar (Windows-1254) ve UTF-16 otomatik çözülür.</span></div></form>
+      <div id="impOut"></div></div>`,
+    onMount: (b) => {
+      $('#impForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target); const dir = String(f.get('dir')).trim(); if (!dir) return;
+        const out = $('#impOut', b); out.innerHTML = '<p class="hint">Taranıyor…</p>';
+        try {
+          const r = await api('POST', '/api/import/scan', { dir, recursive: !!f.get('rec') });
+          ls.set('pp.impDir', dir);
+          if (!r.files.length) { out.innerHTML = '<p>Bu klasörde .txt dosyası bulunamadı.</p>'; return; }
+          out.innerHTML = `<h3>${r.files.length} dosya bulundu</h3>
+            <div class="inline" style="margin-bottom:8px"><button type="button" class="btn sm" id="impAll">Tümünü seç / bırak</button><span class="grow"></span><button type="button" class="btn primary" id="impGo">İçe aktar</button></div>
+            <div class="ftable">${r.files.map((x, i) => `<label class="frowi"><input type="checkbox" data-i="${i}" checked><span><b>${esc(x.rel)}</b><br><span class="pv">${esc(x.preview)}</span></span><span class="hint">${x.lines} satır</span></label>`).join('')}</div>`;
+          $('#impAll', out).addEventListener('click', () => { const cb = $$('[data-i]', out); const all = cb.every((x) => x.checked); cb.forEach((x) => { x.checked = !all; }); });
+          $('#impGo', out).addEventListener('click', async () => {
+            const files = $$('[data-i]', out).filter((x) => x.checked).map((x) => r.files[Number(x.dataset.i)].file);
+            if (!files.length) { toast('Dosya seçilmedi', 'error'); return; }
+            try {
+              const res = await api('POST', '/api/import/run', { dir: r.dir, files, target: String(f.get('target')).trim() || S.libraryDir + '/gelen-kutusu' });
+              const tgt = String(f.get('target')).trim();
+              out.innerHTML = `<h3>${res.created.length} prompt oluşturuldu</h3>
+                <p>Taslak olarak <code>${esc(tgt)}</code> içine kaydedildi. Orijinal .txt dosyaları yerinde duruyor. Şimdi etiketle, klasörlere ayır ve git ile commit et.</p>
+                ${res.skipped.length ? `<p class="issue warn">${res.skipped.length} dosya atlandı: ${res.skipped.map((s) => esc(base(s.file) + ' (' + s.reason + ')')).join(', ')}</p>` : ''}
+                <div class="foot"><button class="btn" data-act="close">Kapat</button><button class="btn primary" data-act="show-folder" data-path="${esc(tgt)}">Klasörü göster</button></div>`;
+              await afterWrite();
+            } catch (err) { fail(err); }
+          });
+        } catch (err) { out.innerHTML = ''; fail(err); }
+      });
+    }
+  });
+}
+
+/* --------------------------------------------------------------------- git */
+function renderGitBadge() {
+  const b = $('#gitBadge'); const g = S.git;
+  if (!g) { b.hidden = true; return; }
+  if (!g.isRepo) { b.hidden = false; b.className = 'badge warn'; b.textContent = '!'; b.title = 'Git deposu değil'; return; }
+  const n = g.files.length;
+  b.className = 'badge'; b.hidden = !n; b.textContent = n; b.title = n + ' değişiklik commit bekliyor';
+}
+
+const GLABEL = { '?': 'yeni', M: 'değişti', D: 'silindi', A: 'eklendi', R: 'taşındı' };
+
+async function openGit(tab) {
+  openModal({ title: 'Git', wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
+  await loadGit();
+  if (tab === 'log') return paintGitLog();
+  paintGit();
+}
+
+function gitTabs(on) {
+  return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">Değişiklikler${S.git && S.git.isRepo ? ' (' + S.git.files.length + ')' : ''}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">Geçmiş</button></div><div style="height:14px"></div>`;
+}
+
+function paintGit() {
+  const g = S.git; const body = $('#mBody');
+  if (!g.isRepo) {
+    body.innerHTML = `<p>Bu klasör henüz bir git deposu değil. Git ile her promptun geçmişi saklanır ve eski sürümlere dönebilirsin.</p>
+      <p class="hint">Depo, havuz klasöründe oluşturulur: <code>${esc(S.info.root)}</code>. Ayrıca <code>.gitignore</code> ve <code>.gitattributes</code> dosyaları eklenir.</p>
+      <div class="foot"><button class="btn primary" data-act="git-init">Git deposunu başlat</button></div>`;
+    return;
+  }
+  if (!S.gitSel) S.gitSel = new Set();
+  const paths = g.files.map((f) => f.path);
+  for (const p of Array.from(S.gitSel)) if (!paths.includes(p)) S.gitSel.delete(p);
+  if (S.gitSel.size === 0 && !S.gitSelTouched) paths.forEach((p) => S.gitSel.add(p));
+  const idOpen = !g.identity.name || !g.identity.email;
+  const suggestion = g.files.length === 1 ? (stem(g.files[0].path) + ': güncelle') : (g.files.length ? g.files.length + ' dosya güncellendi' : '');
+  body.innerHTML = gitTabs('changes') + `<div class="gitgrid"><div class="gitleft">
+    <div class="hint">Dal: <b>${esc(g.branch)}</b>${g.hasCommits ? '' : ' (henüz commit yok)'}</div>
+    ${g.files.length ? `<div class="ftable">${g.files.map((f) => `<div class="gf" data-gpath="${esc(f.path)}"><input type="checkbox" data-gsel="${esc(f.path)}" ${S.gitSel.has(f.path) ? 'checked' : ''} aria-label="${esc(f.path)} commit'e dahil"><button class="link" data-act="git-diff" data-path="${esc(f.path)}" title="${esc(f.path)}">${esc(f.path)}</button><span class="pill ${f.code === 'D' ? 'bad' : f.code === '?' ? 'ok' : 'warn'}">${GLABEL[f.code] || f.code}</span></div>`).join('')}</div>
+      <button class="btn sm" data-act="git-selall" style="justify-self:start">Tümünü seç / bırak</button>`
+      : '<p>Commit bekleyen değişiklik yok. Her şey kayıtlı.</p>'}
+    <details id="gitId" ${idOpen ? 'open' : ''}><summary>Git kimliği ${idOpen ? '(commit için gerekli)' : ''}</summary>
+      <div class="stack" style="margin-top:8px"><input id="gName" placeholder="Ad Soyad" value="${esc(g.identity.name)}" aria-label="Git adı"><input id="gMail" placeholder="e-posta" value="${esc(g.identity.email)}" aria-label="Git e-postası"><button class="btn sm" data-act="git-identity" style="justify-self:start">Kimliği kaydet</button></div></details>
+    ${g.files.length ? `<label>Commit mesajı<textarea id="gMsg" rows="4" placeholder="Ne değişti ve neden? İlk satır özet olsun.">${esc(S.gitMsg || suggestion)}</textarea></label>
+      <button class="btn primary" data-act="git-commit">Seçilenleri commit et</button>` : ''}
+    </div><div><pre class="diff" id="gDiff">Bir dosya adına tıkla, farkı burada gör.</pre></div></div>`;
+}
+
+async function paintGitLog() {
+  const body = $('#mBody');
+  if (!S.git.isRepo) return paintGit();
+  body.innerHTML = gitTabs('log') + '<p class="hint">Yükleniyor…</p>';
+  try {
+    const r = await get('/api/git/log');
+    body.innerHTML = gitTabs('log') + (r.commits.length
+      ? `<div class="hist"><ul class="commits" style="max-height:62vh">${r.commits.map((k) => `<li data-act="git-show" data-hash="${k.hash}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="gDiff">Bir kayıt seç.</pre></div>`
+      : '<p>Henüz commit yok.</p>');
+  } catch (e) { body.innerHTML = gitTabs('log') + `<p class="issue error">${esc(e.message)}</p>`; }
+}
+
+async function gitDiffFor(p) {
+  const box = $('#gDiff'); if (!box) return;
+  $$('.gf').forEach((x) => x.classList.toggle('on', x.dataset.gpath === p));
+  const f = S.git.files.find((x) => x.path === p);
+  try {
+    if (f && f.code === '?') {
+      const r = await get('/api/file?' + qs({ path: p }));
+      box.innerHTML = diffHtml(('+++ ' + p + ' (yeni dosya)\n' + r.raw.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n').map((l) => '+' + l).join('\n')));
+      return;
+    }
+    const r = await get('/api/git/diff?' + qs({ path: p, working: 1 }));
+    box.innerHTML = r.diff ? diffHtml(r.diff) : 'Fark yok.';
+  } catch (e) { box.textContent = e.message; }
+}
+
+async function gitCommit() {
+  const msg = ($('#gMsg') || {}).value || '';
+  const paths = Array.from(S.gitSel || []);
+  if (!paths.length) { toast('Commit için en az bir dosya seç', 'error'); return; }
+  if (!msg.trim()) { toast('Commit mesajı yaz', 'error'); return; }
+  try {
+    const r = await api('POST', '/api/git/commit', { message: msg, paths });
+    S.gitMsg = ''; S.gitSel = null; S.gitSelTouched = false;
+    toast('Commit oluşturuldu (' + r.commit + ')');
+    await loadGit(); paintGit(); loadRecent();
+    if (S.cur && S.cur.tab === 'hist') S.cur.hist = null;
+  } catch (e) {
+    if (e.data && e.data.needIdentity) { const d = $('#gitId'); if (d) d.open = true; }
+    fail(e);
+  }
+}
+
+/* -------------------------------------------------------------- marketplace */
+const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">Kopyala</button></div>`;
+
+function mkListHtml(st) {
+  if (!st.items.length && !st.orphans.length) {
+    return '<div class="empty" style="border:1px solid var(--line2);border-radius:6px">Henüz yayınlanacak prompt yok. Bir promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç (komut, ajan veya skill).</div>';
+  }
+  const stPill = (s) => s === 'guncel' ? '<span class="pill ok">Yayında, güncel</span>' : s === 'eski' ? '<span class="pill warn">Kaynak değişti</span>' : '<span class="pill warn">Yayınlanmadı</span>';
+  let h = '<div class="mklist">';
+  h += st.items.map((i) => `<div class="mkrow"><div>
+      <button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.baslik)}</button> <span class="pill">${esc(i.tur)}</span> <span class="pill">${esc(i.paket)}</span>
+      <div class="hint mono">${esc(i.target)}</div>
+      ${i.issues.map((x) => `<div class="issue ${x.level}">${esc(x.msg)}</div>`).join('')}</div>
+      <div>${stPill(i.state)}</div>
+      <div class="mkbtns">${i.state !== 'guncel' && !i.issues.some((x) => x.level === 'error') ? `<button class="btn sm" data-act="mk-publish" data-path="${esc(i.source)}">${i.state === 'yok' ? 'Yayınla' : 'Güncelle'}</button>` : ''}${i.state !== 'yok' ? `<button class="btn sm ghost" data-act="mk-unpublish" data-target="${esc(i.target)}">Kaldır</button>` : ''}</div></div>`).join('');
+  h += '</div>';
+  if (st.orphans.length) {
+    h += `<h3>Kaynağı kalmayan dosyalar</h3><p class="hint">Bu dosyaların havuzda karşılığı yok: kaynak silinmiş, taşınmış ya da adı değişmiş olabilir. Kaldırınca çöp kutusuna taşınır.</p><div class="mklist">${st.orphans.map((o) => `<div class="mkrow"><div class="mono">${esc(o.target)}</div><div></div><div class="mkbtns"><button class="btn sm" data-act="mk-unpublish" data-target="${esc(o.target)}">Kaldır</button></div></div>`).join('')}</div>`;
+  }
+  return h;
+}
+
+function mkCmdsHtml(st) {
+  const c = st.commands;
+  return `<p class="hint">Bir kez, bilgisayarında (terminalde):</p>${cmdLine(c.validate)}${cmdLine(c.add)}
+    <p class="hint" style="margin-top:12px">Sonra her projede istediğin paketi kur:</p>${c.install.map((i) => cmdLine(i.cmd)).join('')}
+    <p class="hint" style="margin-top:12px">Havuzu değiştirip yeniden yayınladıktan sonra projelerde güncelle:</p>${cmdLine(c.update)}
+    <p class="hint" style="margin-top:12px">Claude Code oturumunda aynı işler <code>/plugin marketplace add …</code> ve <code>/plugin install …</code> ile de yapılır. Kurulan komutlar <code>/paket:ad</code> biçiminde çağrılır.</p>`;
+}
+
+function marketHtml(st) {
+  const c = st.config;
+  return `<h3>Ayarlar</h3>
+    <form class="grid2" id="mkForm">
+      <label>Marketplace adı<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
+      <label>Sahip<input name="owner" value="${esc(c.owner)}" placeholder="Adın" autocomplete="off"></label>
+      <label>Varsayılan paket<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
+      <label>Sürüm (isteğe bağlı)<input name="version" value="${esc(c.version)}" placeholder="Boşsa plugin.json'a yazılmaz" autocomplete="off"></label>
+      <label class="span2">Açıklama<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
+      <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">Marketplace dosyalarını yaz</button>
+        <span class="hint" id="mkState">${st.marketplaceExists ? 'marketplace.json mevcut: ' + esc(st.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı'}</span></div>
+    </form>
+    <h3>Yayınlanacak promptlar</h3>
+    <div class="inline" style="margin-bottom:8px"><span class="hint">Promptun türünü, promptu açıp "Claude Code yayın ayarları" bölümünden seçersin.</span><span class="grow"></span><button class="btn" data-act="mk-publish-all">Tümünü yayınla</button></div>
+    <div id="mkList">${mkListHtml(st)}</div>
+    <h3>Projelerde kullanım</h3><div id="mkCmds">${mkCmdsHtml(st)}</div>`;
+}
+
+async function openMarket() {
+  openModal({ title: 'Marketplace', wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
+  try { S.mk = await get('/api/marketplace/status'); $('#mBody').innerHTML = marketHtml(S.mk); } catch (e) { closeModal(); fail(e); }
+}
+
+async function mkReload() {
+  try {
+    S.mk = await get('/api/marketplace/status');
+    const l = $('#mkList'); if (l) l.innerHTML = mkListHtml(S.mk);
+    const c = $('#mkCmds'); if (c) c.innerHTML = mkCmdsHtml(S.mk);
+    const s = $('#mkState'); if (s) s.textContent = S.mk.marketplaceExists ? 'marketplace.json mevcut: ' + (S.mk.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı';
+  } catch (e) { fail(e); }
+  afterWrite();
+}
+
+async function mkPublish(body, okMsg) {
+  try {
+    const r = await api('POST', '/api/marketplace/publish', body);
+    if (r.failed.length) toast(r.failed.map((f) => f.source + ': ' + f.reason).join('; '), 'error');
+    else toast(r.done.length ? r.done.length + ' dosya yayınlandı' : (okMsg || 'Yayınlanacak yeni bir şey yok'));
+    await mkReload();
+    const c = S.cur; if (c && c.tab === 'edit') { const r2 = await get('/api/file?' + qs({ path: c.path })); c.publish = r2.publish; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); }
+  } catch (e) { fail(e); }
+}
+
+/* ------------------------------------------------------------- olay yönetimi */
+document.addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act; const p = el.dataset.path;
+  switch (act) {
+    case 'close': closeModal(); break;
+    case 'side': document.body.classList.toggle('side-open'); break;
+    case 'toggle': S.expanded.has(p) ? S.expanded.delete(p) : S.expanded.add(p); saveExpanded(); renderList(); break;
+    case 'open': await openFile(p); break;
+    case 'open-close': closeModal(); await openFile(p); break;
+    case 'menu': { ev.stopPropagation(); const r = el.getBoundingClientRect(); menuFor(p, el.dataset.type, r.left, r.bottom + 4); break; }
+    case 'tab': setTab(el.dataset.tab); break;
+    case 'save': await save(); break;
+    case 'copy': await copyBody(); break;
+    case 'bump': { const i = $('#fVer'); i.value = bumpVersion(i.value); setField('versiyon', i.value); break; }
+    case 'chip-x': removeChip(el.dataset.key, el.dataset.val); break;
+    case 'tag': { const t = el.dataset.tag; const i = S.f.tags.findIndex((x) => fold(x) === fold(t)); if (i >= 0) S.f.tags.splice(i, 1); else S.f.tags.push(t); renderFilters(); runSearch(); break; }
+    case 'tags-all': S.tagsAll = !S.tagsAll; renderFilters(); break;
+    case 'clear-filters': S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; renderFilters(); runSearch(); break;
+    case 'new-prompt': openNewPrompt(); break;
+    case 'new-prompt-lib': openNewPrompt(S.libraryDir); break;
+    case 'new-prompt-in': openNewPrompt(p); break;
+    case 'new-dir-lib': await newDir(S.libraryDir); break;
+    case 'new-dir': await newDir(p); break;
+    case 'rename': await renameItem(p); break;
+    case 'delete': await deleteItem(p); break;
+    case 'import': openImport(); break;
+    case 'show-folder': closeModal(); S.expanded.add(p); expandParents(p + '/x'); saveExpanded(); S.results = null; S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; renderFilters(); renderList(); break;
+    case 'hist-select': if (S.cur && S.cur.hist) { S.cur.hist.sel = el.dataset.hash; paintHist(); } break;
+    case 'hist-load': await loadOldVersion(el.dataset.hash); break;
+    case 'publish-now': { if (await save()) await mkPublishCurrent(); break; }
+    case 'copy-text': { const ok = await copyText(el.dataset.text); toast(ok ? 'Kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
+    case 'git': openGit(); break;
+    case 'git-tab': el.dataset.tab === 'log' ? paintGitLog() : paintGit(); break;
+    case 'git-init': try { await api('POST', '/api/git/init'); await loadGit(); toast('Git deposu başlatıldı'); paintGit(); } catch (e) { fail(e); } break;
+    case 'git-diff': await gitDiffFor(p); break;
+    case 'git-selall': { S.gitSelTouched = true; const all = S.git.files.every((f) => S.gitSel.has(f.path)); S.gitSel = new Set(all ? [] : S.git.files.map((f) => f.path)); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); break; }
+    case 'git-identity': try { await api('POST', '/api/git/identity', { name: $('#gName').value, email: $('#gMail').value }); await loadGit(); toast('Kimlik kaydedildi'); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); } catch (e) { fail(e); } break;
+    case 'git-commit': await gitCommit(); break;
+    case 'git-show': { $$('.commits li').forEach((x) => x.classList.toggle('on', x === el)); const box = $('#gDiff'); try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash }))).diff); } catch (e) { box.textContent = e.message; } break; }
+    case 'market': openMarket(); break;
+    case 'mk-init': {
+      ev.preventDefault();
+      const f = new FormData($('#mkForm'));
+      try { const r = await api('POST', '/api/marketplace/init', { config: Object.fromEntries(f.entries()) }); S.info = await get('/api/info'); toast('Marketplace dosyaları yazıldı: ' + r.packages.join(', ')); await mkReload(); } catch (e) { fail(e); }
+      break;
+    }
+    case 'mk-publish': await mkPublish({ paths: [p] }); break;
+    case 'mk-publish-all': await mkPublish({ all: true }, 'Hepsi zaten güncel'); break;
+    case 'mk-unpublish': try { await api('POST', '/api/marketplace/unpublish', { target: el.dataset.target }); toast('Kaldırıldı (çöp kutusuna taşındı)'); await mkReload(); } catch (e) { fail(e); } break;
+    default: break;
+  }
+});
+
+async function mkPublishCurrent() {
+  const c = S.cur; if (!c) return;
+  try {
+    const r = await api('POST', '/api/marketplace/publish', { paths: [c.path] });
+    if (r.failed.length) { toast(r.failed[0].reason, 'error'); return; }
+    toast(r.done.length ? 'Yayınlandı: ' + r.done[0] : 'Zaten güncel');
+    const r2 = await get('/api/file?' + qs({ path: c.path })); c.publish = r2.publish;
+    const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill();
+    const u = $('#pubUsage'); if (u && r2.publish) u.innerHTML = r2.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r2.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r2.publish.paket)}:${esc(r2.publish.ad)}</code>`;
+    afterWrite();
+  } catch (e) { fail(e); }
+}
+
+document.addEventListener('contextmenu', (ev) => {
+  const row = ev.target.closest('.row[data-path]');
+  if (!row || row.dataset.path.startsWith('__')) return;
+  ev.preventDefault();
+  menuFor(row.dataset.path, row.classList.contains('dir') ? 'dir' : 'file', ev.clientX, ev.clientY);
+});
+
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (t.id === 'q') { S.f.q = t.value; runSearch(); return; }
+  if (!S.cur) return;
+  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
+  if (t.id === 'fBody') {
+    S.cur.parsed.body = S.cur.lead + t.value;
+    autosize(t); updateDirty();
+    $('#bodyInfo').innerHTML = bodyInfoText();
+  } else if (t.id === 'fRaw') { autosize(t); updateDirty(); }
+});
+
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
+  else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
+  else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
+  else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
+  else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
+});
+
+document.addEventListener('toggle', (ev) => { if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open); }, true);
+
+document.addEventListener('keydown', (ev) => {
+  const t = ev.target;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return; }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); document.body.classList.add('side-open'); $('#q').focus(); $('#q').select(); return; }
+  if (ev.key === 'Escape') { if (!$('#overlay').hidden) closeModal(); closeMenu(); if (t.id === 'q') t.blur(); return; }
+  if (t.classList && t.classList.contains('chip-in') && S.cur) {
+    const key = t.dataset.chipIn;
+    if (ev.key === 'Enter' || ev.key === ',') { ev.preventDefault(); if (t.value.trim()) addChips(key, t.value, true); }
+    else if (ev.key === 'Backspace' && !t.value) { const l = toList(FM.meta(S.cur.parsed)[key]); if (l.length) { removeChip(key, l[l.length - 1]); const i = $('[data-chip-in="' + key + '"]'); if (i) i.focus(); } }
+    return;
+  }
+  if ((ev.key === 'Enter' || ev.key === ' ') && t.matches && t.matches('[role="treeitem"], .sect, .recent .res')) { ev.preventDefault(); t.click(); }
+  if (ev.key === 'Tab' && t.id === 'fBody') { /* Tab ile odak ilerlesin; girinti için boşluk kullan */ }
+});
+
+document.addEventListener('focusout', (ev) => {
+  const t = ev.target;
+  if (S.cur && t.classList && t.classList.contains('chip-in') && t.value.trim()) addChips(t.dataset.chipIn, t.value, false);
+});
+
+$('#overlay').addEventListener('mousedown', (ev) => { if (ev.target.id === 'overlay') closeModal(); });
+
+window.addEventListener('beforeunload', (ev) => { if (isDirty()) { ev.preventDefault(); ev.returnValue = ''; } });
+
+window.addEventListener('focus', async () => {
+  if (!S.info) return;
+  await refreshAll();
+  const c = S.cur;
+  if (c && !c.dirty) {
+    try {
+      const r = await get('/api/file?' + qs({ path: c.path }));
+      if (r.mtime !== c.mtime) { await openFile(c.path, { reload: true, tab: c.tab }); toast('Dosya diskte değişmişti, yenilendi'); }
+    } catch (e) { /* silinmiş olabilir */ }
+  } else if (c && c.dirty) {
+    try { const r = await get('/api/file?' + qs({ path: c.path })); if (r.mtime !== c.mtime && !c.external) { c.external = true; renderMainKeepEdits(); } } catch (e) { /* sessiz */ }
+  }
+});
+
+function renderMainKeepEdits() { syncFromDom(); renderMain(); updateDirty(); }
+
+/* ------------------------------------------------------------------ başlangıç */
+async function init() {
+  try { S.info = await get('/api/info'); } catch (e) { $('#main').innerHTML = '<div class="start"><h1>Sunucuya ulaşılamadı</h1><p>Terminalde <code>node tools/ui/server.js</code> komutunun çalıştığından emin ol, sonra sayfayı yenile.</p></div>'; return; }
+  document.querySelector('.brand').title = 'Havuz klasörü: ' + S.info.root;
+  await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]);
+  if (!S.info.gitAvailable) toast('Git bulunamadı. Geçmiş özellikleri çalışmaz; git kurup yeniden başlat.', 'error', 8000);
+  if (localStorage.getItem('pp.expanded') === null) {
+    const lib = S.tree.find((n) => n.path === S.libraryDir);
+    (function walk(ns, d) { ns.forEach((n) => { if (n.type === 'dir' && d < 2) { S.expanded.add(n.path); walk(n.children, d + 1); } }); })(lib ? lib.children : [], 0);
+    saveExpanded();
+  }
+  renderFilters(); renderList();
+  const last = ls.get('pp.last', null);
+  if (last) await openFile(last, { quiet: true }); else renderMain();
+  if (!S.cur) renderMain();
+}
+init();
+})();
+</script>
+</body>
+</html>
