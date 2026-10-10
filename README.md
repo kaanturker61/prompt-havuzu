@@ -17,12 +17,13 @@ Arayüz yalnızca bu bilgisayardan erişilebilir (127.0.0.1). Durdurmak için te
 Promptlar araç klasörünün dışında, bir **library kökünde** tutulur. Kökün altındaki her klasör ayrı bir marketplace, yani ayrı bir git deposudur.
 
 1. İlk açılışta "Kuruluma devam et" ekranı çıkar. **Ayarlar**'ı aç, library kökünü seç. Windows'ta `D:\` sürücüsü varsa orada bir library klasörü önerilir. Klasör yoksa oluşturulmasını onaylarsın. Araç klasörünün içi seçilemez.
-2. Ayarlar'dan **Yeni marketplace** oluştur (örn. `ornek-promptlar`). Git deposu (dal `main`) ve iskelet dosyaları hazırlanır, otomatik commit atılmaz. Git deposu olmayan mevcut bir klasörü de seçip "Git'i başlat" diyebilirsin.
-3. Üst çubuktaki seçiciden etkin marketplace'i değiştirirsin. Git paneli her zaman etkin marketplace'in deposuna çalışır.
-4. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Taslak olarak `prompts/gelen-kutusu` altına yazılır, orijinallere dokunulmaz.
-5. Promptları klasörlere taşı (sağ tık veya `⋯` menüsü), etiketle.
-6. Editörde **Commit mesajı** kutusunu doldurup Kaydet'e basarsan dosya kaydedilir ve yalnızca o dosya commit edilir; kutu boşsa yalnızca kaydedilir ("Commit bekliyor" görünür). **Git** panelinden de commit atabilirsin. **+1** düğmesi `versiyon` alanını artırır, commit ve `prompt/<ad>/vX.Y.Z` tag'i atar (sürüm notu zorunlu). Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
-7. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
+2. Soldaki ağacın başlığındaki **+ Marketplace** ile yeni bir marketplace oluştur (örn. `ornek-promptlar`). Git deposu (dal `main`) ve iskelet dosyaları hazırlanır, otomatik commit atılmaz. Git deposu olmayan mevcut bir klasör ağaçta "Git deposu olmayan klasörler" altında görünür; "Git'i başlat" diyebilirsin.
+3. Ağaç üç seviyelidir: **Marketplace → Plugin → Prompt**. Plugin, marketplace'in `prompts/` klasöründeki bir alt klasördür ve yayında aynı adla plugin olur. Tüm marketplace'ler ağaçta, aramada ve filtrelerde birlikte görünür. Bir marketplace'e, plugin'e ya da içindeki bir prompta tıklayınca o marketplace **etkin** olur (sayfa yenilenmez). Editör, Git paneli, sürüm, içe aktarma ve yayın etkin marketplace'te çalışır; üst çubuktaki **Marketplace: ad** düğmesi hangisinin etkin olduğunu gösterir.
+4. **+ Plugin** ile klasör açarsın (ad `claude-`, `anthropic-` gibi öneklerle başlayamaz; `gelen-kutusu` ayrılmıştır). **+ Prompt** ya da plugin satırındaki `+` o plugin'e yeni prompt ekler. `prompts/` kökündeki klasörsüz promptlar "Klasörsüz promptlar" altında, `gelen-kutusu` "Gelen kutusu" altında, `plugins/`, `.claude-plugin/` ve `pp.config.json` gibi dosyalar kapalı gelen "Teknik dosyalar" altında görünür.
+5. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Varsayılan hedef Gelen kutusu'dur (`prompts/gelen-kutusu`); istersen bir plugin seçebilirsin. Orijinallere dokunulmaz.
+6. Promptları başka plugin'e ya da başka marketplace'e taşı (sağ tık, `⋯` menüsü, Shift+F10), yeniden adlandır (F2), etiketle. Marketplace'ler arası taşımada sürüm tag'leri ve geçmiş kaynak depoda kalır, hedefte commit atılmamış yeni dosya olarak görünür.
+7. Editörde **Commit mesajı** kutusunu doldurup Kaydet'e basarsan dosya kaydedilir ve yalnızca o dosya commit edilir; kutu boşsa yalnızca kaydedilir ("Commit bekliyor" görünür). **Git** panelinden de commit atabilirsin. **+1** düğmesi `versiyon` alanını artırır, commit ve `prompt/<ad>/vX.Y.Z` tag'i atar (sürüm notu zorunlu). Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
+8. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
 
 Kullanıcı ayarları (library kökü, etkin marketplace) şu dosyada tutulur; yolu Ayarlar penceresinde de görünür:
 
@@ -35,7 +36,7 @@ Kullanıcı ayarları (library kökü, etkin marketplace) şu dosyada tutulur; y
 
 Library kökü altında, her marketplace klasöründe (ayrı git deposu):
 
-1. `prompts/`: tek kaynak. Her prompt bir `.md` dosyası.
+1. `prompts/`: tek kaynak. Her plugin bir alt klasördür (`prompts/<plugin>/`), her prompt bir `.md` dosyası.
 2. `plugins/` ve `.claude-plugin/`: yayınlayınca otomatik üretilir. Elle düzenleme, kaynakta düzenle.
 3. `.pp/trash/`: silinenler buraya taşınır (git'e girmez).
 4. `pp.config.json`: marketplace ayarları (arayüz yazar).
@@ -46,7 +47,7 @@ Hepsi isteğe bağlı. Tanımadığımız alanlara dokunulmaz.
 
 1. `baslik`, `etiketler`, `projeler`, `durum` (taslak, kararlı, arşiv), `versiyon` (yayınlanan son sürüm, +1 ile artar; boşsa ilk +1 `1.0.0` olur), `olusturma`
 2. `tur`: `komut`, `ajan` veya `skill` yazarsan yayınlanabilir olur
-3. `paket`: hangi pluginin içine gireceği. Projelere sadece ihtiyacın olan paketi kurmak için kullan
+3. `paket`: hangi pluginin içine gireceği. Yeni promptlar bulunduğu plugin klasörünün adını yazar; klasörle uyuşmazsa editörde "Alanı klasöre eşitle" düğmesi çıkar
 4. `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model`: Claude Code dosyasına dönüştürülür
 
 Metin içinde `{{degisken}}` yazarsan **Kopyala** düğmesi değerleri sorar ve doldurup panoya koyar.

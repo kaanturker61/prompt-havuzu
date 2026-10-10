@@ -32,8 +32,8 @@ class VersionService {
     this.files = files;
     this.decode = decode;
     this.listPrompts = listPrompts;
-    this._blobCache = new Map(); // tagNesnesi\0rel -> sha|null (değişmez, kalıcı)
-    this._hashCache = new Map(); // rel -> { mtimeMs, size, sha }
+    this._blobCache = new Map(); // root\0tagNesnesi\0rel -> sha|null (değişmez, kalıcı)
+    this._hashCache = new Map(); // root\0rel -> { mtimeMs, size, sha }
   }
 
   clearCache() {
@@ -62,14 +62,14 @@ class VersionService {
     const blobs = new Map();
     const needBlob = [];
     for (const c of cands) {
-      const key = c.last.object + '\0' + c.rel;
+      const key = root + '\0' + c.last.object + '\0' + c.rel;
       if (this._blobCache.has(key)) blobs.set(c.rel, this._blobCache.get(key));
       else needBlob.push(c);
     }
     for (const part of chunks(needBlob, 8)) {
       await Promise.all(part.map(async (c) => {
         const sha = await this.git.blobAt(root, c.last.commit, c.rel);
-        this._blobCache.set(c.last.object + '\0' + c.rel, sha);
+        this._blobCache.set(root + '\0' + c.last.object + '\0' + c.rel, sha);
         blobs.set(c.rel, sha);
       }));
     }
@@ -79,19 +79,19 @@ class VersionService {
     for (const c of live) {
       const st = await this.files.stat(c.abs);
       stats.set(c.rel, st);
-      const h = this._hashCache.get(c.rel);
+      const h = this._hashCache.get(root + '\0' + c.rel);
       if (!h || h.mtimeMs !== st.mtimeMs || h.size !== st.size) stale.push(c.rel);
     }
     for (const part of chunks(stale, BATCH)) {
       const shas = await this.git.hashFiles(root, part);
       part.forEach((rel, i) => {
         const st = stats.get(rel);
-        this._hashCache.set(rel, { mtimeMs: st.mtimeMs, size: st.size, sha: shas[i] });
+        this._hashCache.set(root + '\0' + rel, { mtimeMs: st.mtimeMs, size: st.size, sha: shas[i] });
       });
     }
     for (const c of cands) {
       const blob = blobs.get(c.rel);
-      result.set(c.rel, blob ? this._hashCache.get(c.rel).sha !== blob : null);
+      result.set(c.rel, blob ? this._hashCache.get(root + '\0' + c.rel).sha !== blob : null);
     }
     return result;
   }

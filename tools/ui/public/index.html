@@ -242,7 +242,28 @@ details summary { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* kurulum, ayarlar */
-#mkSel { max-width: 220px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+#mkCur { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+.ic .dash { stroke-dasharray: 2 2; }
+.row.mp { font-weight: 600; padding-top: 6px; padding-bottom: 6px; }
+.row.mp.etkin { border-left-color: var(--pool); }
+.row.mp.etkin .name { font-weight: 700; }
+.row.mp.etkin .ic { color: var(--pool); }
+.row.soft { opacity: .75; }
+.row.note, .empty.note { padding-left: calc(30px + var(--d, 0) * 16px); }
+.row .pill { flex: none; }
+.row .plus { border: 0; background: none; color: var(--muted); padding: 0 6px; border-radius: 4px; font-weight: 700; }
+.row .plus:hover, .row .more:hover { color: var(--pool-deep); background: var(--pool-tint); }
+.row .acts { margin-left: auto; display: flex; flex: none; opacity: 0; }
+.row:hover .acts, .row:focus-within .acts, .row.active .acts { opacity: 1; }
+@media (hover: none) { .row .acts { opacity: 1; } }
+.row .acts .more { margin-left: 0; opacity: 1; }
+.row[aria-selected="true"] { background: var(--pool-tint); }
+.tools { display: flex; gap: 2px; }
+.res[aria-selected="true"] { background: var(--pool-tint); }
+.menu .mi:focus { background: var(--pool-tint); outline: 0; }
+.crumbs .link { font-size: inherit; }
 .warnband { display: flex; align-items: flex-start; gap: 10px; max-width: 980px; margin: 0 auto 14px; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
 .warnband ul { margin: 0; padding: 0; list-style: none; flex: 1; }
 .setup-list { list-style: none; margin: 16px 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
@@ -260,7 +281,7 @@ details summary { cursor: pointer; }
     <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 12c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0M3 20c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
     Prompt havuzu
   </div>
-  <select id="mkSel" aria-label="Etkin marketplace" hidden></select>
+  <button class="btn" id="mkCur" type="button" data-act="goto-active" aria-live="polite" title="Ağaçta etkin marketplace'e git"></button>
   <div class="searchbox"><input id="q" type="search" placeholder="Prompt ara (Ctrl+K)" autocomplete="off" aria-label="Prompt ara"></div>
   <nav class="actions" aria-label="İşlemler">
     <button class="btn primary" data-act="new-prompt" data-needs-setup>Yeni prompt</button>
@@ -284,16 +305,20 @@ details summary { cursor: pointer; }
           <option value="">Tüm türler</option><option value="komut">Komut</option><option value="ajan">Ajan</option><option value="skill">Skill</option><option value="yok">Yayın dışı</option>
         </select>
       </div>
-      <label class="chk"><input type="checkbox" id="fScope"> Marketplace dosyalarında da ara</label>
+      <label class="chk"><input type="checkbox" id="fScope"> Marketplace dosyalarında da ara (plugins/)</label>
       <div id="tagbar" class="tagbar"></div>
     </div>
     <div class="listhead">
-      <span id="listTitle">Promptlar</span><span class="grow"></span>
+      <span id="listTitle">Kütüphane</span><span class="grow"></span>
       <button class="btn ghost sm" id="btnClear" data-act="clear-filters" hidden>Filtreyi temizle</button>
-      <button class="btn ghost sm" data-act="new-prompt-lib" title="Yeni prompt" data-needs-setup>+ Prompt</button>
-      <button class="btn ghost sm" data-act="new-dir-lib" title="Yeni klasör" data-needs-setup>+ Klasör</button>
     </div>
-    <div id="list" class="list" role="tree" aria-label="Prompt listesi"></div>
+    <div class="listhead tools" role="toolbar" aria-label="Kütüphane işlemleri" style="padding-top:0">
+      <button class="btn sm" id="tbMp" data-act="new-mp" data-needs-root aria-describedby="why-mp">+ Marketplace</button>
+      <button class="btn sm" id="tbPlugin" data-act="new-plugin" aria-describedby="why-plugin">+ Plugin</button>
+      <button class="btn sm" id="tbPrompt" data-act="new-prompt" aria-describedby="why-prompt">+ Prompt</button>
+      <span id="why-mp" class="sr"></span><span id="why-plugin" class="sr"></span><span id="why-prompt" class="sr"></span>
+    </div>
+    <div id="list" class="list" role="tree" aria-label="Kütüphane"></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -332,11 +357,17 @@ const stem = (p) => base(p).replace(/\.[^.]+$/, '');
 const normTur = Rules.normTur;
 const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'taslak' : f === 'kararli' ? 'kararli' : f === 'arsiv' ? 'arsiv' : ''; };
 
+// Etkin marketplace gerektiren rotalar: bu isteklere X-PP-MP başlığı eklenir (başka sekmede geçiş yapıldıysa sunucu reddeder).
+const MP_GUARDED = /^\/api\/(file|rename|mkdir|git\/|version|import\/|marketplace\/|package|prompts\/)/;
 async function api(method, url, body) {
-  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-PP': '1' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const headers = { 'Content-Type': 'application/json', 'X-PP': '1' };
+  if (S.info && S.info.activeMarketplace && MP_GUARDED.test(url)) headers['X-PP-MP'] = encodeURIComponent(S.info.activeMarketplace);
+  const r = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   let j = {}; try { j = await r.json(); } catch (e) { /* gövde yok */ }
   if (!r.ok) {
     const e = new Error(j.error || ('İstek başarısız (' + r.status + ')')); e.status = r.status; e.data = j;
+    // Başka sekmede etkin marketplace değişti: yazma reddedildi; durumu eşle.
+    if (r.status === 409 && j.code === 'etkinDegil') { e.etkinDegil = true; resyncActive(); }
     // Kurulum bozulduysa (örn. klasör dışarıdan silindi) kurulum ekranına düş; `conflict` 409'undan ayrı.
     if (r.status === 409 && j.setupRequired) { e.setupRequired = true; if (j.setup && S.info) onSetupLost(j.setup); }
     throw e;
@@ -384,34 +415,84 @@ function autosize(el) { if (!el) return; el.style.height = 'auto'; el.style.heig
 
 /* --------------------------------------------------------------------- durum */
 const S = {
-  info: null, tree: [], libraryDir: 'library',
-  facets: { tags: [], durum: [], tur: [], projeler: [], pakets: [], folders: [], total: 0 },
-  expanded: new Set(), // init() içinde, /api/info geldikten sonra doldurulur (localStorage anahtarı marketplace'e bağlı)
+  info: null, lib: null, gen: 0, model: [], modelMap: new Map(),
+  facets: { tags: [], durum: [], tur: [], projeler: [], total: 0, yayinUyari: 0, yayinUyariByMp: {} },
+  exp: new Map(),         // mp -> Set<marketplace'e göreli yol | '#teknik' | '#gelen' | '#klasorsuz'>
+  mpOpen: new Set(),      // açık marketplace düğümleri (pp.agac.marketplaceler)
+  gitlessOpen: false,     // "Git deposu olmayan klasörler" grubu (pp.agac.gitsiz)
+  sel: null,              // { mp, key } seçili ağaç düğümü
+  focusKey: null,         // roving tabindex: odaktaki satır
   f: { q: '', tags: [], durum: '', tur: '', scope: 'library' },
   results: null, cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null,
-  mkList: null, warnHidden: false
+  warnHidden: false
 };
 
-// localStorage anahtarları etkin marketplace'e göre ayrılır.
-const lsKey = (k) => 'pp.' + ((S.info && S.info.activeMarketplace) || '_') + '.' + k;
 const setupOk = () => !!(S.info && S.info.setup && S.info.setup.ok);
+const rootOk = () => !!(S.info && S.info.setup && S.info.setup.rootOk);
+const activeName = () => (S.info && S.info.activeMarketplace) || '';
 const firstError = () => { const i = S.info && S.info.setup && S.info.setup.issues.find((x) => x.level === 'error'); return i ? i.message : ''; };
+// localStorage anahtarları marketplace'e göre ayrılır: pp.<mp>.<ad>
+const lsKey = (k, mp) => 'pp.' + (mp !== undefined ? mp : (activeName() || '_')) + '.' + k;
+const nodeKey = (mp, rel) => mp + ':' + rel;
+const mpByName = (n) => (S.lib && S.lib.marketplaces.find((m) => m.name === n)) || null;
+const activeMp = () => { const m = mpByName(activeName()); return m && m.state === 'hazir' ? m : null; };
+const pluginsOf = (mp) => { const m = typeof mp === 'string' ? mpByName(mp) : mp; return m ? m.plugins : []; };
+const libDirOf = (mp) => {
+  const m = mpByName(mp || activeName());
+  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || 'library';
+};
+const pathSep = () => ((S.lib && S.lib.libraryRoot) || (S.info && S.info.libraryRoot) || '').includes('\\') ? '\\' : '/';
 
 const isFiltering = () => !!(S.f.q.trim() || S.f.tags.length || S.f.durum || S.f.tur);
-const saveExpanded = () => ls.set(lsKey('expanded'), Array.from(S.expanded));
+
+// Açık düğümler. Eski "__others" girdisi bir kez "#teknik"e çevrilir.
+function expOf(mp) {
+  let s = S.exp.get(mp);
+  if (!s) {
+    const raw = ls.get(lsKey('expanded', mp), null);
+    s = new Set(Array.isArray(raw) ? raw : []);
+    if (s.has('__others')) { s.delete('__others'); s.add('#teknik'); ls.set(lsKey('expanded', mp), Array.from(s)); }
+    S.exp.set(mp, s);
+  }
+  return s;
+}
+const saveExp = (mp) => ls.set(lsKey('expanded', mp), Array.from(expOf(mp)));
+const saveMpOpen = () => ls.set('pp.agac.marketplaceler', Array.from(S.mpOpen));
+
+// İlk açılışta (kayıt yokken) etkin marketplace ve plugin'leri açılır.
+function initExpansion() {
+  const stored = ls.get('pp.agac.marketplaceler', null);
+  if (Array.isArray(stored)) S.mpOpen = new Set(stored);
+  else { S.mpOpen = new Set(activeName() ? [activeName()] : []); saveMpOpen(); }
+  S.gitlessOpen = !!ls.get('pp.agac.gitsiz', false);
+  ensureDefaultExp(activeName());
+}
+function ensureDefaultExp(name) {
+  const m = mpByName(name);
+  if (!m || m.state !== 'hazir') return;
+  let has = null; try { has = localStorage.getItem(lsKey('expanded', name)); } catch (e) { has = ''; }
+  if (has !== null) return;
+  const ex = expOf(name);
+  m.plugins.forEach((p) => ex.add(p.path));
+  saveExp(name);
+}
 
 /* ------------------------------------------------------------------- yükleme */
-async function loadTree() { const r = await get('/api/tree'); S.tree = r.tree; S.libraryDir = r.libraryDir; }
+async function loadLibrary() { S.lib = await get('/api/tree'); }
 async function loadFacets() { S.facets = await get('/api/facets'); renderMkBadge(); }
 function renderMkBadge() {
   const b = $('#mkBadge'); if (!b) return;
-  const n = (S.facets && S.facets.yayinUyari) || 0;
+  const n = (S.facets && S.facets.yayinUyariByMp && S.facets.yayinUyariByMp[activeName()]) || 0;
   b.hidden = !n || !setupOk(); b.textContent = n;
   b.title = n + ' prompt yayınlanmayacak';
 }
 async function loadGit() {
+  const gen = S.gen;
   if (!setupOk()) { S.git = { isRepo: false, error: firstError() }; renderGitBadge(); return S.git; }
-  try { S.git = await get('/api/git/status'); } catch (e) { S.git = { isRepo: false, error: e.message }; }
+  let g;
+  try { g = await get('/api/git/status'); } catch (e) { g = { isRepo: false, error: e.message }; }
+  if (gen !== S.gen) return S.git;
+  S.git = g;
   renderGitBadge();
   syncCommitBar();
   return S.git;
@@ -427,8 +508,10 @@ function syncCommitBar() {
 async function loadRecent() { try { S.recent = (await get('/api/search?q=')).results.slice(0, 8); } catch (e) { S.recent = []; } }
 
 async function refreshAll() {
-  if (!setupOk()) return;
-  await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]);
+  if (!rootOk()) return;
+  const gen = S.gen;
+  await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
+  if (gen !== S.gen) return;
   renderFilters(); renderList();
   if (isFiltering()) runSearch();
   if (!S.cur) renderMain();
@@ -443,64 +526,200 @@ function renderFilters() {
   $('#tagbar').innerHTML = h;
   const opt = (arr) => arr.map((x) => `<option value="${esc(x)}">`).join('');
   $('#dl-etiketler').innerHTML = opt(tags.map((t) => t.name));
-  $('#dl-projeler').innerHTML = opt(S.facets.projeler.map((t) => t.name));
-  $('#dl-paket').innerHTML = opt(S.facets.pakets.concat(S.info ? [S.info.config.marketplace.plugin] : []));
+  $('#dl-projeler').innerHTML = opt((S.facets.projeler || []).map((t) => t.name));
+  const m = activeMp();
+  $('#dl-paket').innerHTML = opt(pluginsOf(m).map((p) => p.slug).concat(m && m.defaultPlugin ? [m.defaultPlugin] : (S.info && S.info.config ? [S.info.config.marketplace.plugin] : [])));
 }
 
-function countFiles(n) { return n.children.reduce((a, c) => a + (c.type === 'dir' ? countFiles(c) : (/\.md$/i.test(c.name) ? 1 : 0)), 0); }
+const SVG = (inner, cls) => `<svg class="ic ${cls || ''}" viewBox="0 0 16 16" aria-hidden="true" focusable="false">${inner}</svg>`;
+const ICON = {
+  mp: SVG('<ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>'),
+  plugin: SVG('<path d="M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6"/>'),
+  dir: SVG('<path d="M2 4h4l1.5 1.5H14V12H2z"/>'),
+  loose: SVG('<path class="dash" d="M2 5l6-3 6 3v6l-6 3-6-3zM2 5l6 3 6-3M8 8v6"/>'),
+  inbox: SVG('<path d="M2 9l2-5h8l2 5v3H2zM2 9h4l1 2h2l1-2h4"/>'),
+  tech: SVG('<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>'),
+  warn: SVG('<path d="M8 2l6.5 11.5h-13zM8 6.5v3.2M8 11.4v.3"/>'),
+  gitless: SVG('<ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4"/>')
+};
 
-function nodeHtml(n, depth) {
-  const active = S.cur && S.cur.path === n.path ? ' active' : '';
-  if (n.type === 'dir') {
-    const open = S.expanded.has(n.path);
-    return `<div class="row dir" role="treeitem" aria-expanded="${open}" tabindex="0" data-act="toggle" data-path="${esc(n.path)}" style="--d:${depth}">
-      <span class="caret ${open ? 'open' : ''}"></span><span class="name">${esc(n.name)}</span><span class="cnt">${countFiles(n)}</span>
-      <button class="more" data-act="menu" data-path="${esc(n.path)}" data-type="dir" aria-label="${esc(n.name)} için işlemler">⋯</button></div>`
-      + (open ? n.children.map((c) => nodeHtml(c, depth + 1)).join('') : '');
+// Ağacı düz bir görünür listeye çevirir (roving tabindex ve klavye gezintisi bunu kullanır).
+function treeModel() {
+  const out = [];
+  const lib = S.lib; if (!lib) return out;
+  const add = (it, parentKey, level, i, n) => { it.parentKey = parentKey; it.level = level; it.posinset = i + 1; it.setsize = n; out.push(it); return it; };
+  const nodes = (list, mp, level, parentKey, tech) => {
+    list.forEach((nd, i) => {
+      if (nd.type === 'dir') {
+        const open = expOf(mp).has(nd.path);
+        const it = add({ kind: tech ? 'tdir' : 'dir', mp, path: nd.path, key: nodeKey(mp, nd.path), ek: nd.path, node: nd, expandable: nd.children.length > 0, expanded: open }, parentKey, level, i, list.length);
+        if (open && nd.children.length) nodes(nd.children, mp, level + 1, it.key, tech);
+      } else {
+        add({ kind: tech ? 'tfile' : 'file', mp, path: nd.path, key: nodeKey(mp, nd.path), node: nd, expandable: false }, parentKey, level, i, list.length);
+      }
+    });
+  };
+  const mps = lib.marketplaces; const gl = lib.ignored || [];
+  const top = mps.length + (gl.length ? 1 : 0);
+  mps.forEach((m, mi) => {
+    const mOpen = m.state === 'hazir' && S.mpOpen.has(m.name);
+    const mit = add({ kind: 'mp', mp: m.name, path: '', key: nodeKey(m.name, ''), node: m, expandable: m.state === 'hazir', expanded: mOpen }, null, 1, mi, top);
+    if (!mOpen) return;
+    const ex = expOf(m.name);
+    const kids = m.plugins.map((p) => ({ kind: 'plugin', node: p }));
+    if (m.inbox) kids.push({ kind: 'inbox', node: m.inbox });
+    if (m.loose.length) kids.push({ kind: 'loose', node: m.loose });
+    if (m.teknik.length) kids.push({ kind: 'teknik', node: m.teknik });
+    kids.forEach((k, ki) => {
+      const nd = k.node;
+      if (k.kind === 'plugin') {
+        const open = ex.has(nd.path);
+        const it = add({ kind: 'plugin', mp: m.name, path: nd.path, key: nodeKey(m.name, nd.path), ek: nd.path, node: nd, expandable: nd.children.length > 0, expanded: open }, mit.key, 2, ki, kids.length);
+        if (open) nodes(nd.children, m.name, 3, it.key, false);
+      } else {
+        const ek = k.kind === 'inbox' ? '#gelen' : k.kind === 'loose' ? '#klasorsuz' : '#teknik';
+        const kids2 = k.kind === 'inbox' ? nd.children : nd;
+        const open = ex.has(ek);
+        const it = add({ kind: k.kind, mp: m.name, path: k.kind === 'inbox' ? nd.path : '', key: nodeKey(m.name, ek), ek, node: nd, list: kids2, expandable: kids2.length > 0, expanded: open }, mit.key, 2, ki, kids.length);
+        if (open) nodes(kids2, m.name, 3, it.key, k.kind === 'teknik');
+      }
+    });
+    if (!m.libraryDirExists) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: 'Prompt klasörü yok (' + m.libraryDir + '/).' });
+    else if (!m.plugins.length) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: 'Henüz plugin yok.', action: 'new-plugin', actionLabel: 'Yeni plugin' });
+  });
+  if (gl.length) {
+    const open = S.gitlessOpen;
+    const git = add({ kind: 'gitless', mp: '', path: '', key: 'gitsiz', node: gl, expandable: true, expanded: open }, null, 1, mps.length, top);
+    if (open) gl.forEach((g, i) => add({ kind: 'gitlessItem', mp: '', path: g.name, key: 'gitsiz:' + g.name, node: g, expandable: false }, git.key, 2, i, gl.length));
   }
-  const m = n.meta;
-  const label = m && m.baslik ? m.baslik : n.name;
-  return `<div class="row file${active}" role="treeitem" tabindex="0" data-act="open" data-path="${esc(n.path)}" style="--d:${depth}" title="${esc(n.path)}">
-    <span class="dot ${m ? durumClass(m.durum) : ''}"></span><span class="name">${esc(label)}</span>${m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : ''}${m && m.uyari ? '<span class="pill warn" title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>' : ''}${m && m.surum ? '<span class="pill warn" title="Son sürümden beri değişti, versiyon aynı" aria-label="Sürüm uyarısı">v</span>' : ''}
-    <button class="more" data-act="menu" data-path="${esc(n.path)}" data-type="file" aria-label="${esc(label)} için işlemler">⋯</button></div>`;
+  return out;
+}
+
+const isFileKind = (k) => k === 'file' || k === 'tfile';
+
+function rowHtml(it, focusKey) {
+  const d = it.level - 1;
+  if (it.kind === 'note') {
+    return `<div class="empty note" style="--d:${d}" data-note>${esc(it.text)}${it.action ? ` <button class="btn sm" data-act="${it.action}" data-mp="${esc(it.mp)}">${esc(it.actionLabel)}</button>` : ''}</div>`;
+  }
+  const cur = S.cur && isFileKind(it.kind) && S.cur.mp === it.mp && S.cur.path === it.path;
+  const selected = cur || (S.sel && S.sel.key === it.key);
+  const isEtkin = it.kind === 'mp' && it.node.active;
+  let icon = ICON[it.kind] || ''; let label = ''; let pills = ''; let sr = ''; let acts = ''; let cls = '';
+  const btn = (act, txt, aria) => `<button class="${act === 'plus' ? 'plus' : 'more'}" data-act="${act}" data-key="${esc(it.key)}" tabindex="-1" aria-label="${esc(aria)}">${txt}</button>`;
+  const cnt = (n) => `<span class="cnt">${n}</span>`;
+  switch (it.kind) {
+    case 'mp': {
+      const m = it.node; const bad = m.state !== 'hazir';
+      label = esc(m.name); cls = ' mp' + (isEtkin ? ' etkin' : '');
+      pills = (isEtkin ? '<span class="pill ok">etkin</span>' : '') + (bad ? `<span class="pill bad">geçersiz: ${esc(m.reason || '')}</span>` : cnt(m.count))
+        + (m.yayinUyari ? `<span class="pill warn" title="${m.yayinUyari} prompt yayınlanmayacak">${m.yayinUyari} uyarı</span>` : '');
+      sr = ', marketplace' + (isEtkin ? ', etkin marketplace' : '');
+      if (!bad) acts += btn('plus', '+', m.name + ' için yeni plugin');
+      acts += btn('menu', '⋯', m.name + ' için işlemler');
+      break;
+    }
+    case 'plugin': {
+      const p = it.node; label = esc(p.name);
+      pills = cnt(p.count);
+      if (p.nameIssue) pills += p.nameIssue.level === 'error' ? `<span class="pill bad" title="${esc(p.nameIssue.message)}">!</span>` : `<span class="pill" title="${esc(p.nameIssue.message)}">${esc(p.nameIssue.message.toLowerCase())}</span>`;
+      sr = ', plugin';
+      acts += btn('plus', '+', p.name + ' içine yeni prompt') + btn('menu', '⋯', p.name + ' için işlemler');
+      break;
+    }
+    case 'dir': label = esc(it.node.name); pills = cnt(it.node.count); acts = btn('menu', '⋯', it.node.name + ' için işlemler'); sr = ', klasör'; break;
+    case 'tdir': label = esc(it.node.name); sr = ', klasör'; icon = ICON.dir; break;
+    case 'inbox': label = 'Gelen kutusu'; pills = cnt(it.node.count); acts = btn('menu', '⋯', 'Gelen kutusu için işlemler'); break;
+    case 'loose': label = 'Klasörsüz promptlar'; pills = cnt(it.node.length);
+      break;
+    case 'teknik': label = 'Teknik dosyalar'; cls = ' soft'; break;
+    case 'gitless': label = 'Git deposu olmayan klasörler (' + it.node.length + ')'; icon = ICON.warn; cls = ' soft'; break;
+    case 'gitlessItem': label = esc(it.node.name); pills = '<span class="pill warn">Git deposu değil</span>'; icon = ICON.gitless; cls = ' soft';
+      acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">Git'i başlat</button>`; break;
+    case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = btn('menu', '⋯', it.node.name + ' için işlemler'); break;
+    default: { // file
+      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
+      label = esc(txt);
+      icon = `<span class="dot ${m ? durumClass(m.durum) : ''}"></span>`;
+      pills = (m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : '')
+        + (m && m.uyari ? '<span class="pill warn" title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>' : '')
+        + (m && m.surum ? '<span class="pill warn" title="Son sürümden beri değişti, versiyon aynı" aria-label="Sürüm uyarısı">v</span>' : '')
+        + (m && m.paketUyusmuyor ? '<span class="pill warn" title="paket alanı klasörle uyuşmuyor" aria-label="Paket klasörle uyuşmuyor">p</span>' : '');
+      acts = btn('menu', '⋯', txt + ' için işlemler');
+    }
+  }
+  if (it.kind === 'loose') acts = '';
+  const caret = it.expandable ? `<span class="caret ${it.expanded ? 'open' : ''}"></span>` : '<span class="caret" style="visibility:hidden"></span>';
+  const title = it.kind === 'loose' ? `Yayında "${(it.mpNode && it.mpNode.defaultPlugin) || (mpByName(it.mp) || {}).defaultPlugin || ''}" plugin'ine gider.`
+    : isFileKind(it.kind) ? it.path : it.kind === 'plugin' ? (it.node.description || it.node.name) : '';
+  return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node" tabindex="${it.key === focusKey ? 0 : -1}"
+    aria-level="${it.level}" aria-posinset="${it.posinset}" aria-setsize="${it.setsize}" ${it.expandable ? `aria-expanded="${it.expanded}"` : ''} ${selected ? 'aria-selected="true"' : ''}
+    style="--d:${d}" ${title ? `title="${esc(title)}"` : ''}>${it.expandable || it.level > 1 ? caret : caret}${icon}<span class="name">${label}${sr ? `<span class="sr">${esc(sr)}</span>` : ''}</span>${pills}${acts ? `<span class="acts">${acts}</span>` : ''}</div>`;
 }
 
 function treeHtml() {
-  const lib = S.tree.find((n) => n.path === S.libraryDir);
-  const others = S.tree.filter((n) => n !== lib);
-  let h = '';
-  if (lib) {
-    if (!lib.children.length) h += '<div class="empty">Havuz boş. Yeni bir prompt oluştur veya .txt dosyalarını içe aktar.</div>';
-    h += lib.children.map((c) => nodeHtml(c, 0)).join('');
+  S.model = treeModel();
+  S.modelMap = new Map(S.model.filter((x) => x.kind !== 'note').map((x) => [x.key, x]));
+  if (!S.lib) return '<div class="empty">Yükleniyor…</div>';
+  if (!S.lib.marketplaces.length && !(S.lib.ignored || []).length) {
+    return '<div class="empty">Henüz marketplace yok.<br><button class="btn sm primary" data-act="new-mp" style="margin-top:8px">Yeni marketplace</button></div>';
   }
-  if (others.length) {
-    const open = S.expanded.has('__others');
-    h += `<div class="sect" role="button" tabindex="0" data-act="toggle" data-path="__others"><span class="caret ${open ? 'open' : ''}"></span>Marketplace ve diğer dosyalar</div>`;
-    if (open) h += others.map((c) => nodeHtml(c, 0)).join('');
-  }
-  return h;
+  let fk = S.focusKey;
+  if (!fk || !S.modelMap.has(fk)) { const f = S.model.find((x) => x.kind !== 'note'); fk = f ? f.key : null; S.focusKey = fk; }
+  return S.model.map((it) => rowHtml(it, fk)).join('');
 }
+
+const whereOf = (r) => (r.kind === 'paket' ? r.plugin : r.kind === 'klasorsuz' ? 'Klasörsüz' : r.kind === 'gelenKutusu' ? 'Gelen kutusu' : (r.path.split('/').slice(0, -1).join('/') || 'Teknik'));
 
 function resultsHtml() {
   const tokens = fold(S.f.q).split(/\s+/).filter(Boolean);
   if (!S.results.length) return '<div class="empty">Eşleşen prompt yok. Filtreleri veya arama sözcüklerini değiştir.</div>';
-  return S.results.map((r) => `<div class="res ${S.cur && S.cur.path === r.path ? 'active' : ''}" role="treeitem" tabindex="0" data-act="open" data-path="${esc(r.path)}">
+  return S.results.map((r, i) => {
+    const act = S.cur && S.cur.mp === r.mp && S.cur.path === r.path;
+    return `<div class="res ${act ? 'active' : ''}" role="listitem" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}" data-ri="${i}" ${act ? 'aria-selected="true"' : ''}>
     <div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${hl(r.baslik, tokens)}</span>${r.tur ? `<span class="pill">${esc(r.tur)}</span>` : ''}</div>
-    <div class="rp">${esc(r.path)}</div>
+    <div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div>
     ${r.snippet ? `<div class="rs">${hl(r.snippet, tokens)}</div>` : ''}
-    ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`).join('');
+    ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`;
+  }).join('');
+}
+
+// Araç çubuğu düğmelerinin açık/kapalı durumu ve nedeni.
+function paintToolbar() {
+  const rok = rootOk(); const m = activeMp(); const ok = setupOk();
+  const set = (id, why, off) => {
+    const b = $('#' + id); const w = $('#why-' + id.slice(2).toLowerCase());
+    if (!b) return;
+    b.disabled = off;
+    if (w) w.textContent = off ? why : '';
+    b.title = off ? why : (id === 'tbPlugin' ? 'Yeni plugin: ' + activeName() : id === 'tbPrompt' ? 'Yeni prompt: ' + activeName() : 'Yeni marketplace');
+  };
+  set('tbMp', 'Library kökü hazır değil: önce Ayarlar\'dan kökü seç', !rok);
+  set('tbPlugin', !rok ? 'Library kökü hazır değil' : 'Önce bir marketplace seç', !(ok && m));
+  set('tbPrompt', !(ok && m) ? 'Önce bir marketplace seç' : 'Önce bir plugin oluştur', !(ok && m && m.plugins.length));
 }
 
 function renderList() {
+  const list = $('#list');
+  const hadFocus = list.contains(document.activeElement) && document.activeElement.closest('[data-key],[data-ri]');
+  const fk = hadFocus ? (hadFocus.dataset.key || null) : null; const fri = hadFocus ? hadFocus.dataset.ri : null;
   if (S.results) {
-    $('#list').innerHTML = resultsHtml();
-    $('#listTitle').textContent = 'Sonuçlar (' + S.results.length + ')';
+    list.setAttribute('role', 'list'); list.setAttribute('aria-label', 'Arama sonuçları');
+    list.innerHTML = resultsHtml();
+    const n = new Set(S.results.map((r) => r.mp)).size;
+    $('#listTitle').textContent = 'Sonuçlar (' + S.results.length + ')' + (n > 1 ? ' · ' + n + ' marketplace' : '');
+    if (fri != null) { const el = list.querySelector('[data-ri="' + fri + '"]'); if (el) el.focus(); }
   } else {
-    $('#list').innerHTML = treeHtml();
-    $('#listTitle').textContent = 'Promptlar (' + S.facets.total + ')';
+    list.setAttribute('role', 'tree'); list.setAttribute('aria-label', 'Kütüphane');
+    list.innerHTML = treeHtml();
+    $('#listTitle').textContent = 'Kütüphane (' + (S.facets.total || 0) + ')';
+    if (fk) { const el = rowEl(fk); if (el) el.focus(); }
   }
   $('#btnClear').hidden = !isFiltering();
+  paintToolbar();
 }
+
+const rowEl = (key) => $$('#list [data-key]').find((e) => e.dataset.key === key) || null;
 
 const runSearch = debounce(async () => {
   if (!isFiltering()) { S.results = null; renderList(); return; }
@@ -510,11 +729,38 @@ const runSearch = debounce(async () => {
   renderList();
 }, 140);
 
-function expandParents(p) {
+// Bir dosyanın ağaçta görünmesi için üst düğümleri açar.
+function expandParents(p, mp) {
+  mp = mp || activeName();
+  const ex = expOf(mp);
+  S.mpOpen.add(mp);
+  const cl = Rules.classifyPromptPath(p, libDirOf(mp));
+  if (cl.kind === 'klasorsuz') ex.add('#klasorsuz');
+  else if (cl.kind === 'gelenKutusu') ex.add('#gelen');
+  else if (cl.kind === 'disarida') ex.add('#teknik');
   const parts = p.split('/'); let acc = '';
-  for (let i = 0; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; S.expanded.add(acc); }
-  if (!p.startsWith(S.libraryDir + '/')) S.expanded.add('__others');
-  saveExpanded();
+  for (let i = 0; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; ex.add(acc); }
+  saveExp(mp); saveMpOpen();
+}
+
+// Düğümü seçer, görünür yapar ve odağı ona taşır.
+function focusKey(key) {
+  S.focusKey = key;
+  document.body.classList.add('side-open');
+  S.results = null; renderList();
+  const el = rowEl(key); if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
+}
+
+function toggleItem(it) {
+  if (it.kind === 'mp') { S.mpOpen.has(it.mp) ? S.mpOpen.delete(it.mp) : S.mpOpen.add(it.mp); saveMpOpen(); return; }
+  if (it.kind === 'gitless') { S.gitlessOpen = !S.gitlessOpen; ls.set('pp.agac.gitsiz', S.gitlessOpen); return; }
+  const ex = expOf(it.mp);
+  ex.has(it.ek) ? ex.delete(it.ek) : ex.add(it.ek);
+  saveExp(it.mp);
+}
+function setExpanded(it, open) {
+  if (!it.expandable || it.expanded === open) return false;
+  toggleItem(it); return true;
 }
 
 /* ------------------------------------------------------------------ modal'lar */
@@ -570,28 +816,64 @@ function askChoice(o) {
 }
 
 /* açılır menü */
-let menuOff = null;
-function closeMenu() {
+let menuOff = null; let menuReturn = null;
+function closeMenu(refocus) {
   $$('.menu').forEach((m) => m.remove());
   if (menuOff) { document.removeEventListener('click', menuOff); menuOff = null; }
+  const key = menuReturn; menuReturn = null;
+  if (refocus && key) { const el = rowEl(key); if (el) el.focus(); }
 }
-function showMenu(x, y, items) {
+function showMenu(x, y, items, returnKey) {
   closeMenu();
+  menuReturn = returnKey || null;
   const m = document.createElement('div');
   m.className = 'menu'; m.setAttribute('role', 'menu');
-  m.innerHTML = items.map((i) => `<button class="mi ${i.danger ? 'danger' : ''}" role="menuitem" data-act="${i.act}" data-path="${esc(i.path)}">${esc(i.label)}</button>`).join('');
+  m.innerHTML = items.map((i) => `<button class="mi ${i.danger ? 'danger' : ''}" role="menuitem" tabindex="-1" data-act="${i.act}" data-mp="${esc(i.mp || '')}" data-path="${esc(i.path || '')}" data-kind="${esc(i.kind || '')}" data-name="${esc(i.name || '')}">${esc(i.label)}</button>`).join('');
   document.body.appendChild(m);
   const r = m.getBoundingClientRect();
   m.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
   m.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
   menuOff = () => closeMenu();
   setTimeout(() => { if (menuOff) document.addEventListener('click', menuOff); }, 0);
+  const first = $('.mi', m); if (first) first.focus();
 }
-function menuFor(path, type, x, y) {
-  const items = type === 'dir'
-    ? [{ label: 'Yeni prompt burada', act: 'new-prompt-in', path }, { label: 'Yeni klasör', act: 'new-dir', path }, { label: 'Yeniden adlandır veya taşı', act: 'rename', path }, { label: 'Sil (çöp kutusuna taşı)', act: 'delete', path, danger: true }]
-    : [{ label: 'Yeniden adlandır veya taşı', act: 'rename', path }, { label: 'Sil (çöp kutusuna taşı)', act: 'delete', path, danger: true }];
-  showMenu(x, y, items);
+
+// Düğüm türüne göre bağlam menüsü öğeleri.
+function menuItemsFor(it) {
+  const mk = (label, act, extra) => ({ label, act, mp: it.mp, path: it.path, kind: it.kind, ...extra });
+  const items = [];
+  switch (it.kind) {
+    case 'mp':
+      if (!it.node.active) items.push(mk('Etkinleştir', 'm-activate'));
+      if (it.node.state === 'hazir') items.push(mk('Yeni plugin', 'new-plugin'), mk('Git paneli', 'git'), mk('Marketplace (yayın)', 'market'));
+      items.push(mk('Yolu kopyala', 'm-copy-path'));
+      break;
+    case 'plugin':
+      items.push(mk('Yeni prompt', 'm-new-prompt', { name: it.node.name }), mk('Açıklamayı düzenle', 'm-desc', { name: it.node.name }),
+        mk('Yeniden adlandır', 'm-rename-plugin', { name: it.node.name }), mk('Sil (çöp kutusuna taşı)', 'm-delete-plugin', { name: it.node.name, danger: true }));
+      break;
+    case 'dir':
+      items.push(mk('Yeniden adlandır veya taşı', 'rename'), mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+      break;
+    case 'file': {
+      if (/\.(md|markdown)$/i.test(it.path)) {
+        const loose = Rules.classifyPromptPath(it.path, libDirOf(it.mp)).kind === 'klasorsuz';
+        items.push(mk(loose ? "Plugin'e taşı…" : 'Taşı…', 'm-move'), mk('Yeniden adlandır', 'm-rename-file'));
+      } else items.push(mk('Yeniden adlandır veya taşı', 'rename'));
+      items.push(mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+      break;
+    }
+    case 'tfile':
+      items.push(mk('Yeniden adlandır veya taşı', 'rename'), mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+      break;
+    case 'inbox': items.push(mk('İçe aktar', 'import')); break;
+    default: break;
+  }
+  return items;
+}
+function openMenuFor(it, x, y) {
+  const items = menuItemsFor(it);
+  if (items.length) showMenu(x, y, items, it.key);
 }
 
 /* ------------------------------------------------------------------ dosya açma */
@@ -645,20 +927,32 @@ async function openFile(p, o) {
   o = o || {};
   if (S.cur && S.cur.path === p && !o.reload) { closeSide(); return; }
   if (!(await confirmDiscard())) return;
+  const gen = S.gen;
   let r;
   try { r = await get('/api/file?' + qs({ path: p })); } catch (e) { if (!o.quiet) fail(e); if (e.status === 404) ls.set(lsKey('last'), null); renderMain(); return; }
+  if (gen !== S.gen) return; // bu arada marketplace değişti
   const parsed = FM.parse(r.raw);
+  const mp = activeName();
   S.cur = {
-    path: r.path, parsed, savedRaw: r.raw, mtime: r.mtime, isPrompt: r.isPrompt, isMd: r.isMd,
+    mp, path: r.path, parsed, savedRaw: r.raw, mtime: r.mtime, isPrompt: r.isPrompt, isMd: r.isMd,
     generatedFrom: r.generatedFrom, publish: r.publish, eol: parsed.eol, bom: parsed.bom, lead: leadOf(parsed),
     tab: o.tab || (r.isPrompt ? 'edit' : 'raw'), hist: null, dirty: false, external: false, commitMsg: (o.reload && S.cur && S.cur.path === p) ? S.cur.commitMsg : '', ver: null
   };
   ls.set(lsKey('last'), r.path);
-  expandParents(r.path);
+  expandParents(r.path, mp);
+  S.sel = { mp, key: nodeKey(mp, r.path) }; S.focusKey = S.sel.key;
   closeSide(); renderList(); renderMain();
   loadVersion();
   if (S.cur.tab === 'hist') loadHistory();
   document.title = 'Prompt havuzu';
+}
+
+// Açık dosya başka bir marketplace'e aitse (başka sekmede geçiş) yazma engellenir.
+function staleGuard() {
+  const c = S.cur;
+  if (!c || c.mp === activeName()) return false;
+  toast('Bu dosya "' + c.mp + "\" marketplace'ine ait ama etkin marketplace \"" + activeName() + '". Dosyayı ağaçtan yeniden aç.', 'error', 7000);
+  return true;
 }
 
 function closeSide() { document.body.classList.remove('side-open'); }
@@ -725,7 +1019,7 @@ function editPaneHtml() {
         <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>Ajan (subagent)</option>
         <option value="skill" ${tur === 'skill' ? 'selected' : ''}>Skill</option>
       </select>
-      <label for="pPaket">Paket</label><input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(mk.plugin)}">
+      <label for="pPaket">Paket</label><div><input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(pluginOfPath(c.path) || mk.plugin)}" aria-describedby="paketHint"><div id="paketHint" class="issue warn" role="status" hidden></div></div>
       <label for="pAd">Ad</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
       <label for="pAcik">Açıklama</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?">
       <label for="pArg">Argüman ipucu</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="[dosya yolu]">
@@ -764,9 +1058,24 @@ function histPaneHtml() {
 }
 
 function renderMain() {
-  if (!setupOk()) { renderSetup(); return; }
+  if (!rootOk()) { renderSetup(); return; }
+  if (!setupOk()) { renderPick(); return; }
   renderMainInner();
   paintWarnBand();
+}
+
+// mp › plugin › dosya (marketplace adı ağaçta o düğüme götürür).
+function crumbsHtml(c) {
+  const cl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  const parts = c.path.split('/');
+  const sep = '<span class="sep">›</span>';
+  let rest;
+  if (cl.kind === 'paket') rest = [esc(cl.klasor)].concat(parts.slice(libDirOf(c.mp).split('/').length + 1).map(esc));
+  else if (cl.kind === 'gelenKutusu') rest = ['Gelen kutusu'].concat(parts.slice(libDirOf(c.mp).split('/').length + 1).map(esc));
+  else if (cl.kind === 'klasorsuz') rest = ['Klasörsüz', esc(parts[parts.length - 1])];
+  else rest = parts.map(esc);
+  if (cl.kind === 'paket' || cl.kind === 'gelenKutusu') { /* klasör adından sonraki parçalar zaten eklendi */ }
+  return `<button type="button" class="link" data-act="reveal" title="Ağaçta göster">${esc(c.mp)}</button>` + sep + rest.join(sep);
 }
 
 function renderMainInner() {
@@ -774,11 +1083,13 @@ function renderMainInner() {
   const c = S.cur;
   if (!c) { main.innerHTML = startHtml(); return; }
   const tabs = c.isPrompt ? [['edit', 'Düzenle'], ['raw', 'Ham metin'], ['hist', 'Geçmiş']] : [['raw', 'Düzenle'], ['hist', 'Geçmiş']];
-  const crumbs = c.path.split('/').map((s) => esc(s)).join('<span class="sep">/</span>');
+  const crumbs = crumbsHtml(c);
   const m = FM.meta(c.parsed);
   const title = c.isPrompt
     ? `<input class="title" data-f="baslik" value="${esc(str(m.baslik))}" placeholder="${esc(stem(c.path))}" aria-label="Başlık">`
     : `<h1 class="title static">${esc(base(c.path))}</h1>`;
+  const stale = c.mp !== activeName();
+  const staleBanner = stale ? `<div class="banner" role="alert">Bu dosya <b>${esc(c.mp)}</b> marketplace'ine ait ama etkin marketplace şu an <b>${esc(activeName() || 'yok')}</b>. Kaydetmek için dosyayı ağaçtan yeniden aç.</div>` : '';
   const banner = c.generatedFrom
     ? `<div class="banner">Bu dosya <b>${esc(c.generatedFrom)}</b> kaynağından otomatik üretildi. Burada yaptığın değişiklik bir sonraki yayında ezilir.<button class="btn sm" data-act="open" data-path="${esc(c.generatedFrom)}">Kaynağa git</button></div>` : '';
   const ext = c.external ? '<div class="banner">Bu dosya, sen açtıktan sonra diskte değişti. Kaydedersen ne yapmak istediğini soracağım.</div>' : '';
@@ -792,14 +1103,14 @@ function renderMainInner() {
       <div class="tbtns">${c.isMd ? '<button class="btn" data-act="copy" title="Prompt metnini panoya kopyala">Kopyala</button>' : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty || (uncommitted(c.path) && c.commitMsg.trim()) ? '' : 'disabled'} title="Ctrl+S">${esc(saveLabel())}</button></div>
     </div>
     <div class="commitbar" id="commitBar" ${S.git && S.git.isRepo ? '' : 'hidden'}>
-      <label for="commitMsg" class="hint">Commit mesajı</label>
+      <label for="commitMsg" class="hint">Commit mesajı (${esc(c.mp)})</label>
       <input id="commitMsg" value="${esc(c.commitMsg)}" placeholder="Ne değişti, neden? (boşsa yalnızca kaydedilir)" autocomplete="off">
       <span id="commitPill" class="pill warn" ${uncommitted(c.path) && !c.dirty ? '' : 'hidden'}>Commit bekliyor</span>
     </div>
-    ${banner}${ext}
+    ${staleBanner}${banner}${ext}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
-  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); }
+  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
   if (c.tab === 'hist') paintHist();
   paintVerHint(); paintVerWarn();
@@ -808,7 +1119,7 @@ function renderMainInner() {
 function startHtml() {
   const n = S.facets.total;
   const recent = S.recent.length
-    ? `<h2>Son değişenler</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.path)}</div></div>`).join('')}</div>` : '';
+    ? `<h2>Son değişenler</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div></div>`).join('')}</div>` : '';
   return `<div class="start"><h1>${n ? 'Bir prompt seç' : 'Havuz henüz boş'}</h1>
     <p>${n ? `Havuzunda ${n} prompt var. Soldaki listeden veya arama kutusundan birini aç. Sık kopyaladıklarını etiketle, değiştirdiklerini git ile kaydet.` : 'Eski .txt dosyalarını içe aktararak başlayabilir ya da sıfırdan yeni bir prompt yazabilirsin.'}</p>
     <div class="btns"><button class="btn primary" data-act="new-prompt">Yeni prompt</button><button class="btn" data-act="import">.txt dosyalarını içe aktar</button></div>${recent}</div>`;
@@ -825,6 +1136,7 @@ function setField(key, value) {
     const pb = $('#pubBox button[data-act="publish-now"]'); if (pb) pb.disabled = !normTur(value);
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
+  if (key === 'paket') paintPaketHint();
   if (key === 'versiyon') paintVerHint();
 }
 
@@ -841,9 +1153,10 @@ function paintVerHint() {
 
 async function loadVersion() {
   const c = S.cur; if (!c || !c.isPrompt) return;
+  const gen = S.gen;
   try {
     const v = await get('/api/version?' + qs({ path: c.path }));
-    if (S.cur === c) { c.ver = v; paintVerWarn(); }
+    if (S.cur === c && gen === S.gen) { c.ver = v; paintVerWarn(); }
   } catch (e) { /* sessiz */ }
 }
 
@@ -855,6 +1168,16 @@ function paintVerWarn() {
     w.textContent = 'v' + c.ver.sonSurum.version + '\'dan beri değişti';
     w.title = u.message; w.setAttribute('aria-label', u.message);
   }
+}
+
+// Klasörle uyuşmayan "paket" alanı için uyarı ve "Alanı klasöre eşitle" düğmesi.
+function paintPaketHint() {
+  const c = S.cur; const h = $('#paketHint'); if (!c || !h) return;
+  const cl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  const alan = str(FM.meta(c.parsed).paket).trim();
+  const bad = cl.kind === 'paket' && !!alan && FM.slug(alan) !== cl.paket;
+  h.hidden = !bad;
+  h.innerHTML = bad ? esc(Rules.MSG.paketUyusmuyorBilgi(cl.klasor, alan)) + ' <button type="button" class="btn sm" data-act="paket-esitle">Alanı klasöre eşitle</button>' : '';
 }
 
 function refreshPubWarn() {
@@ -943,6 +1266,7 @@ function askIdentity() {
 // Yalnızca commit: dosya zaten kaydedilmiş, mesaj dolu.
 async function commitOnly() {
   const c = S.cur; if (!c) return false;
+  if (staleGuard()) return false;
   const message = c.commitMsg.trim();
   if (!message) return false;
   try {
@@ -964,6 +1288,7 @@ async function commitOnly() {
 // +1: sürüm penceresi. Sunucu dosyayı yazar, commit eder ve tag atar; hata olursa her şeyi geri alır.
 async function openBump() {
   const c = S.cur; if (!c || !c.isPrompt) return;
+  if (staleGuard()) return;
   syncFromDom();
   let v;
   try { v = await get('/api/version?' + qs({ path: c.path })); } catch (e) { fail(e); return; }
@@ -1047,6 +1372,7 @@ async function openBump() {
 
 async function save(force) {
   const c = S.cur; if (!c) return false;
+  if (staleGuard()) return false;
   syncFromDom();
   if (!c.dirty && c.commitMsg.trim() && uncommitted(c.path)) return commitOnly();
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
@@ -1088,13 +1414,15 @@ async function save(force) {
 }
 
 async function afterWrite() {
-  await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]);
+  const gen = S.gen;
+  await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
+  if (gen !== S.gen) return; // bu arada marketplace değişti
   renderFilters(); renderList();
   if (isFiltering()) runSearch();
   const c = S.cur;
   if (c && c.isPrompt) {
     loadVersion();
-    try { const r = await get('/api/file?' + qs({ path: c.path })); c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r.publish.paket)}:${esc(r.publish.ad)}</code>`; } catch (e) { /* sessiz */ }
+    try { const r = await get('/api/file?' + qs({ path: c.path })); if (gen !== S.gen || S.cur !== c) return; c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r.publish.paket)}:${esc(r.publish.ad)}</code>`; } catch (e) { /* sessiz */ }
   }
 }
 
@@ -1126,11 +1454,12 @@ async function copyBody() {
 
 /* ------------------------------------------------------------------- geçmiş */
 async function loadHistory() {
-  const c = S.cur; c.hist = { loading: true }; paintHist();
+  const c = S.cur; const gen = S.gen; c.hist = { loading: true }; paintHist();
   try {
     const st = S.git || await loadGit();
     if (!st.isRepo) { c.hist = { noRepo: true }; paintHist(); return; }
     const [log, wd] = await Promise.all([get('/api/git/log?' + qs({ path: c.path })), get('/api/git/diff?' + qs({ path: c.path, working: 1 }))]);
+    if (gen !== S.gen || S.cur !== c) return;
     c.hist = { commits: log.commits, working: wd, sel: (wd.diff || wd.untracked) ? 'working' : (log.commits[0] ? log.commits[0].hash : null), diffs: {} };
     paintHist();
   } catch (e) { c.hist = { error: e.message }; paintHist(); }
@@ -1178,7 +1507,7 @@ async function loadOldVersion(hash) {
   } catch (e) { fail(e); }
 }
 
-/* --------------------------------------------------------- yeni prompt, klasör */
+/* --------------------------------------------------- yeni marketplace, plugin, prompt */
 const TEMPLATES = {
   bos: { label: 'Boş', meta: {}, body: '' },
   rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
@@ -1186,17 +1515,126 @@ const TEMPLATES = {
   ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
 };
 
-function openNewPrompt(folder) {
-  const folders = S.facets.folders.length ? S.facets.folders : [S.libraryDir];
-  const sel = folder && folders.includes(folder) ? folder : S.libraryDir;
+const hasWord = (v) => /[\p{L}\p{N}]/u.test(v);
+// Yolun plugin klasörü adı; klasörsüz/gelen kutusu/dışarıdaki yollar için ''.
+const pluginOfPath = (p, mp) => { const cl = Rules.classifyPromptPath(p || '', libDirOf(mp)); return cl.kind === 'paket' ? cl.klasor : ''; };
+const pluginOfItem = (it) => (!it ? '' : it.kind === 'plugin' ? it.node.name : (() => { const cl = Rules.classifyPromptPath(it.path || '', libDirOf(it.mp)); return cl.kind === 'paket' ? cl.klasor : ''; })());
+
+// Yeni prompt için ön değer: seçili düğüm, açık dosya, son kullanılan, ilk plugin.
+function defaultPlugin() {
+  const m = activeMp(); if (!m) return '';
+  const names = m.plugins.map((p) => p.name);
+  const cands = [];
+  if (S.sel && S.sel.mp === m.name) cands.push(pluginOfItem(S.modelMap.get(S.sel.key)));
+  if (S.cur && S.cur.mp === m.name) cands.push(pluginOfItem({ path: S.cur.path, mp: S.cur.mp }));
+  cands.push(ls.get(lsKey('sonPlugin'), ''));
+  for (const c of cands) if (c && names.includes(c)) return c;
+  return names[0] || '';
+}
+
+// Yeni marketplace penceresi (ağaç araç çubuğundan açılır).
+async function openNewMarketplace() {
+  if (!rootOk()) { toast('Önce geçerli bir library kökü kaydet', 'error'); return; }
+  openModal({
+    title: 'Yeni marketplace',
+    html: `<form class="stack" id="newMkForm" novalidate>
+      <label>Ad<input id="nmName" autocomplete="off" aria-describedby="nmSlug nmErr" placeholder="Örn. ornek-promptlar" autofocus></label>
+      <p class="hint" id="nmSlug" style="margin:0"></p>
+      <label>Açıklama<input id="nmDesc" autocomplete="off"></label>
+      <label>Sahip<input id="nmOwner" autocomplete="off" placeholder="Boşsa sistem kullanıcısı kullanılır"></label>
+      <p class="issue error" id="nmErr" role="alert" style="margin:0" hidden></p>
+      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+    onMount: (b) => {
+      $('#nmName', b).addEventListener('input', (e) => { $('#nmSlug', b).textContent = hasWord(e.target.value) ? 'Klasör adı: ' + FM.slug(e.target.value) : ''; });
+      $('#newMkForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = $('#nmName', b).value.trim();
+        showFieldErr('nmErr', '');
+        if (!hasWord(name)) { showFieldErr('nmErr', 'Bir ad gir'); $('#nmName', b).focus(); return; }
+        if (!(await confirmDiscard())) return;
+        try {
+          const r = await api('POST', '/api/marketplaces', { name, description: $('#nmDesc', b).value.trim(), owner: $('#nmOwner', b).value.trim(), activate: true });
+          closeModal();
+          const made = (r.marketplace && r.marketplace.name) || FM.slug(name);
+          adoptInfo(await get('/api/info'));
+          await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
+          S.mpOpen.add(made); saveMpOpen();
+          S.sel = { mp: made, key: nodeKey(made, '') }; S.focusKey = nodeKey(made, '');
+          ensureDefaultExp(made);
+          renderFilters(); renderList(); renderMain();
+          toast("Marketplace oluşturuldu. İlk commit'i Git panelinden atabilirsin.", 'ok', 5000);
+        } catch (err) { showFieldErr('nmErr', err.message); $('#nmName', b).focus(); }
+      });
+    }
+  });
+}
+
+// Yeni plugin: klasör + .gitkeep (+ açıklama). Commit atılmaz.
+function openNewPlugin() {
+  const m = activeMp();
+  if (!m) { toast('Önce bir marketplace seç', 'error'); return; }
+  const lib = m.libraryDir;
+  openModal({
+    title: 'Yeni plugin: ' + m.name,
+    html: `<form class="stack" id="newPlForm" novalidate>
+      <label>Ad<input id="plName" autocomplete="off" aria-describedby="plPrev plErr plWarn" placeholder="Örn. kod-inceleme" autofocus></label>
+      <p class="hint" id="plPrev" style="margin:0"></p>
+      <p class="issue error" id="plErr" role="alert" style="margin:0" hidden></p>
+      <p class="issue warn" id="plWarn" style="margin:0" hidden></p>
+      <label>Açıklama<input id="plDesc" autocomplete="off" placeholder="Bu plugin ne işe yarar?"></label>
+      <p class="hint" style="margin:0">Boş bırakılabilir. Yayında açıklama gerekir.</p>
+      <div id="plSrvErr" class="issue error" role="alert" hidden></div>
+      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+    onMount: (b) => {
+      const check = () => {
+        const v = $('#plName', b).value; const slug = hasWord(v) ? FM.slug(v) : '';
+        $('#plPrev', b).textContent = slug ? `Klasör: ${lib}/${slug}/ · Claude Code'da: /${slug}:<komut>` : '';
+        const err = slug ? Rules.checkPluginName(slug) : null; const warn = slug ? Rules.pluginNameWarn(slug) : null;
+        showFieldErr('plErr', err); showFieldErr('plWarn', err ? '' : warn);
+        $('#plName', b).setAttribute('aria-invalid', err ? 'true' : 'false');
+        return { slug, err };
+      };
+      $('#plName', b).addEventListener('input', check);
+      $('#newPlForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const { slug, err } = check();
+        if (!slug) { showFieldErr('plErr', 'Plugin adı gerekli'); $('#plName', b).focus(); return; }
+        if (err) { $('#plName', b).focus(); return; }
+        if (activeName() !== m.name) { showFieldErr('plSrvErr', 'Etkin marketplace değişti. Pencereyi kapatıp yeniden dene.'); return; }
+        try {
+          const r = await api('POST', '/api/package', { name: $('#plName', b).value, description: $('#plDesc', b).value.trim() });
+          closeModal();
+          ls.set(lsKey('sonPlugin'), r.plugin.name);
+          await afterWrite();
+          expOf(m.name).add(r.plugin.path); S.mpOpen.add(m.name); saveExp(m.name); saveMpOpen();
+          S.sel = { mp: m.name, key: nodeKey(m.name, r.plugin.path) }; S.focusKey = S.sel.key;
+          renderList();
+          toast('Plugin oluşturuldu: ' + r.plugin.name + ". Commit'i Git panelinden atabilirsin.", 'ok', 5000);
+        } catch (err2) { showFieldErr('plSrvErr', err2.message); }
+      });
+    }
+  });
+}
+
+function openNewPrompt(o) {
+  o = o || {};
+  const m = activeMp();
+  if (!m) { toast('Önce bir marketplace seç', 'error'); return; }
+  if (!m.plugins.length) {
+    openModal({
+      title: 'Yeni prompt',
+      html: `<p>Bu marketplace'te henüz plugin yok.</p><div class="foot"><button class="btn" data-act="close">Kapat</button><button class="btn primary" data-act="new-plugin">Yeni plugin</button></div>`
+    });
+    return;
+  }
+  const names = m.plugins.map((p) => p.name);
+  const sel = o.plugin && names.includes(o.plugin) ? o.plugin : defaultPlugin();
   openModal({
     title: 'Yeni prompt',
     html: `<form class="stack" id="newForm">
+      <p class="hint" style="margin:0">Marketplace: <b>${esc(m.name)}</b></p>
       <label>Başlık<input name="title" required autofocus placeholder="Örn. C# kod inceleme" autocomplete="off"></label>
-      <div class="grid2">
-        <label>Klasör<select name="folder">${folders.map((f) => `<option value="${esc(f)}" ${f === sel ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label>
-        <label>Yeni alt klasör (isteğe bağlı)<input name="sub" placeholder="Örn. mstest" autocomplete="off"></label>
-      </div>
+      <label>Plugin<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
       <label>Etiketler (virgülle ayır)<input name="tags" list="dl-etiketler" placeholder="csharp, kod-inceleme" autocomplete="off"></label>
       <label>Şablon<select name="tpl">${Object.keys(TEMPLATES).map((k) => `<option value="${k}">${esc(TEMPLATES[k].label)}</option>`).join('')}</select></label>
       <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
@@ -1205,19 +1643,21 @@ function openNewPrompt(folder) {
         e.preventDefault();
         const f = new FormData(e.target);
         const title = String(f.get('title')).trim(); if (!title) return;
-        let dir = String(f.get('folder'));
-        const sub = String(f.get('sub')).trim(); if (sub) dir += '/' + FM.slug(sub);
+        const plugin = String(f.get('plugin'));
         const p = FM.parse('');
         FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
         FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = TEMPLATES[f.get('tpl')] || TEMPLATES.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
+        FM.set(p, 'paket', FM.slug(plugin)); // yayın paketi klasörle aynı olsun
         p.body = '\n' + t.body;
         closeModal();
+        if (activeName() !== m.name) { toast('Etkin marketplace değişti, prompt oluşturulmadı', 'error'); return; }
         if (!(await confirmDiscard())) return;
         try {
-          const r = await api('POST', '/api/file', { path: dir + '/' + FM.slug(title) + '.md', raw: FM.stringify(p), unique: true });
+          const r = await api('POST', '/api/file', { path: m.libraryDir + '/' + plugin + '/' + FM.slug(title) + '.md', raw: FM.stringify(p), unique: true });
+          ls.set(lsKey('sonPlugin'), plugin);
           await afterWrite();
           await openFile(r.path);
           const bd = $('#fBody'); if (bd) bd.focus();
@@ -1227,15 +1667,93 @@ function openNewPrompt(folder) {
     }
   });
 }
-async function newDir(parent) {
-  const name = await askText({ title: 'Yeni klasör', label: 'Klasör adı', hint: parent + ' içinde oluşturulur.', ok: 'Oluştur' });
-  if (!name) return;
-  try { const r = await api('POST', '/api/mkdir', { path: parent + '/' + FM.slug(name) }); S.expanded.add(parent); S.expanded.add(r.path); saveExpanded(); await afterWrite(); toast('Klasör oluşturuldu'); } catch (e) { fail(e); }
+
+// Prompt taşı: aynı marketplace'te /api/rename, başka marketplace'e /api/prompts/transfer.
+async function openMove(path) {
+  const m = activeMp(); if (!m) return;
+  const from = m.name;
+  const mps = S.lib.marketplaces.filter((x) => x.state === 'hazir');
+  const cl = Rules.classifyPromptPath(path, m.libraryDir);
+  const targetOpts = (name) => {
+    const mm = mpByName(name); const opts = mm.plugins.map((p) => ({ v: 'p:' + p.name, label: p.name }));
+    if (name === from) { opts.push({ v: 'i:', label: 'Gelen kutusu' }, { v: 'l:', label: 'Klasörsüz promptlar' }); }
+    return opts;
+  };
+  const defTarget = cl.kind === 'paket' ? 'p:' + cl.klasor : cl.kind === 'gelenKutusu' ? 'i:' : 'l:';
+  openModal({
+    title: 'Taşı: ' + base(path),
+    html: `<form class="stack" id="moveForm">
+      <label>Marketplace<select id="mvMp">${mps.map((x) => `<option value="${esc(x.name)}" ${x.name === from ? 'selected' : ''}>${esc(x.name)}${x.name === from ? ' (etkin)' : ''}</option>`).join('')}</select></label>
+      <label>Hedef<select id="mvTarget"></select></label>
+      <label>Dosya adı<input id="mvName" value="${esc(base(path))}" autocomplete="off"></label>
+      <p class="hint" id="mvNote" style="margin:0"></p>
+      <div id="mvErr" class="issue error" role="alert" hidden></div>
+      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Taşı</button></div></form>`,
+    onMount: (b) => {
+      const fill = () => {
+        const name = $('#mvMp', b).value; const cross = name !== from;
+        const opts = targetOpts(name);
+        const keep = $('#mvTarget', b).value;
+        $('#mvTarget', b).innerHTML = opts.length ? opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('') : '<option value="">(bu marketplace\'te plugin yok)</option>';
+        const want = cross ? keep : (keep || defTarget);
+        if (opts.some((o) => o.v === want)) $('#mvTarget', b).value = want;
+        else if (!cross && opts.some((o) => o.v === defTarget)) $('#mvTarget', b).value = defTarget;
+        $('#mvName', b).disabled = cross;
+        if (cross) $('#mvName', b).value = base(path);
+        $('#mvNote', b).textContent = cross
+          ? `Hedef marketplace: ${name}. Dosya orada yeni (commit edilmemiş) olarak görünür, kaynak çöp kutusuna taşınır. Sürüm tag'leri ve geçmiş "${from}" deposunda kalır. Commit'i iki depoda ayrı atarsın.`
+          : "Bu promptun sürüm tag'leri eski yola bağlı kalır. Yayınlanmışsa eski hedef Marketplace panelinde \"kaynağı kalmayan dosyalar\" altında görünür.";
+      };
+      fill();
+      $('#mvMp', b).addEventListener('change', fill);
+      $('#moveForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const toMp = $('#mvMp', b).value; const tv = $('#mvTarget', b).value; const er = $('#mvErr', b);
+        const showErr = (msg) => { er.textContent = msg; er.hidden = false; };
+        if (!tv) { showErr('Hedef seç'); return; }
+        if (activeName() !== from) { showErr('Etkin marketplace değişti. Pencereyi kapatıp yeniden dene.'); return; }
+        if (S.cur && S.cur.path === path && !(await confirmDiscard())) return;
+        try {
+          if (toMp !== from) {
+            await api('POST', '/api/prompts/transfer', { path, toMp, toPlugin: tv.slice(2) });
+            closeModal();
+            if (S.cur && S.cur.path === path) { S.cur = null; ls.set(lsKey('last'), null); }
+            S.mpOpen.add(toMp); saveMpOpen();
+            await afterWrite(); renderMain();
+            toast(`Taşındı: ${toMp}. Sürüm tag'leri ve geçmiş "${from}" deposunda kaldı; iki depoda da commit bekleyen değişiklik var.`, 'ok', 7000);
+            return;
+          }
+          const kind = tv.charAt(0); const nm = tv.slice(2);
+          const dir = kind === 'p' ? m.libraryDir + '/' + nm : kind === 'i' ? m.libraryDir + '/' + Rules.INBOX_DIR : m.libraryDir;
+          let file = $('#mvName', b).value.trim() || base(path);
+          if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
+          const to = dir + '/' + file;
+          if (to === path) { closeModal(); return; }
+          const r = await api('POST', '/api/rename', { from: path, to });
+          closeModal();
+          if (S.cur && S.cur.path === path) { S.cur.path = r.path; ls.set(lsKey('last'), r.path); }
+          expandParents(r.path);
+          await afterWrite(); renderMain();
+          toast("Taşındı. Bu promptun sürüm tag'leri eski yola bağlı kalır. Yayınlanmışsa eski hedef Marketplace panelinde \"kaynağı kalmayan dosyalar\" altında görünür.", 'ok', 6000);
+        } catch (err) { showErr(err.message); }
+      });
+    }
+  });
 }
 
-async function renameItem(p) {
-  const to = await askText({ title: 'Yeniden adlandır veya taşı', label: 'Yeni yol', value: p, hint: 'Başka bir klasöre taşımak için yolu düzenle.', ok: 'Uygula' });
+// Prompt dosyasını aynı klasörde yeniden adlandırır.
+async function renameFile(path) {
+  const dir = path.split('/').slice(0, -1).join('/');
+  const nm = await askText({ title: 'Yeniden adlandır', label: 'Yeni dosya adı', value: base(path), ok: 'Uygula' });
+  if (!nm || nm === base(path)) return;
+  let file = nm; if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
+  await renameItem(path, dir + '/' + file);
+}
+
+async function renameItem(p, to) {
+  if (to === undefined) to = await askText({ title: 'Yeniden adlandır veya taşı', label: 'Yeni yol', value: p, hint: 'Başka bir klasöre taşımak için yolu düzenle.', ok: 'Uygula' });
   if (!to || to === p) return;
+  if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/')) && !(await confirmDiscard())) return;
   try {
     const r = await api('POST', '/api/rename', { from: p, to });
     if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) { S.cur.path = r.path + S.cur.path.slice(p.length); ls.set(lsKey('last'), S.cur.path); }
@@ -1244,8 +1762,41 @@ async function renameItem(p) {
   } catch (e) { fail(e); }
 }
 
-async function deleteItem(p) {
-  const a = await askChoice({ title: 'Silinsin mi?', text: '"' + p + '" çöp kutusuna (.pp/trash) taşınır. Git ile takip ediliyorsa geçmişte de durur.', choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Sil', kind: 'danger' }] });
+async function renamePlugin(name) {
+  const m = activeMp(); if (!m) return;
+  const to = await askText({ title: "Plugin'i yeniden adlandır", label: 'Yeni ad', value: name, hint: 'Klasör adı ve yayın adı buna göre değişir.', ok: 'Devam' });
+  if (!to || to === name) return;
+  const slug = FM.slug(to);
+  const a = await askChoice({
+    title: 'Plugin yeniden adlandırılsın mı?',
+    text: `"${name}" → "${slug}". Promptların sürüm tag'leri eski adla kalır, yayınlanmış çıktı (plugins/${FM.slug(name)}) kaynaksız kalır ve bir sonraki yayında temizlenir.`,
+    choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Yeniden adlandır', kind: 'primary' }]
+  });
+  if (a !== 'yes') return;
+  const old = m.libraryDir + '/' + name;
+  if (S.cur && S.cur.path.startsWith(old + '/') && !(await confirmDiscard())) return;
+  try {
+    const r = await api('POST', '/api/package/rename', { from: name, to });
+    const ex = expOf(m.name);
+    if (ex.delete(old)) ex.add(r.plugin.path);
+    saveExp(m.name);
+    if (S.cur && S.cur.path.startsWith(old + '/')) { S.cur.path = r.plugin.path + S.cur.path.slice(old.length); ls.set(lsKey('last'), S.cur.path); }
+    if (ls.get(lsKey('sonPlugin'), '') === name) ls.set(lsKey('sonPlugin'), r.plugin.name);
+    S.sel = { mp: m.name, key: nodeKey(m.name, r.plugin.path) }; S.focusKey = S.sel.key;
+    await afterWrite(); renderMain();
+    toast('Plugin yeniden adlandırıldı: ' + r.plugin.name + ' (' + r.moved + ' prompt)', 'ok', 5000);
+  } catch (e) { fail(e); }
+}
+
+async function editPluginDesc(name) {
+  const pl = pluginsOf(activeMp()).find((p) => p.name === name);
+  const d = await askText({ title: 'Plugin açıklaması: ' + name, label: 'Açıklama', value: (pl && pl.description) || '', hint: 'Bu plugin ne işe yarar? Yayında açıklama gerekir.', ok: 'Kaydet' });
+  if (!d) return;
+  try { await api('PUT', '/api/package', { name, description: d }); await afterWrite(); toast('Açıklama kaydedildi'); } catch (e) { fail(e); }
+}
+
+async function deleteItem(p, text) {
+  const a = await askChoice({ title: 'Silinsin mi?', text: text || ('"' + p + '" çöp kutusuna (.pp/trash) taşınır. Git ile takip ediliyorsa geçmişte de durur.'), choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Sil', kind: 'danger' }] });
   if (a !== 'yes') return;
   try {
     await api('DELETE', '/api/file?' + qs({ path: p }));
@@ -1255,12 +1806,16 @@ async function deleteItem(p) {
 }
 
 /* ---------------------------------------------------------- içe aktarma */
-function openImport() {
+function openImport(preset) {
+  const m = activeMp();
+  const lib = libDirOf();
+  const targets = [{ v: lib + '/' + Rules.INBOX_DIR, label: 'Gelen kutusu' }].concat(pluginsOf(m).map((p) => ({ v: p.path, label: p.name })));
   openModal({
     title: '.txt dosyalarını içe aktar', wide: true,
     html: `<div class="stack"><form class="grid2" id="impForm">
       <label class="span2">Klasör yolu<input name="dir" value="${esc(ls.get('pp.impDir', ''))}" placeholder="C:\\Users\\sen\\promptlar veya ~/promptlar" autocomplete="off" autofocus></label>
-      <label>Hedef klasör<input name="target" value="${esc(S.libraryDir)}/gelen-kutusu" autocomplete="off"></label>
+      <p class="span2 hint" style="margin:0">Hedef marketplace: <b>${esc(activeName())}</b></p>
+      <label>Hedef<select name="target">${targets.map((t) => `<option value="${esc(t.v)}" ${preset === t.v ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
       <label class="chk" style="align-self:end"><input type="checkbox" name="rec"> Alt klasörleri de tara</label>
       <div class="span2 foot-left"><button class="btn primary">Tara</button><span class="hint">Orijinal dosyalara dokunulmaz. Eski Türkçe kodlamalar (Windows-1254) ve UTF-16 otomatik çözülür.</span></div></form>
       <div id="impOut"></div></div>`,
@@ -1281,7 +1836,7 @@ function openImport() {
             const files = $$('[data-i]', out).filter((x) => x.checked).map((x) => r.files[Number(x.dataset.i)].file);
             if (!files.length) { toast('Dosya seçilmedi', 'error'); return; }
             try {
-              const res = await api('POST', '/api/import/run', { dir: r.dir, files, target: String(f.get('target')).trim() || S.libraryDir + '/gelen-kutusu' });
+              const res = await api('POST', '/api/import/run', { dir: r.dir, files, target: String(f.get('target')).trim() || lib + '/' + Rules.INBOX_DIR });
               const tgt = String(f.get('target')).trim();
               out.innerHTML = `<h3>${res.created.length} prompt oluşturuldu</h3>
                 <p>Taslak olarak <code>${esc(tgt)}</code> içine kaydedildi. Orijinal .txt dosyaları yerinde duruyor. Şimdi etiketle, klasörlere ayır ve git ile commit et.</p>
@@ -1308,6 +1863,7 @@ function renderGitBadge() {
 const GLABEL = { '?': 'yeni', M: 'değişti', D: 'silindi', A: 'eklendi', R: 'taşındı' };
 
 const gitTitle = () => 'Git: ' + (S.info.activeMarketplace || 'marketplace seçilmedi');
+const gitTarget = () => `<p class="hint" style="margin:0">Commit bu depoya atılır: <b>${esc(S.info.activeMarketplace)}</b> <code>${esc(S.info.root || '')}</code></p>`;
 
 async function openGit(tab) {
   if (!setupOk()) {
@@ -1343,6 +1899,7 @@ function paintGit() {
   const idOpen = !g.identity.name || !g.identity.email;
   const suggestion = g.files.length === 1 ? (stem(g.files[0].path) + ': güncelle') : (g.files.length ? g.files.length + ' dosya güncellendi' : '');
   body.innerHTML = gitTabs('changes') + `<div class="gitgrid"><div class="gitleft">
+    ${gitTarget()}
     <div class="hint">Dal: <b>${esc(g.branch)}</b>${g.hasCommits ? '' : ' (henüz commit yok)'}</div>
     ${g.files.length ? `<div class="ftable">${g.files.map((f) => `<div class="gf" data-gpath="${esc(f.path)}"><input type="checkbox" data-gsel="${esc(f.path)}" ${S.gitSel.has(f.path) ? 'checked' : ''} aria-label="${esc(f.path)} commit'e dahil"><button class="link" data-act="git-diff" data-path="${esc(f.path)}" title="${esc(f.path)}">${esc(f.path)}</button><span class="pill ${f.code === 'D' ? 'bad' : f.code === '?' ? 'ok' : 'warn'}">${GLABEL[f.code] || f.code}</span></div>`).join('')}</div>
       <button class="btn sm" data-act="git-selall" style="justify-self:start">Tümünü seç / bırak</button>`
@@ -1459,7 +2016,7 @@ function marketHtml(st) {
 }
 
 async function openMarket() {
-  openModal({ title: 'Marketplace', wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
+  openModal({ title: 'Marketplace: ' + activeName(), wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
   try { S.mk = await get('/api/marketplace/status'); $('#mBody').innerHTML = marketHtml(S.mk); } catch (e) { closeModal(); fail(e); }
 }
 
@@ -1497,13 +2054,13 @@ async function mkPublish(body, okMsg) {
   } catch (e) { fail(e); }
 }
 
-/* ------------------------------------------------- kurulum durumu, marketplace seçici */
-const ACTION_LABEL = { ayarlar: 'Ayarları aç', yeniMarketplace: 'Yeni marketplace', marketplaceSec: 'Marketplace seç', gitBaslat: "Git'i başlat" };
+/* ------------------------------------------------- kurulum durumu, marketplace geçişi */
+const ACTION_LABEL = { ayarlar: 'Ayarları aç', yeniMarketplace: 'Yeni marketplace', marketplaceSec: 'Ağaçtan seç', gitBaslat: "Git'i başlat" };
 
 function issueButton(i) {
   if (i.action === 'ayarlar') return '<button class="btn sm" data-act="settings">' + ACTION_LABEL.ayarlar + '</button>';
-  if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="settings" data-section="new">' + ACTION_LABEL.yeniMarketplace + '</button>';
-  if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="settings" data-section="mk">' + ACTION_LABEL.marketplaceSec + '</button>';
+  if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + ACTION_LABEL.yeniMarketplace + '</button>';
+  if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + ACTION_LABEL.marketplaceSec + '</button>';
   if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${ACTION_LABEL.gitBaslat}</button>`;
   return '';
 }
@@ -1518,6 +2075,16 @@ function renderSetup() {
   const h = $('#setupTitle'); if (h) h.focus();
 }
 
+// Library kökü hazır ama etkin marketplace yok: ağaçtan seçilir.
+function renderPick() {
+  const codes = S.info.setup.issues.map((i) => i.code);
+  if (!codes.includes('marketplaceSecilmedi') && !codes.includes('marketplaceYok')) { renderSetup(); return; }
+  const none = codes.includes('marketplaceYok');
+  $('#main').innerHTML = `<div class="start"><h1 id="pickTitle" tabindex="-1">Bir marketplace seç</h1>
+    <p>${none ? 'Henüz marketplace yok. Yeni bir tane oluştur.' : 'Soldaki ağaçtan bir marketplace\'e tıkla ya da yeni bir tane oluştur.'}</p>
+    <div class="btns"><button class="btn primary" data-act="new-mp">Yeni marketplace</button></div></div>`;
+}
+
 function paintWarnBand() {
   const old = $('#warnBand'); if (old) old.remove();
   if (!setupOk() || S.warnHidden) return;
@@ -1529,62 +2096,105 @@ function paintWarnBand() {
   $('#main').prepend(band);
 }
 
-// Kurulum açıkken düğmeleri ve kenar çubuğunu duruma göre ayarlar.
+// Üst bardaki etkin marketplace göstergesi (aria-live ile duyurulur).
+function paintMkCur() {
+  const b = $('#mkCur'); if (!b) return;
+  const n = activeName();
+  b.innerHTML = n ? 'Marketplace: <b>' + esc(n) + '</b><span class="sr">. Etkin marketplace: ' + esc(n) + '</span>' : 'Marketplace seçilmedi';
+  b.disabled = !rootOk();
+}
+
+// Düğmeleri ve kenar çubuğunu kurulum durumuna göre ayarlar.
 function applySetupUi() {
-  const ok = setupOk();
+  const ok = setupOk(); const rok = rootOk();
   const why = 'Kurulum tamamlanmadı: ' + firstError();
   $$('[data-needs-setup]').forEach((b) => {
     if (b.dataset.title0 === undefined) b.dataset.title0 = b.getAttribute('title') || '';
     b.disabled = !ok;
     if (ok) { if (b.dataset.title0) b.title = b.dataset.title0; else b.removeAttribute('title'); } else b.title = why;
   });
-  ['q', 'fDurum', 'fTur', 'fScope'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = !ok; });
-  if (!ok) {
-    $('#list').innerHTML = '<div class="empty">Kurulum tamamlanınca promptlar burada görünür.</div>';
-    $('#listTitle').textContent = 'Promptlar';
+  ['q', 'fDurum', 'fTur', 'fScope'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = !rok; });
+  if (!rok) {
+    $('#list').setAttribute('role', 'list');
+    $('#list').innerHTML = '<div class="empty">Library kökü hazır olunca marketplace\'ler burada görünür.</div>';
+    $('#listTitle').textContent = 'Kütüphane';
     $('#tagbar').innerHTML = '';
-    $('#gitBadge').hidden = true;
-    $('#mkBadge').hidden = true;
   }
-  const s = S.info;
-  document.querySelector('.brand').title = s.activeMarketplace ? 'Marketplace: ' + s.activeMarketplace + (s.root ? ' — ' + s.root : '') : 'Marketplace seçilmedi';
+  if (!ok) { $('#gitBadge').hidden = true; $('#mkBadge').hidden = true; }
+  paintMkCur();
+  paintToolbar();
 }
 
 function onSetupLost(setup) {
   S.info.setup = setup; S.info.root = null; S.info.isRepo = false;
-  S.cur = null; S.results = null; S.tree = []; S.git = null;
+  S.cur = null; S.git = null; S.gen++;
+  if (!setup.rootOk) { S.lib = null; S.results = null; }
   document.title = 'Prompt havuzu';
-  applySetupUi(); renderSetup();
+  applySetupUi(); renderList(); renderMain();
 }
 
-function paintMkSelect() {
-  const sel = $('#mkSel'); const m = S.mkList;
-  const ignored = m ? m.ignored.filter((i) => i.reason !== 'Araç reposu') : [];
-  if (!m || (!m.items.length && !ignored.length)) { sel.hidden = true; return; }
-  const active = m.active;
-  sel.innerHTML = (active ? '' : '<option value="" selected disabled>Marketplace seç</option>')
-    + m.items.map((i) => `<option value="${esc(i.name)}" ${i.name === active ? 'selected' : ''}>${esc(i.name)}${i.valid ? '' : ' (geçersiz)'}</option>`).join('')
-    + (ignored.length ? `<optgroup label="Git deposu olmayan">${ignored.map((i) => `<option value="${esc(i.name)}" ${i.name === active ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</optgroup>` : '');
-  sel.hidden = false;
+// Sunucudan gelen yeni /api/info ile etkin marketplace'e geçiş durumunu uygular.
+function adoptInfo(info) {
+  S.info = info; S.gen++;
+  S.cur = null; S.git = null; S.mk = null; S.gitSel = null; S.gitMsg = ''; S.gitSelTouched = false;
+  if (S.lib) {
+    S.lib.active = info.activeMarketplace;
+    S.lib.marketplaces.forEach((m) => { m.active = m.name === info.activeMarketplace; });
+    const a = S.lib.marketplaces.find((m) => m.active && m.state === 'hazir');
+    S.lib.libraryDir = a ? a.libraryDir : null;
+  }
+  document.title = 'Prompt havuzu';
+  applySetupUi();
 }
 
-async function loadMarketplaces() {
-  try { S.mkList = await get('/api/marketplaces'); } catch (e) { S.mkList = null; }
-  paintMkSelect();
-}
-
-function reloadWith(msg) {
-  try { if (msg) sessionStorage.setItem('pp.flash', msg); } catch (e) { /* özel pencere */ }
-  location.reload();
-}
-
-// Marketplace değiştirir: kaydedilmemiş düzenleme varsa sorar, sonra tam yeniden yükleme yapar.
-async function switchMarketplace(name) {
-  if (!(await confirmDiscard())) { paintMkSelect(); return false; }
-  try { await api('POST', '/api/marketplaces/activate', { name }); } catch (e) { fail(e); paintMkSelect(); return false; }
-  if (S.cur) S.cur.dirty = false;
-  location.reload();
+// Yerinde marketplace geçişi (sayfa yeniden yüklenmez). Başarılıysa true.
+async function activateMarketplace(name, o) {
+  o = o || {};
+  if (name === activeName()) return true;
+  if (!(await confirmDiscard())) return false;
+  let r;
+  try { r = await api('POST', '/api/marketplaces/activate', { name }); } catch (e) { fail(e); return false; }
+  adoptInfo(r.info);
+  const m = mpByName(name);
+  if (m && m.state === 'hazir') { S.mpOpen.add(name); saveMpOpen(); ensureDefaultExp(name); }
+  if (setupOk()) await loadGit();
+  renderMkBadge(); renderFilters(); renderList(); renderMain();
+  if (!o.quiet) toast('Etkin marketplace: ' + name);
   return true;
+}
+
+// Ağaçta, arama sonuçlarında ve "Son değişenler"de tıklanınca: gerekirse marketplace'i etkinleştirip dosyayı açar.
+async function openIn(mp, path, o) {
+  mp = mp || activeName();
+  if (mp !== activeName() && !(await activateMarketplace(mp))) return;
+  await openFile(path, o);
+}
+
+// Başka sekmede etkin marketplace değişmişse (409 etkinDegil) durumu sunucuyla eşler. Açık dosya korunur ama yazması engellenir.
+let resyncing = false;
+async function resyncActive() {
+  if (resyncing) return; resyncing = true;
+  try {
+    const info = await get('/api/info');
+    S.info = info; S.gen++; S.git = null; S.mk = null;
+    if (S.lib) S.lib.marketplaces.forEach((m) => { m.active = m.name === info.activeMarketplace; });
+    applySetupUi();
+    await refreshAll();
+    if (S.cur) renderMainKeepEdits();
+  } catch (e) { /* sessiz */ } finally { resyncing = false; }
+}
+
+// Etkin marketplace aynı kalıp kurulum durumu değiştiğinde (git başlatma, dışarıdan düzeltme) yerinde yeniler.
+async function reloadState() {
+  const info = await get('/api/info');
+  const changed = info.activeMarketplace !== activeName() || info.setup.ok !== setupOk() || info.setup.rootOk !== rootOk();
+  if (changed) adoptInfo(info); else { S.info = info; applySetupUi(); }
+  if (!rootOk()) { renderList(); renderMain(); return; }
+  await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
+  if (!S.mpOpen.size) initExpansion();
+  ensureDefaultExp(activeName());
+  renderFilters(); renderList();
+  if (!S.cur) renderMain();
 }
 
 async function mkGitInit(name, ask) {
@@ -1599,8 +2209,9 @@ async function mkGitInit(name, ask) {
   }
   try {
     const r = await api('POST', '/api/marketplaces/git-init', { name });
-    if (name === S.info.activeMarketplace) reloadWith('Git başlatıldı: ' + name);
-    else { toast('Git başlatıldı: ' + name); openSettings('mk'); }
+    await reloadState();
+    toast('Git başlatıldı: ' + name);
+    if (fromSettings) openSettings('mk');
     return r;
   } catch (e) { fail(e); if (fromSettings) openSettings('mk'); }
 }
@@ -1638,19 +2249,7 @@ function settingsHtml(s, m) {
     </form>
     <h3 id="setMkTitle" tabindex="-1">Marketplace'ler</h3>
     ${rows ? `<div class="mklist">${rows}</div>` : `<p class="hint">${rootBad ? 'Önce geçerli bir library kökü kaydet.' : 'Bu kökte henüz marketplace yok.'}</p>`}
-    <details id="newMk" ${rootBad ? '' : 'open'}><summary>Yeni marketplace</summary>
-      <form class="stack" id="newMkForm" style="margin-top:10px" novalidate>
-        <fieldset class="fieldset-plain stack" ${rootBad ? 'disabled' : ''}>
-          ${rootBad ? '<p class="hint" id="newMkOff">Önce geçerli bir library kökü kaydet.</p>' : ''}
-          <label>Ad<input id="nmName" autocomplete="off" aria-describedby="nmSlug nmErr" placeholder="Örn. ornek-promptlar"></label>
-          <p class="hint" id="nmSlug" style="margin:0"></p>
-          <label>Açıklama<input id="nmDesc" autocomplete="off"></label>
-          <label>Sahip<input id="nmOwner" autocomplete="off" placeholder="Boşsa sistem kullanıcısı kullanılır"></label>
-          <p class="issue error" id="nmErr" role="alert" style="margin:0" hidden></p>
-          <div class="foot-left"><button class="btn primary">Oluştur</button></div>
-        </fieldset>
-      </form>
-    </details>
+    <div class="foot-left"><button type="button" class="btn" data-act="new-mp" ${rootBad ? 'disabled' : ''}>Yeni marketplace…</button>${rootBad ? '<span class="hint">Önce geçerli bir library kökü kaydet.</span>' : ''}</div>
   </div>`;
 }
 
@@ -1659,8 +2258,14 @@ function showFieldErr(id, msg) {
   el.textContent = msg || ''; el.hidden = !msg;
 }
 
-async function saveRoot(create) {
-  const val = $('#setRoot').value;
+function reloadWith(msg) {
+  try { if (msg) sessionStorage.setItem('pp.flash', msg); } catch (e) { /* özel pencere */ }
+  location.reload();
+}
+
+// Library kökü değişince (bilinçli ve nadir) sayfa yeniden yüklenir.
+async function saveRoot(create, onVal) {
+  const val = onVal != null ? onVal : $('#setRoot').value;
   showFieldErr('setRootErr', '');
   const before = { root: S.info.libraryRoot, active: S.info.activeMarketplace, ok: setupOk() };
   try {
@@ -1671,28 +2276,18 @@ async function saveRoot(create) {
     if (changed) reloadWith('Library kökü kaydedildi'); else openSettings();
     return r;
   } catch (e) {
+    if (create) { showFieldErr('setRootErr', e.message); const i = $('#setRoot'); if (i) i.focus(); return; }
     if (e.status === 404 && e.data && e.data.notFound) {
       const a = await askChoice({
         title: 'Klasör yok', text: 'Klasör yok: ' + val.trim() + '. Oluşturulsun mu?',
         choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Oluştur', kind: 'primary' }]
       });
-      if (a === 'yes') return saveRoot(true);
+      if (a === 'yes') return saveRoot(true, val);
       openSettings();
       return;
     }
-    if (e.data && e.data.code === 'kokAracReposunda') { showFieldErr('setRootErr', e.message); $('#setRoot').focus(); return; }
     showFieldErr('setRootErr', e.message); $('#setRoot').focus();
   }
-}
-
-async function createMarketplace() {
-  const name = $('#nmName').value.trim();
-  showFieldErr('nmErr', '');
-  if (!/[\p{L}\p{N}]/u.test(name)) { showFieldErr('nmErr', 'Bir ad gir'); $('#nmName').focus(); return; }
-  try {
-    await api('POST', '/api/marketplaces', { name, description: $('#nmDesc').value.trim(), owner: $('#nmOwner').value.trim(), activate: true });
-    reloadWith("Marketplace oluşturuldu. İlk commit'i Git panelinden atabilirsin.");
-  } catch (e) { showFieldErr('nmErr', e.message); $('#nmName').focus(); }
 }
 
 async function openSettings(section) {
@@ -1701,33 +2296,123 @@ async function openSettings(section) {
   openModal({
     title: 'Ayarlar', wide: true, html: settingsHtml(s, m), noFocus: true,
     onClose: () => { const b = $('.actions [data-act="settings"]'); if (b) b.focus(); },
-    onMount: (b) => {
-      $('#setRootForm', b).addEventListener('submit', (e) => { e.preventDefault(); saveRoot(false); });
-      $('#newMkForm', b).addEventListener('submit', (e) => { e.preventDefault(); createMarketplace(); });
-      $('#nmName', b).addEventListener('input', (e) => {
-        const v = e.target.value;
-        $('#nmSlug', b).textContent = /[\p{L}\p{N}]/u.test(v) ? 'Klasör adı: ' + FM.slug(v) : '';
-      });
-    }
+    onMount: (b) => { $('#setRootForm', b).addEventListener('submit', (e) => { e.preventDefault(); saveRoot(false); }); }
   });
-  let target = $('#setRoot');
-  if (section === 'mk') target = $('#setMkTitle');
-  else if (section === 'new') { const d = $('#newMk'); if (d) d.open = true; target = $('#nmName') && !$('#nmName').closest('fieldset').disabled ? $('#nmName') : $('#setRoot'); }
+  const target = section === 'mk' ? $('#setMkTitle') : $('#setRoot');
   if (target) { if (section === 'mk') target.scrollIntoView({ block: 'nearest' }); target.focus(); }
 }
 
 /* ------------------------------------------------------------- olay yönetimi */
+
+// Ağaç satırına tıklama / Enter / Space. Marketplace ve plugin'e tıklamak o marketplace'i etkinleştirir.
+async function nodeClick(it) {
+  S.sel = { mp: it.mp, key: it.key }; S.focusKey = it.key;
+  switch (it.kind) {
+    case 'mp': {
+      if (!it.node.active) {
+        if (!(await activateMarketplace(it.mp))) return;
+        if (it.node.state === 'hazir') { S.mpOpen.add(it.mp); saveMpOpen(); }
+      } else if (it.expandable) toggleItem(it);
+      break;
+    }
+    case 'plugin':
+      if (!(await activateMarketplace(it.mp, { quiet: true }))) return;
+      toggleItem(it); ls.set(lsKey('sonPlugin', it.mp), it.node.name);
+      break;
+    case 'file': case 'tfile':
+      await openIn(it.mp, it.path);
+      return;
+    case 'gitlessItem': break;
+    default: toggleItem(it);
+  }
+  renderList();
+}
+
+function menuKey(ev, menu) {
+  const items = $$('.mi', menu); const n = items.length; if (!n) return;
+  const i = items.indexOf(document.activeElement);
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(i + 1) % n].focus(); }
+  else if (ev.key === 'ArrowUp') { ev.preventDefault(); items[(i - 1 + n) % n].focus(); }
+  else if (ev.key === 'Home') { ev.preventDefault(); items[0].focus(); }
+  else if (ev.key === 'End') { ev.preventDefault(); items[n - 1].focus(); }
+  else if (ev.key === 'Tab') { ev.preventDefault(); closeMenu(true); }
+}
+
+// Ağaç ve arama sonuçları için klavye gezintisi (WAI-ARIA tree kalıbı). İşlendiyse true.
+function listKey(ev, t) {
+  if (S.results) {
+    const rs = $$('#list .res'); const i = rs.indexOf(t.closest('.res'));
+    if (i < 0) return false;
+    const go = (x) => { if (x) { ev.preventDefault(); x.focus(); } };
+    if (ev.key === 'ArrowDown') go(rs[i + 1]); else if (ev.key === 'ArrowUp') go(rs[i - 1]);
+    else if (ev.key === 'Home') go(rs[0]); else if (ev.key === 'End') go(rs[rs.length - 1]);
+    else return false;
+    return true;
+  }
+  const row = t.closest('[data-key]'); if (!row) return false;
+  const it = S.modelMap.get(row.dataset.key); if (!it) return false;
+  const vis = S.model.filter((x) => x.kind !== 'note');
+  const idx = vis.findIndex((x) => x.key === it.key);
+  const go = (x) => {
+    if (!x) return;
+    S.focusKey = x.key;
+    $$('#list [data-key]').forEach((r) => { r.tabIndex = r.dataset.key === x.key ? 0 : -1; });
+    const el = rowEl(x.key); if (el) { el.focus(); el.scrollIntoView({ block: 'nearest' }); }
+  };
+  switch (ev.key) {
+    case 'ArrowDown': ev.preventDefault(); go(vis[idx + 1]); return true;
+    case 'ArrowUp': ev.preventDefault(); go(vis[idx - 1]); return true;
+    case 'Home': ev.preventDefault(); go(vis[0]); return true;
+    case 'End': ev.preventDefault(); go(vis[vis.length - 1]); return true;
+    case 'ArrowRight':
+      ev.preventDefault();
+      if (it.expandable && !it.expanded) { setExpanded(it, true); renderList(); }
+      else if (it.expandable && it.expanded) go(vis.find((x) => x.parentKey === it.key));
+      return true;
+    case 'ArrowLeft':
+      ev.preventDefault();
+      if (it.expandable && it.expanded) { setExpanded(it, false); renderList(); }
+      else if (it.parentKey) go(S.modelMap.get(it.parentKey));
+      return true;
+    case 'F2':
+      ev.preventDefault();
+      if (it.kind === 'plugin') (async () => { if (await activateMarketplace(it.mp, { quiet: true })) renamePlugin(it.node.name); })();
+      else if (it.kind === 'file' && /\.(md|markdown)$/i.test(it.path)) (async () => { if (await activateMarketplace(it.mp, { quiet: true })) renameFile(it.path); })();
+      return true;
+    case 'ContextMenu': case 'F10':
+      if (ev.key === 'F10' && !ev.shiftKey) return false;
+      ev.preventDefault();
+      { const r = row.getBoundingClientRect(); openMenuFor(it, r.left + 28, r.bottom - 4); }
+      return true;
+    default: return false;
+  }
+}
+
+const resetFilters = () => { S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; };
+
 document.addEventListener('click', async (ev) => {
   const el = ev.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act; const p = el.dataset.path;
+  // Bağlam menüsünden gelen işlemlerde önce ilgili marketplace etkinleştirilir.
+  if (el.closest('.menu') && el.dataset.mp && el.dataset.mp !== activeName()) {
+    if (!(await activateMarketplace(el.dataset.mp))) return;
+  }
   switch (act) {
     case 'close': closeModal(); break;
     case 'side': document.body.classList.toggle('side-open'); break;
-    case 'toggle': S.expanded.has(p) ? S.expanded.delete(p) : S.expanded.add(p); saveExpanded(); renderList(); break;
-    case 'open': await openFile(p); break;
-    case 'open-close': closeModal(); await openFile(p); break;
-    case 'menu': { ev.stopPropagation(); const r = el.getBoundingClientRect(); menuFor(p, el.dataset.type, r.left, r.bottom + 4); break; }
+    case 'node': { const it = S.modelMap.get(el.dataset.key); if (it) await nodeClick(it); break; }
+    case 'plus': {
+      const it = S.modelMap.get(el.dataset.key); if (!it) break;
+      if (!(await activateMarketplace(it.mp, { quiet: true }))) break;
+      if (it.kind === 'mp') openNewPlugin(); else openNewPrompt({ plugin: it.node.name });
+      break;
+    }
+    case 'open': await openIn(el.dataset.mp, p); break;
+    case 'open-close': closeModal(); await openIn(el.dataset.mp, p); break;
+    case 'menu': { ev.stopPropagation(); const it = S.modelMap.get(el.dataset.key); if (it) { const r = el.getBoundingClientRect(); S.focusKey = it.key; openMenuFor(it, r.left, r.bottom + 4); } break; }
+    case 'm-activate': break; // etkinleştirme yukarıda yapıldı
+    case 'm-copy-path': { const full = ((S.lib && S.lib.libraryRoot) || '') + pathSep() + el.dataset.mp; const ok = await copyText(full); toast(ok ? 'Yol kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
     case 'tab': setTab(el.dataset.tab); break;
     case 'save': await save(); break;
     case 'copy': await copyBody(); break;
@@ -1735,16 +2420,49 @@ document.addEventListener('click', async (ev) => {
     case 'chip-x': removeChip(el.dataset.key, el.dataset.val); break;
     case 'tag': { const t = el.dataset.tag; const i = S.f.tags.findIndex((x) => fold(x) === fold(t)); if (i >= 0) S.f.tags.splice(i, 1); else S.f.tags.push(t); renderFilters(); runSearch(); break; }
     case 'tags-all': S.tagsAll = !S.tagsAll; renderFilters(); break;
-    case 'clear-filters': S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; renderFilters(); runSearch(); break;
+    case 'clear-filters': resetFilters(); renderFilters(); runSearch(); break;
+    case 'new-mp': openNewMarketplace(); break;
+    case 'new-plugin':
+      if (el.dataset.mp && el.dataset.mp !== activeName() && !(await activateMarketplace(el.dataset.mp, { quiet: true }))) break;
+      openNewPlugin(); break;
     case 'new-prompt': openNewPrompt(); break;
-    case 'new-prompt-lib': openNewPrompt(S.libraryDir); break;
-    case 'new-prompt-in': openNewPrompt(p); break;
-    case 'new-dir-lib': await newDir(S.libraryDir); break;
-    case 'new-dir': await newDir(p); break;
+    case 'm-new-prompt': openNewPrompt({ plugin: el.dataset.name }); break;
+    case 'm-desc': await editPluginDesc(el.dataset.name); break;
+    case 'm-rename-plugin': await renamePlugin(el.dataset.name); break;
+    case 'm-delete-plugin': {
+      const pl = pluginsOf(activeMp()).find((x) => x.name === el.dataset.name); if (!pl) break;
+      await deleteItem(pl.path, '"' + pl.name + '" plugin\'i ve içindeki ' + pl.count + ' prompt çöp kutusuna (.pp/trash) taşınır.');
+      break;
+    }
+    case 'm-move': await openMove(p); break;
+    case 'm-rename-file': await renameFile(p); break;
     case 'rename': await renameItem(p); break;
     case 'delete': await deleteItem(p); break;
-    case 'import': openImport(); break;
-    case 'show-folder': closeModal(); S.expanded.add(p); expandParents(p + '/x'); saveExpanded(); S.results = null; S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; renderFilters(); renderList(); break;
+    case 'import': openImport(el.dataset.kind === 'inbox' ? libDirOf() + '/' + Rules.INBOX_DIR : undefined); break;
+    case 'show-folder': {
+      closeModal();
+      const mp = activeName();
+      await afterWrite(); // içe aktarma biter bitmez tıklanırsa ağaç henüz yenilenmemiş olabilir
+      expandParents(p + '/x', mp);
+      resetFilters(); S.results = null; renderFilters();
+      const cl = Rules.classifyPromptPath(p + '/x', libDirOf());
+      focusKey(nodeKey(mp, cl.kind === 'gelenKutusu' ? '#gelen' : p));
+      break;
+    }
+    case 'reveal': { const c = S.cur; if (c) { expandParents(c.path, c.mp); resetFilters(); S.results = null; renderFilters(); focusKey(nodeKey(c.mp, c.path)); } break; }
+    case 'goto-active': {
+      const n = activeName();
+      if (n && mpByName(n)) { S.mpOpen.add(n); saveMpOpen(); focusKey(nodeKey(n, '')); }
+      else { document.body.classList.add('side-open'); const f = S.model.find((x) => x.kind !== 'note'); if (f) focusKey(f.key); }
+      break;
+    }
+    case 'pick-mp': { const f = S.model.find((x) => x.kind === 'mp'); document.body.classList.add('side-open'); if (f) focusKey(f.key); break; }
+    case 'paket-esitle': {
+      const c = S.cur; if (!c) break;
+      const cl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+      if (cl.paket) { setField('paket', cl.paket); renderMainKeepEdits(); }
+      break;
+    }
     case 'hist-select': if (S.cur && S.cur.hist) { S.cur.hist.sel = el.dataset.hash; paintHist(); } break;
     case 'hist-load': await loadOldVersion(el.dataset.hash); break;
     case 'publish-now': { if (await save()) await mkPublishCurrent(); break; }
@@ -1752,7 +2470,7 @@ document.addEventListener('click', async (ev) => {
     case 'git': openGit(); break;
     case 'git-tab': el.dataset.tab === 'log' ? paintGitLog() : paintGit(); break;
     case 'mk-git-init': await mkGitInit(el.dataset.name, el.dataset.confirm !== undefined); break;
-    case 'mk-activate': await switchMarketplace(el.dataset.name); break;
+    case 'mk-activate': if (await activateMarketplace(el.dataset.name)) closeModal(); break;
     case 'settings': openSettings(el.dataset.section); break;
     case 'warn-close': S.warnHidden = true; paintWarnBand(); break;
     case 'git-diff': await gitDiffFor(p); break;
@@ -1795,10 +2513,13 @@ async function mkPublishCurrent() {
 }
 
 document.addEventListener('contextmenu', (ev) => {
-  const row = ev.target.closest('.row[data-path]');
-  if (!row || row.dataset.path.startsWith('__')) return;
+  const row = ev.target.closest('#list [data-key]');
+  if (!row) return;
+  const it = S.modelMap.get(row.dataset.key);
+  if (!it) return;
   ev.preventDefault();
-  menuFor(row.dataset.path, row.classList.contains('dir') ? 'dir' : 'file', ev.clientX, ev.clientY);
+  S.focusKey = it.key;
+  openMenuFor(it, ev.clientX, ev.clientY);
 });
 
 document.addEventListener('input', (ev) => {
@@ -1816,7 +2537,6 @@ document.addEventListener('input', (ev) => {
 
 document.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'mkSel') { switchMarketplace(t.value); return; }
   if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
   else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
@@ -1831,14 +2551,17 @@ document.addEventListener('keydown', (ev) => {
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); document.body.classList.add('side-open'); $('#q').focus(); $('#q').select(); return; }
   if (ev.key === 'Enter' && t.id === 'commitMsg' && S.cur) { ev.preventDefault(); save(); return; }
-  if (ev.key === 'Escape') { if (!$('#overlay').hidden) closeModal(); closeMenu(); if (t.id === 'q') t.blur(); return; }
+  if (ev.key === 'Escape') { if (!$('#overlay').hidden) closeModal(); closeMenu(true); if (t.id === 'q') t.blur(); return; }
+  const menu = t.closest && t.closest('.menu');
+  if (menu) { menuKey(ev, menu); return; }
+  if (t.closest && t.closest('#list') && listKey(ev, t)) return;
   if (t.classList && t.classList.contains('chip-in') && S.cur) {
     const key = t.dataset.chipIn;
     if (ev.key === 'Enter' || ev.key === ',') { ev.preventDefault(); if (t.value.trim()) addChips(key, t.value, true); }
     else if (ev.key === 'Backspace' && !t.value) { const l = toList(FM.meta(S.cur.parsed)[key]); if (l.length) { removeChip(key, l[l.length - 1]); const i = $('[data-chip-in="' + key + '"]'); if (i) i.focus(); } }
     return;
   }
-  if ((ev.key === 'Enter' || ev.key === ' ') && t.matches && t.matches('[role="treeitem"], .sect, .recent .res')) { ev.preventDefault(); t.click(); }
+  if ((ev.key === 'Enter' || ev.key === ' ') && t.matches && t.matches('#list [role="treeitem"], #list .res, .recent .res')) { ev.preventDefault(); t.click(); }
   if (ev.key === 'Tab' && t.id === 'fBody') { /* Tab ile odak ilerlesin; girinti için boşluk kullan */ }
 });
 
@@ -1854,12 +2577,17 @@ window.addEventListener('beforeunload', (ev) => { if (isDirty()) { ev.preventDef
 window.addEventListener('focus', async () => {
   if (!S.info) return;
   if (!setupOk()) {
-    // Kullanıcı sorunu dışarıdan gidermiş olabilir (örn. klasörü geri koymuş).
-    try { const i = await get('/api/info'); if (i.setup.ok) location.reload(); } catch (e) { /* sessiz */ }
+    // Kullanıcı sorunu dışarıdan gidermiş olabilir (örn. klasörü geri koymuş): sayfa yenilenmeden toparlanır.
+    try {
+      const i = await get('/api/info');
+      if (i.setup.ok || i.setup.rootOk !== rootOk() || i.activeMarketplace !== activeName()) await reloadState();
+      else if (rootOk()) await refreshAll();
+    } catch (e) { /* sessiz */ }
     return;
   }
   await refreshAll();
   const c = S.cur;
+  if (c && c.mp !== activeName()) return;
   if (c && !c.dirty) {
     try {
       const r = await get('/api/file?' + qs({ path: c.path }));
@@ -1878,19 +2606,13 @@ async function init() {
   // Eski (marketplace'siz) anahtarlar bir kez silinir.
   try { localStorage.removeItem('pp.last'); localStorage.removeItem('pp.expanded'); } catch (e) { /* özel pencere */ }
   try { const f = sessionStorage.getItem('pp.flash'); if (f) { sessionStorage.removeItem('pp.flash'); toast(f, 'ok', 5000); } } catch (e) { /* özel pencere */ }
-  S.expanded = new Set(ls.get(lsKey('expanded'), []));
   applySetupUi();
-  loadMarketplaces();
-  if (!setupOk()) { renderSetup(); return; }
-  try { await Promise.all([loadTree(), loadFacets(), loadGit(), loadRecent()]); } catch (e) { if (e.setupRequired) return; throw e; }
+  if (!rootOk()) { renderMain(); return; }
+  try { await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]); } catch (e) { if (e.setupRequired) return; throw e; }
   if (!S.info.gitAvailable) toast('Git bulunamadı. Geçmiş özellikleri çalışmaz; git kurup yeniden başlat.', 'error', 8000);
-  if (localStorage.getItem(lsKey('expanded')) === null) {
-    const lib = S.tree.find((n) => n.path === S.libraryDir);
-    (function walk(ns, d) { ns.forEach((n) => { if (n.type === 'dir' && d < 2) { S.expanded.add(n.path); walk(n.children, d + 1); } }); })(lib ? lib.children : [], 0);
-    saveExpanded();
-  }
+  initExpansion();
   renderFilters(); renderList();
-  const last = ls.get(lsKey('last'), null);
+  const last = setupOk() ? ls.get(lsKey('last'), null) : null;
   if (last) await openFile(last, { quiet: true }); else renderMain();
   if (!S.cur) renderMain();
 }

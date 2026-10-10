@@ -18,7 +18,11 @@
     dosyaBuyuk: 'Dosya 2 MB\'tan büyük. Dizinlenmiyor ve yayınlanmıyor.',
     yayinDisi: 'Tür seçilmemiş (yayın dışı).',
     surumGuncelDegil: function (v) { return 'Son sürümden (v' + v + ') beri dosya değişti ama versiyon aynı. Yeni sürüm için +1\'e bas.'; },
-    adUretilemedi: function (v) { return 'Ad üretilemedi ("' + v + '"), "adsiz" kullanılacak. "Ad" alanına harf veya rakam içeren bir değer yaz.'; }
+    adUretilemedi: function (v) { return 'Ad üretilemedi ("' + v + '"), "adsiz" kullanılacak. "Ad" alanına harf veya rakam içeren bir değer yaz.'; },
+    // Aşama 4, bunu kendi engelleyici "paketUyusmuyor" iletisiyle değiştirir.
+    paketUyusmuyorBilgi: function (klasor, alan) {
+      return 'Dosya "' + klasor + '" plugin\'inde ama "paket" alanı "' + alan + '". Yayın şimdilik alana göre yapılır; alanı klasöre eşitle.';
+    }
   };
 
   function str(v) { return Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v); }
@@ -120,7 +124,53 @@
     return { code: 'yayinDisi', level: 'info', reason: MSG.yayinDisi };
   }
 
+  /* ---- plugin (klasör) adı kuralları ---- */
+
+  const INBOX_DIR = 'gelen-kutusu';
+  // server.js IGNORE kümesiyle aynı içerikte olmalı (testle denetlenir).
+  const RESERVED_DIRS = ['tools', 'node_modules', '.pp', '.git'];
+  const BAD_PREFIXES = ['claude-', 'anthropic-', 'anthropics-', 'cc-plugin-'];
+  const BAD_NAMES = ['claude', 'anthropic', 'anthropics', 'claude-code', 'claude-mods'];
+
+  // Geçerliyse null, değilse Türkçe hata iletisi.
+  function checkPluginName(slug) {
+    const n = String(slug == null ? '' : slug).trim().toLowerCase();
+    if (!n) return 'Plugin adı gerekli';
+    if (n === INBOX_DIR) return '"' + INBOX_DIR + '" içe aktarma klasörüne ayrılmış. Başka bir ad seç.';
+    if (RESERVED_DIRS.indexOf(n) >= 0) return '"' + n + '" adı sistemde ayrılmış. Başka bir ad seç.';
+    const official = /(^|-)(claude|anthropic)-official(-|$)|(^|-)official-(claude|anthropic)(-|$)/.test(n);
+    if (BAD_NAMES.indexOf(n) >= 0 || BAD_PREFIXES.some(function (p) { return n.indexOf(p) === 0; }) || official) {
+      return '"' + n + '" adı Anthropic\'e ayrılmış (claude-, anthropic-, anthropics-, cc-plugin- ile başlayamaz; claude, anthropic, claude-code gibi adlar kullanılamaz). Başka bir ad seç.';
+    }
+    return null;
+  }
+
+  // Engellemeyen uyarı. Yoksa null.
+  function pluginNameWarn(slug) {
+    const n = String(slug == null ? '' : slug).trim().toLowerCase();
+    const m = /(?:^|-)(claude|anthropic)(?:-|$)/.exec(n);
+    if (m) return '"' + n + '" içinde "' + m[1] + '" kelimesi geçiyor; Claude Code bunu uyarıyla kabul eder.';
+    if (n.length > 128) return 'Plugin adı 128 karakterden uzun; Claude Desktop kabul etmeyebilir.';
+    return null;
+  }
+
+  // Prompt yolunun marketplace içindeki yeri. Kural tek yerde burada.
+  function classifyPromptPath(rel, libraryDir) {
+    const r = String(rel || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    const lib = String(libraryDir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+    const none = { kind: 'disarida', klasor: null, paket: null };
+    if (!lib || r.indexOf(lib + '/') !== 0) return none;
+    const parts = r.slice(lib.length + 1).split('/').filter(Boolean);
+    if (!parts.length) return none;
+    if (parts.length === 1) return { kind: 'klasorsuz', klasor: null, paket: null };
+    if (parts[0] === INBOX_DIR) return { kind: 'gelenKutusu', klasor: INBOX_DIR, paket: null };
+    if (parts[0].charAt(0) === '.') return none;
+    return { kind: 'paket', klasor: parts[0], paket: FM.slug(parts[0]) };
+  }
+
   return {
+    INBOX_DIR: INBOX_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
+    pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
     DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, checkVersion: checkVersion,
     normalizeVersion: normalizeVersion, MSG: MSG,

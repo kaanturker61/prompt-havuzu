@@ -15,9 +15,10 @@ class SetupService {
     this.registry = registry;
     this.git = git;
     this.toolRoot = toolRoot;
-    this._state = { ok: false, libraryRoot: '', activeMarketplace: '', root: null, issues: [] };
+    this._state = { ok: false, rootOk: false, libraryRoot: '', activeMarketplace: '', root: null, issues: [] };
     this._dirty = true;
     this._listeners = [];
+    this._libListeners = [];
   }
 
   get current() { return this._state; }
@@ -25,6 +26,9 @@ class SetupService {
   invalidate() { this._dirty = true; }
 
   onRootChange(fn) { this._listeners.push(fn); }
+
+  // Yalnızca libraryRoot değişince çağrılır (etkin marketplace değişince çağrılmaz).
+  onLibraryChange(fn) { this._libListeners.push(fn); }
 
   // Kirli ise yeniden değerlendirir.
   async ensure() { return this._dirty ? this.evaluate() : this._state; }
@@ -40,7 +44,9 @@ class SetupService {
     const next = await this._compute();
     this._dirty = false;
     const prev = this._state.root;
+    const prevLib = this._state.libraryRoot;
     this._state = next;
+    if (prevLib !== next.libraryRoot) for (const fn of this._libListeners) fn(next.libraryRoot, prevLib);
     if (prev !== next.root) for (const fn of this._listeners) fn(next.root, prev);
     return next;
   }
@@ -52,7 +58,10 @@ class SetupService {
     const issues = [];
     const add = (code, level, message, p, action) => issues.push({ code, level, message, path: p || null, action: action || null });
     const done = (root = null) => ({
-      ok: !issues.some((i) => i.level === 'error'), libraryRoot, activeMarketplace: active,
+      ok: !issues.some((i) => i.level === 'error'),
+      // Library kökü kullanılabilir mi (ağaç/arama için yeterli; etkin marketplace gerekmez).
+      rootOk: !issues.some((i) => ROOT_BLOCKERS.includes(i.code)),
+      libraryRoot, activeMarketplace: active,
       root: issues.some((i) => i.level === 'error') ? null : root, issues
     });
 

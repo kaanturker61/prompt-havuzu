@@ -166,3 +166,43 @@ test('refreshIfStale: .git dışarıdan silinince yeniden değerlendirir', real,
     assert.deepEqual(codes(st), ['marketplaceGitYok']);
   } finally { rmrf(d); }
 });
+
+test('rootOk: marketplaceSecilmedi iken true, kokYok iken false', real, async () => {
+  const d = tmpDir();
+  try {
+    const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
+    const { svc, store, git } = await build(d, { cfg: { libraryRoot: lib } });
+    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
+    let st = await svc.evaluate();
+    assert.deepEqual(codes(st), ['marketplaceSecilmedi']);
+    assert.equal(st.ok, false); assert.equal(st.rootOk, true);
+    await store.save({ libraryRoot: lib, activeMarketplace: 'a' });
+    st = await svc.evaluate();
+    assert.equal(st.ok, true); assert.equal(st.rootOk, true);
+    await store.save({ libraryRoot: path.join(d, 'yok') });
+    st = await svc.evaluate();
+    assert.deepEqual(codes(st), ['kokYok']); assert.equal(st.rootOk, false);
+  } finally { rmrf(d); }
+});
+
+test('onLibraryChange yalnızca libraryRoot değişince çağrılır', real, async () => {
+  const d = tmpDir();
+  try {
+    const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
+    const lib2 = path.join(d, 'lib2'); fs.mkdirSync(lib2);
+    const { svc, store, git } = await build(d, { cfg: { libraryRoot: lib } });
+    for (const n of ['a', 'b']) { fs.mkdirSync(path.join(lib, n)); await git.init(path.join(lib, n)); }
+    const seen = [];
+    svc.onLibraryChange((now, prev) => seen.push([now, prev]));
+    await store.save({ libraryRoot: lib, activeMarketplace: 'a' });
+    await svc.evaluate();
+    assert.equal(seen.length, 1);
+    await store.save({ libraryRoot: lib, activeMarketplace: 'b' });
+    await svc.evaluate();
+    assert.equal(seen.length, 1, 'yalnızca etkin marketplace değişti');
+    await store.save({ libraryRoot: lib2, activeMarketplace: '' });
+    await svc.evaluate();
+    assert.equal(seen.length, 2);
+    assert.deepEqual(seen[1], [lib2, lib]);
+  } finally { rmrf(d); }
+});

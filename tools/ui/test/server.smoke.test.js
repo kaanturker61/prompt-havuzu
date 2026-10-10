@@ -123,7 +123,8 @@ test('sunucu: kurulum akışı uçtan uca', { skip: !gitAvailable && 'git yok' }
     r = await srv.call('POST', '/api/marketplaces', { name: 'ikinci' });
     assert.equal(r.status, 200);
     r = await srv.call('GET', '/api/search?q=merhaba');
-    assert.equal(r.data.results.length, 0, 'kök değişince önbellek temizlenmeli');
+    assert.equal(r.data.results.length, 1, "okuma tüm marketplace'leri kapsar: ikinci etkinken de bulunur");
+    assert.equal(r.data.results[0].mp, 'ornek-promptlar');
     r = await srv.call('POST', '/api/marketplaces/activate', { name: 'ornek-promptlar' });
     assert.equal(r.data.setup.ok, true);
     assert.equal((await srv.call('GET', '/api/search?q=merhaba')).data.results.length, 1);
@@ -136,7 +137,10 @@ test('sunucu: kurulum akışı uçtan uca', { skip: !gitAvailable && 'git yok' }
     assert.deepEqual(r.data.items.map((i) => i.name), ['ikinci', 'ornek-promptlar']);
     r = await srv.call('POST', '/api/marketplaces/activate', { name: 'notlar' });
     assert.equal(r.data.setup.issues[0].code, 'marketplaceGitYok');
-    assert.equal((await srv.call('GET', '/api/tree')).status, 409);
+    r = await srv.call('GET', '/api/tree');
+    assert.equal(r.status, 200, 'ağaç etkin marketplace gerektirmez');
+    assert.ok(r.data.ignored.some((i) => i.name === 'notlar'));
+    assert.equal((await srv.call('GET', '/api/file?path=prompts/x.md')).status, 409);
     r = await srv.call('POST', '/api/marketplaces/git-init', { name: 'notlar' });
     assert.equal(r.status, 200); assert.ok(r.data.created.includes('.git'));
     assert.equal(r.data.setup.ok, true);
@@ -175,6 +179,22 @@ test('sunucu: tek geçerli marketplace kök kaydında otomatik seçilir', { skip
     rmrf(tmp);
   }
 });
+
+// Ağaç yanıtında (marketplaces[]) bir marketplace altındaki dosya/klasör düğümünü yoluna göre bulur.
+function findNode(marketplaces, mp, p) {
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.path === p) return n;
+      const x = walk(n.children); if (x) return x;
+    }
+    return null;
+  };
+  const m = marketplaces.find((x) => x.name === mp);
+  if (!m) return null;
+  const groups = [m.plugins, m.loose, m.inbox ? [m.inbox] : [], m.teknik];
+  for (const g of groups) { const x = walk(g); if (x) return x; }
+  return null;
+}
 
 async function setupMk(srv, tmp) {
   const lib = path.join(tmp, 'lib'); fs.mkdirSync(lib);
@@ -270,10 +290,9 @@ test('sunucu: yayına girmeyen promptlar nedeniyle raporlanır (D2)', { skip: !g
     r = await srv.call('GET', '/api/file?path=pp.config.json');
     assert.equal(r.data.publishCheck, null);
     r = await srv.call('GET', '/api/tree');
-    const find = (nodes, p) => { for (const n of nodes) { if (n.path === p) return n; if (n.children) { const x = find(n.children, p); if (x) return x; } } return null; };
-    assert.equal(find(r.data.tree, B).meta.uyari, 'turYok');
-    assert.equal(find(r.data.tree, A).meta.uyari, '');
-    assert.equal(find(r.data.tree, E).meta.uyari, '');
+    assert.equal(findNode(r.data.marketplaces, 'mk', B).meta.uyari, 'turYok');
+    assert.equal(findNode(r.data.marketplaces, 'mk', A).meta.uyari, '');
+    assert.equal(findNode(r.data.marketplaces, 'mk', E).meta.uyari, '');
     r = await srv.call('GET', '/api/facets');
     assert.equal(r.data.yayinUyari, 3);
 
@@ -352,15 +371,14 @@ test('sunucu: kaydet-commit ve sürüm (Aşama 2)', { skip: !gitAvailable && 'gi
     r = await srv.call('GET', '/api/file?path=' + encodeURIComponent(P));
     const changed = r.data.raw + 'yeni satir\n';
     r = await srv.call('PUT', '/api/file', { path: P, raw: changed });
-    const treeFile = (t) => { for (const n of t) { if (n.path === P) return n; if (n.children) { const f = treeFile(n.children); if (f) return f; } } return null; };
     r = await srv.call('GET', '/api/tree');
-    assert.equal(treeFile(r.data.tree).meta.surum, 'surumGuncelDegil');
+    assert.equal(findNode(r.data.marketplaces, 'mp', P).meta.surum, 'surumGuncelDegil');
     r = await srv.call('GET', '/api/version?path=' + encodeURIComponent(P));
     assert.equal(r.data.uyari.code, 'surumGuncelDegil');
     r = await srv.call('POST', '/api/version/bump', { path: P, level: 'kucuk', note: 'ikinci' });
     assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.version, '1.1.0');
     r = await srv.call('GET', '/api/tree');
-    assert.equal(treeFile(r.data.tree).meta.surum, '');
+    assert.equal(findNode(r.data.marketplaces, 'mp', P).meta.surum, '');
 
     // hatalar
     const cur = fs.readFileSync(path.join(mpDir, P), 'utf8');

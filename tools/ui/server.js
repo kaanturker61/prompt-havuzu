@@ -23,6 +23,11 @@ const { MarketplaceFactory } = require('./lib/marketplace-factory');
 const { SetupService, ROOT_BLOCKERS } = require('./lib/setup-service');
 const templates = require('./lib/templates');
 const paths = require('./lib/paths');
+const ppConfig = require('./lib/pp-config');
+const { PromptIndex } = require('./lib/prompt-index');
+const { LibraryCatalog } = require('./lib/library-catalog');
+const { PackageService, PackageError } = require('./lib/package-service');
+const { UndoStack } = require('./lib/undo');
 
 /* ------------------------------------------------------------------ ayarlar */
 
@@ -44,14 +49,8 @@ const TOOL_DIR = path.resolve(__dirname, '..', '..');
 const PORT = Number(ARGS.port || process.env.PORT || 4317);
 const HOST = '127.0.0.1';
 const PUBLIC = path.join(__dirname, 'public');
-const IGNORE = new Set(['.git', 'node_modules', '.pp', 'tools']);
+const IGNORE = new Set(Rules.RESERVED_DIRS);
 const EDITABLE = new Set(['.md', '.markdown', '.txt', '.json', '.yml', '.yaml']);
-
-const DEFAULTS = {
-  libraryDir: 'library',
-  marketplace: { name: 'prompt-havuzu', owner: '', plugin: 'benim-promptlarim', description: 'Kişisel prompt havuzu', version: Rules.DEFAULT_VERSION },
-  packages: {}
-};
 
 /* ---------------------------------------------------------------- servisler */
 
@@ -60,12 +59,20 @@ const gitService = new GitService({ forbiddenRoots: [TOOL_DIR] });
 const registry = new MarketplaceRegistry({ git: gitService, toolRoot: TOOL_DIR });
 const factory = new MarketplaceFactory({ git: gitService, templates, atomicWrite: (abs, data) => atomicWrite(abs, data, { mkdir: true }) });
 const setup = new SetupService({ configStore, registry, git: gitService, toolRoot: TOOL_DIR });
+const index = new PromptIndex({ decode, FM, Rules, ignore: IGNORE });
 const versions = new VersionService({
   git: gitService,
   files: { read: (a) => fsp.readFile(a), write: (a, d) => atomicWrite(a, d), stat: (a) => fsp.stat(a), utimes: (a, x, y) => fsp.utimes(a, x, y) },
   decode,
-  listPrompts: async (_root, lib) => listMd(lib)
+  listPrompts: (r, lib) => index.listMd(r, lib)
 });
+const catalog = new LibraryCatalog({
+  registry, index, loadConfigAt: ppConfig.loadConfigAt, versions, Rules, FM, ignore: IGNORE, editable: EDITABLE
+});
+const packages = new PackageService({
+  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt, Rules, FM
+});
+const pkgErr = (e) => (e instanceof PackageError ? httpErr(e.status, e.message, e.data) : e);
 const vErr = (e) => (e instanceof VersionError ? httpErr(e.status, e.message, e.data) : e);
 
 const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v));
@@ -81,21 +88,8 @@ function httpErr(status, message, data) {
 
 // Etkin marketplace klasörü (çalışma kökü). Kurulum eksikse null.
 function root() { return setup.current.root; }
-const configFile = () => path.join(root(), 'pp.config.json');
-
-async function loadConfig() {
-  let c = {};
-  if (root()) {
-    try { c = JSON.parse(await fsp.readFile(configFile(), 'utf8')); } catch (e) { /* yok: varsayılanlar */ }
-  }
-  const marketplace = { ...DEFAULTS.marketplace, ...(c.marketplace || {}) };
-  marketplace.version = Rules.normalizeVersion(marketplace.version);
-  return { ...DEFAULTS, ...c, marketplace, packages: { ...(c.packages || {}) } };
-}
-
-async function saveConfig(c) {
-  await atomicWrite(configFile(), JSON.stringify(c, null, 2) + '\n');
-}
+const loadConfig = () => ppConfig.loadConfigAt(root());
+const saveConfig = (c) => ppConfig.saveConfigAt(root(), c, atomicWrite);
 
 /* --------------------------------------------------------------- dosya araçları */
 
@@ -155,171 +149,9 @@ async function uniquePath(rel) {
 
 /* ------------------------------------------------------------------ dizin (arama) */
 
-const cache = new Map();
-
-async function indexFile(rel, abs) {
-  const st = await fsp.stat(abs);
-  const c = cache.get(rel);
-  if (c && c.mtimeMs === st.mtimeMs && c.size === st.size) return c;
-  const ext = path.extname(rel).toLowerCase();
-  const isMd = ext === '.md' || ext === '.markdown';
-  const item = { path: rel, mtimeMs: st.mtimeMs, size: st.size, isMd };
-  if (isMd && st.size < 2000000) {
-    const raw = decode(await fsp.readFile(abs));
-    const p = FM.parse(raw);
-    const m = FM.meta(p);
-    item.meta = m;
-    item.hasFm = p.hasFm;
-    item.fmBroken = Rules.isFmBroken(raw, p.hasFm);
-    item.check = Rules.publishCheck({ meta: m, hasFm: p.hasFm, fmBroken: item.fmBroken });
-    item.body = p.body;
-    item.title = str(m.baslik) || path.basename(rel, ext);
-    item.tags = toList(m.etiketler);
-    item.fTitle = FM.fold(item.title);
-    item.fTags = item.tags.map(FM.fold);
-    item.fPath = FM.fold(rel);
-    item.fBody = FM.fold(p.body);
-  } else if (isMd) {
-    item.isMd = false;
-    item.tooBig = true;
-    item.check = { code: 'dosyaBuyuk', level: 'warn', reason: Rules.MSG.dosyaBuyuk };
-  }
-  cache.set(rel, item);
-  return item;
-}
-
-async function listMd(relDir, opts) {
-  const includeBig = !!(opts && opts.includeBig);
-  const out = [];
-  async function rec(abs, rel) {
-    let ents;
-    try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of ents) {
-      if (IGNORE.has(e.name)) continue;
-      const r = rel + '/' + e.name;
-      const a = path.join(abs, e.name);
-      if (e.isDirectory()) await rec(a, r);
-      else if (/\.(md|markdown)$/i.test(e.name)) {
-        const it = await indexFile(r, a);
-        if (it && (it.isMd || (includeBig && it.tooBig))) out.push(it);
-      }
-    }
-  }
-  await rec(path.join(root(), relDir), relDir);
-  return out;
-}
-
-async function listDirs(relDir) {
-  const out = [relDir];
-  async function rec(abs, rel) {
-    let ents;
-    try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return; }
-    for (const e of ents) {
-      if (!e.isDirectory() || IGNORE.has(e.name)) continue;
-      out.push(rel + '/' + e.name);
-      await rec(path.join(abs, e.name), rel + '/' + e.name);
-    }
-  }
-  await rec(path.join(root(), relDir), relDir);
-  return out.sort((a, b) => a.localeCompare(b, 'tr'));
-}
-
-async function buildTree(abs, rel, libDir, vmap) {
-  let ents;
-  try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return []; }
-  ents.sort((a, b) => (Number(b.isDirectory()) - Number(a.isDirectory())) || a.name.localeCompare(b.name, 'tr'));
-  const out = [];
-  for (const e of ents) {
-    if (IGNORE.has(e.name)) continue;
-    const childRel = rel ? rel + '/' + e.name : e.name;
-    const childAbs = path.join(abs, e.name);
-    if (e.isDirectory()) {
-      out.push({ type: 'dir', name: e.name, path: childRel, children: await buildTree(childAbs, childRel, libDir, vmap) });
-    } else if (EDITABLE.has(path.extname(e.name).toLowerCase())) {
-      const n = { type: 'file', name: e.name, path: childRel };
-      try {
-        const it = await indexFile(childRel, childAbs);
-        if (it && it.isMd) {
-          const inLib = !!libDir && childRel.startsWith(libDir + '/');
-          n.meta = {
-            baslik: str(it.meta.baslik), durum: str(it.meta.durum), tur: normTur(it.meta.tur),
-            uyari: inLib && it.check && it.check.level === 'warn' ? it.check.code : '',
-            surum: inLib ? ((vmap && vmap.get(childRel)) || '') : ''
-          };
-        }
-      } catch (err) { /* okunamayan dosya: yalnızca ad */ }
-      out.push(n);
-    }
-  }
-  return out;
-}
-
-async function search(q, o) {
-  const cfg = await loadConfig();
-  let items = await listMd(cfg.libraryDir);
-  if (o.scope === 'all') items = items.concat(await listMd('plugins'));
-  const tokens = FM.fold(q || '').split(/\s+/).filter(Boolean);
-  const tagFilter = toList(o.tags || '').map(FM.fold);
-  const res = [];
-  for (const it of items) {
-    const m = it.meta;
-    if (tagFilter.length && !tagFilter.every((t) => it.fTags.includes(t))) continue;
-    if (o.durum && FM.fold(str(m.durum)) !== FM.fold(o.durum)) continue;
-    if (o.tur) {
-      const t = normTur(m.tur);
-      if (o.tur === 'yok' ? t !== '' : t !== o.tur) continue;
-    }
-    let score = 0; let ok = true; let hit = -1;
-    for (const t of tokens) {
-      let s = 0;
-      if (it.fTitle.includes(t)) s += 10;
-      if (it.fTags.some((x) => x === t)) s += 8;
-      else if (it.fTags.some((x) => x.includes(t))) s += 4;
-      if (it.fPath.includes(t)) s += 3;
-      const bi = it.fBody.indexOf(t);
-      if (bi >= 0) { s += 1; if (hit < 0) hit = bi; }
-      if (s === 0) { ok = false; break; }
-      score += s;
-    }
-    if (!ok) continue;
-    let snippet;
-    if (hit >= 0 && !tokens.some((t) => it.fTitle.includes(t) && it.fBody.indexOf(t) < 0)) {
-      const a = Math.max(0, hit - 50);
-      snippet = (a > 0 ? '…' : '') + it.body.slice(a, hit + 140).replace(/\s+/g, ' ').trim();
-    } else {
-      snippet = it.body.replace(/\s+/g, ' ').trim().slice(0, 140);
-    }
-    res.push({
-      path: it.path, baslik: it.title, etiketler: it.tags, durum: str(m.durum), tur: normTur(m.tur),
-      versiyon: str(m.versiyon), score, snippet, mtime: Math.round(it.mtimeMs)
-    });
-  }
-  res.sort((a, b) => (tokens.length ? b.score - a.score : 0) || b.mtime - a.mtime);
-  return res.slice(0, 300);
-}
-
-async function facets() {
-  const cfg = await loadConfig();
-  const all = await listMd(cfg.libraryDir, { includeBig: true });
-  const items = all.filter((it) => it.isMd);
-  const tags = {}; const durum = {}; const tur = {}; const projeler = {}; const paket = new Set();
-  // Yayın uyarısı: warn seviyeli atlananlar + içeriği boş (error) yayın adayları. Hedef çakışması sayılmaz.
-  const yayinUyari = all.filter((it) => (it.check && it.check.level === 'warn')
-    || (it.isMd && normTur(it.meta.tur) && !it.body.trim())).length;
-  for (const it of items) {
-    it.tags.forEach((t) => { tags[t] = (tags[t] || 0) + 1; });
-    const d = str(it.meta.durum); if (d) durum[d] = (durum[d] || 0) + 1;
-    const t = normTur(it.meta.tur); if (t) tur[t] = (tur[t] || 0) + 1;
-    toList(it.meta.projeler).forEach((p) => { projeler[p] = (projeler[p] || 0) + 1; });
-    if (it.meta.paket) paket.add(str(it.meta.paket));
-  }
-  const arr = (o) => Object.keys(o).map((k) => ({ name: k, count: o[k] }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'));
-  return {
-    total: items.length, yayinUyari, tags: arr(tags), durum: arr(durum), tur: arr(tur), projeler: arr(projeler),
-    pakets: Array.from(paket).sort(), folders: await listDirs(cfg.libraryDir)
-  };
-}
+// Etkin marketplace için ince delegeler (dizin servisi marketplace klasörüne göre ayrı önbellek tutar).
+const indexFile = (rel, abs) => index.indexFile(root(), rel, abs);
+const listMd = (relDir, opts) => index.listMd(root(), relDir, opts);
 
 /* ------------------------------------------------------------------------- git */
 
@@ -611,7 +443,8 @@ async function requireRootOk() {
   return st;
 }
 
-route('GET', '/api/info', async () => {
+// /api/info gövdesi; marketplace etkinleştirme yanıtı da aynısını taşır (ikinci istek gerekmesin).
+async function infoView() {
   const st = await setup.evaluate();
   const cfg = await loadConfig();
   let gitOk = true;
@@ -620,7 +453,9 @@ route('GET', '/api/info', async () => {
     root: st.root, platform: process.platform, node: process.version, config: cfg, isRepo: st.ok, gitAvailable: gitOk,
     configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace, setup: st
   };
-}, { open: true });
+}
+
+route('GET', '/api/info', async () => infoView(), { open: true });
 
 /* ---- ayarlar ve marketplace yönetimi (her zaman açık) ---- */
 
@@ -666,6 +501,7 @@ route('PUT', '/api/settings', async ({ body }) => {
     if (valid.length === 1) await saveCfg({ ...next, activeMarketplace: valid[0].name });
   }
   setup.invalidate();
+  catalog.invalidate();
   return settingsView();
 }, { open: true });
 
@@ -686,6 +522,7 @@ route('POST', '/api/marketplaces', async ({ body }) => {
     try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
   }
   setup.invalidate();
+  catalog.invalidate();
   const view = await marketplacesView();
   return { ok: true, marketplace: view.items.find((i) => i.name === made.name) || null, setup: view.setup };
 }, { open: true });
@@ -700,7 +537,8 @@ route('POST', '/api/marketplaces/activate', async ({ body }) => {
   const { config } = await configStore.load();
   try { await configStore.save({ ...config, activeMarketplace: name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
   setup.invalidate();
-  return { ok: true, setup: await setup.evaluate() };
+  catalog.invalidate();
+  return { ok: true, setup: await setup.evaluate(), info: await infoView() };
 }, { open: true });
 
 route('POST', '/api/marketplaces/git-init', async ({ body }) => {
@@ -711,24 +549,35 @@ route('POST', '/api/marketplaces/git-init', async ({ body }) => {
   if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, 'Araç reposu marketplace olarak kullanılamaz');
   const created = await factory.initExisting(dir);
   setup.invalidate();
+  catalog.invalidate();
   const view = await marketplacesView();
   return { ok: true, marketplace: view.items.find((i) => i.name === name) || null, created, setup: view.setup };
 }, { open: true });
 
+// Okuma rotaları: etkin marketplace gerekmez, library kökü yeterlidir. Tüm geçerli marketplace'leri kapsar.
 route('GET', '/api/tree', async () => {
-  const cfg = await loadConfig();
-  await fsp.mkdir(path.join(root(), cfg.libraryDir), { recursive: true });
-  const vmap = await versions.statusMap(root(), cfg.libraryDir).catch(() => new Map());
-  return { libraryDir: cfg.libraryDir, tree: await buildTree(root(), '', cfg.libraryDir, vmap) };
-});
+  const st = await requireRootOk();
+  // Prompt klasörü yalnızca etkin marketplace için oluşturulur; diğer depolara hiçbir şey yazılmaz.
+  if (st.ok) {
+    const cfg = await loadConfig();
+    await fsp.mkdir(path.join(root(), cfg.libraryDir), { recursive: true });
+  }
+  return catalog.tree(st.libraryRoot, st.activeMarketplace);
+}, { open: true });
 
-route('GET', '/api/facets', async () => facets());
+route('GET', '/api/facets', async () => {
+  const st = await requireRootOk();
+  return catalog.facets(st.libraryRoot, st.activeMarketplace);
+}, { open: true });
 
-route('GET', '/api/search', async ({ q }) => ({
-  results: await search(q.get('q') || '', {
-    tags: q.get('tags') || '', durum: q.get('durum') || '', tur: q.get('tur') || '', scope: q.get('scope') || 'library'
-  })
-}));
+route('GET', '/api/search', async ({ q }) => {
+  const st = await requireRootOk();
+  return {
+    results: await catalog.search(st.libraryRoot, st.activeMarketplace, q.get('q') || '', {
+      tags: q.get('tags') || '', durum: q.get('durum') || '', tur: q.get('tur') || '', scope: q.get('scope') || 'library'
+    })
+  };
+}, { open: true });
 
 route('GET', '/api/file', async ({ q }) => {
   const { abs, rel } = safePath(q.get('path'));
@@ -805,6 +654,7 @@ route('DELETE', '/api/file', async ({ q }) => {
   return { ok: true, trash: await toTrash(rel, abs) };
 });
 
+// Kullanımdan kalktı: arayüz artık klasör açmak için /api/package kullanır. Geriye uyum için korunur.
 route('POST', '/api/mkdir', async ({ body }) => {
   const { abs, rel } = safePath(body.path);
   if (await exists(abs)) throw httpErr(409, 'Bu klasör zaten var');
@@ -821,6 +671,85 @@ route('POST', '/api/rename', async ({ body }) => {
   await fsp.mkdir(path.dirname(to.abs), { recursive: true });
   await fsp.rename(from.abs, to.abs);
   return { ok: true, path: to.rel };
+});
+
+/* ---- plugin ---- */
+
+route('POST', '/api/package', async ({ body }) => {
+  const cfg = await loadConfig();
+  try {
+    return { ok: true, plugin: await packages.create(root(), cfg.libraryDir, { name: body.name, description: body.description }) };
+  } catch (e) { throw pkgErr(e); }
+});
+
+route('PUT', '/api/package', async ({ body }) => {
+  const cfg = await loadConfig();
+  try { return await packages.setDescription(root(), cfg.libraryDir, { name: body.name, description: body.description }); } catch (e) { throw pkgErr(e); }
+});
+
+route('POST', '/api/package/rename', async ({ body }) => {
+  const cfg = await loadConfig();
+  try {
+    const r = await packages.rename(root(), cfg.libraryDir, { from: body.from, to: body.to });
+    return { ok: true, plugin: { name: r.name, slug: r.slug, path: r.path }, moved: r.moved };
+  } catch (e) { throw pkgErr(e); }
+});
+
+/* ---- marketplace'ler arası taşıma ---- */
+
+// K2'nin tek, belgelenmiş istisnası: kaynak etkin marketplace'tir, hedef başka bir marketplace'tir. Commit atılmaz.
+route('POST', '/api/prompts/transfer', async ({ body }) => {
+  const st = setup.current;
+  const cfg = await loadConfig();
+  const { abs, rel } = safePath(body.path);
+  const cl = Rules.classifyPromptPath(rel, cfg.libraryDir);
+  if (!/\.(md|markdown)$/i.test(rel) || cl.kind === 'disarida') throw httpErr(400, 'Yalnızca prompt dosyaları taşınabilir');
+  const sst = await fsp.stat(abs).catch(() => null);
+  if (!sst || !sst.isFile()) throw httpErr(404, 'Dosya bulunamadı');
+  const toMp = String(body.toMp || '');
+  if (!toMp) throw httpErr(400, 'Hedef marketplace gerekli');
+  if (toMp === st.activeMarketplace) throw httpErr(400, "Hedef marketplace kaynakla aynı. Aynı marketplace içinde taşımak için yeniden adlandırma kullan");
+  const { items } = await catalog.marketplaces(st.libraryRoot, st.activeMarketplace);
+  const target = items.find((m) => m.name === toMp);
+  if (!target) throw httpErr(404, 'Marketplace bulunamadı: ' + toMp);
+  if (!target.valid) throw httpErr(400, 'Hedef marketplace geçerli bir git deposu değil: ' + toMp);
+  const toPlugin = String(body.toPlugin || '');
+  if (!toPlugin) throw httpErr(400, 'Hedef plugin gerekli');
+  if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, 'Geçersiz plugin adı');
+  const tLib = target.cfg.libraryDir;
+  const tDir = path.join(target.path, tLib, toPlugin);
+  const dst = await fsp.stat(tDir).catch(() => null);
+  if (!dst || !dst.isDirectory()) throw httpErr(404, 'Hedefte plugin bulunamadı: ' + toPlugin);
+
+  const buf = await fsp.readFile(abs);
+  let data = buf;
+  const p = FM.parse(decode(buf));
+  const alan = str(FM.meta(p).paket);
+  const newSlug = FM.slug(toPlugin);
+  if (cl.kind === 'paket' && alan && FM.slug(alan) === cl.paket && alan !== newSlug) {
+    FM.set(p, 'paket', newSlug);
+    data = FM.stringify(p);
+  }
+  // Hedefte benzersiz ad
+  const baseName = path.posix.basename(rel);
+  const ext = path.posix.extname(baseName);
+  const stem = baseName.slice(0, baseName.length - ext.length);
+  let name = baseName; let n = 2;
+  while (await exists(path.join(tDir, name))) name = stem + '-' + (n++) + ext;
+  const toAbs = path.join(tDir, name);
+  const toRel = tLib + '/' + toPlugin + '/' + name;
+
+  const undo = new UndoStack();
+  try {
+    await atomicWrite(toAbs, data);
+    undo.push(() => fsp.rm(toAbs, { force: true }));
+    const trash = await toTrash(rel, abs);
+    undo.clear();
+    return { ok: true, from: { mp: st.activeMarketplace, path: rel }, to: { mp: toMp, path: toRel }, trash };
+  } catch (e) {
+    try { await undo.rollback(); } catch (agg) { throw httpErr(500, 'Taşıma başarısız ve geri alma tamamlanamadı: ' + e.message + '. Hedefteki ' + toRel + ' dosyasını kontrol et.'); }
+    throw httpErr(500, 'Taşınamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.');
+  }
 });
 
 /* ---- git ---- */
@@ -1041,6 +970,15 @@ const server = http.createServer(async (req, res) => {
       if (!entry.open) {
         const st = await setup.refreshIfStale();
         if (!st.ok) throw setupRequired(st);
+        // Çok sekme koruması: arayüz etkin marketplace adını bildirir; değiştiyse yanlış depoya yazılmaz.
+        const want = req.headers['x-pp-mp'];
+        if (want !== undefined) {
+          let name = '';
+          try { name = decodeURIComponent(String(want)); } catch (e) { /* geçersiz kodlama: uyuşmaz */ }
+          if (name !== st.activeMarketplace) {
+            throw httpErr(409, 'Etkin marketplace değişti (şu an: ' + st.activeMarketplace + "). Ağaçtan yeniden seç.", { code: 'etkinDegil', active: st.activeMarketplace });
+          }
+        }
       }
       const body = req.method === 'GET' || req.method === 'DELETE' ? {} : await readBody(req);
       return send(res, 200, await entry.fn({ q: url.searchParams, body, req }));
@@ -1088,5 +1026,7 @@ process.on('unhandledRejection', (e) => console.error('Beklenmeyen hata:', e));
 if ('root' in ARGS) console.warn('Uyarı: --root artık desteklenmiyor. Library kökünü arayüzdeki Ayarlar bölümünden seç.');
 
 // Kök değişince arama önbelleği (köke göreli yollar) geçersiz olur.
-setup.onRootChange(() => { cache.clear(); versions.clearCache(); });
+// Kök (library) değişince tüm dizin ve sürüm önbellekleri geçersiz olur. Etkin marketplace değişince
+// temizlenmez: önbellekler marketplace klasörüne göre ayrılmıştır.
+setup.onLibraryChange(() => { index.clear(); versions.clearCache(); catalog.invalidate(); });
 setup.evaluate().then(() => listen(PORT, 10));

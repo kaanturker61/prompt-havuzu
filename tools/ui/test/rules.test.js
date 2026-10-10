@@ -93,3 +93,47 @@ test('promptTagAd, promptTag, parsePromptTag', () => {
   assert.equal(Rules.parsePromptTag('paket/a/v1.0.0'), null);
   assert.match(Rules.MSG.surumGuncelDegil('1.0.2'), /v1\.0\.2/);
 });
+
+test('checkPluginName: tablo', () => {
+  for (const ad of ['claude-x', 'anthropic', 'anthropics-a', 'cc-plugin-a', 'claude', 'claude-code', 'claude-mods', 'official-claude', 'anthropic-official', 'gelen-kutusu', 'tools', 'node_modules', '', 'x-claude-official']) {
+    assert.equal(typeof Rules.checkPluginName(ad), 'string', ad);
+  }
+  for (const ad of ['kod', 'mcp-for-claude', 'claudex', 'official', 'kod-inceleme']) assert.equal(Rules.checkPluginName(ad), null, ad);
+  assert.equal(Rules.checkPluginName('gelen-kutusu'), '"gelen-kutusu" içe aktarma klasörüne ayrılmış. Başka bir ad seç.');
+  assert.equal(Rules.checkPluginName('tools'), '"tools" adı sistemde ayrılmış. Başka bir ad seç.');
+  assert.match(Rules.checkPluginName('claude-x'), /^"claude-x" adı Anthropic'e ayrılmış \(/);
+});
+
+test('pluginNameWarn', () => {
+  assert.equal(Rules.pluginNameWarn('mcp-for-claude'), '"mcp-for-claude" içinde "claude" kelimesi geçiyor; Claude Code bunu uyarıyla kabul eder.');
+  assert.equal(Rules.pluginNameWarn('my-anthropic-tools'), '"my-anthropic-tools" içinde "anthropic" kelimesi geçiyor; Claude Code bunu uyarıyla kabul eder.');
+  assert.equal(Rules.pluginNameWarn('claudex'), null);
+  assert.equal(Rules.pluginNameWarn('a'.repeat(129)), 'Plugin adı 128 karakterden uzun; Claude Desktop kabul etmeyebilir.');
+  assert.equal(Rules.pluginNameWarn('kod'), null);
+});
+
+test('classifyPromptPath: dört tür ve kenar durumlar', () => {
+  const c = (p, l = 'prompts') => Rules.classifyPromptPath(p, l);
+  assert.deepEqual(c('prompts/ornek/a.md'), { kind: 'paket', klasor: 'ornek', paket: 'ornek' });
+  assert.deepEqual(c('prompts/Kod İnceleme/alt/a.md'), { kind: 'paket', klasor: 'Kod İnceleme', paket: 'kod-inceleme' });
+  assert.deepEqual(c('prompts/x.md'), { kind: 'klasorsuz', klasor: null, paket: null });
+  assert.equal(c('prompts/gelen-kutusu/x.md').kind, 'gelenKutusu');
+  assert.equal(c('prompts/gelen-kutusu/alt/x.md').kind, 'gelenKutusu');
+  assert.equal(c('prompts/.gizli/x.md').kind, 'disarida');
+  assert.equal(c('plugins/a/commands/x.md').kind, 'disarida');
+  assert.equal(c('prompts2/a/x.md').kind, 'disarida');
+  assert.equal(c('prompts/a/x.md', 'prompts/').kind, 'paket', 'libraryDir sonundaki /');
+  assert.equal(c('prompts\\a\\x.md').kind, 'paket', 'ters eğik çizgi');
+  assert.equal(c('prompts/a/x.md', '').kind, 'disarida');
+});
+
+test('RESERVED_DIRS server.js IGNORE ile aynı kaynaktan gelir', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'server.js'), 'utf8');
+  assert.match(src, /const IGNORE = new Set\(Rules\.RESERVED_DIRS\);/);
+  assert.deepEqual(Rules.RESERVED_DIRS.slice().sort(), ['.git', '.pp', 'node_modules', 'tools']);
+  assert.equal(Rules.INBOX_DIR, 'gelen-kutusu');
+});
+
+test('MSG.paketUyusmuyorBilgi', () => {
+  assert.equal(Rules.MSG.paketUyusmuyorBilgi('kod', 'x'), 'Dosya "kod" plugin\'inde ama "paket" alanı "x". Yayın şimdilik alana göre yapılır; alanı klasöre eşitle.');
+});

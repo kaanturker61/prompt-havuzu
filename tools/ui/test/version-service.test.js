@@ -272,3 +272,23 @@ test('info: eski biçim ve yorumlanamayan sürüm', real, async () => {
     assert.equal(i.versiyonGecerli, false); assert.equal(i.oneriler, null);
   } finally { rmrf(s.d); }
 });
+
+test('statusMap: aynı rel iki depoda karışmaz (önbellek anahtarı kökü içerir)', real, async () => {
+  const s1 = await setup();
+  const s2 = await setup();
+  try {
+    // s1'de sürüm basılıp dosya değiştirilir; s2'de aynı rel için hiç tag yok.
+    const svc = s1.mk(s1.g);
+    await svc.bump(s1.root, LIB, { rel: s1.rel, abs: s1.a, level: 'yama', note: 'n' });
+    fs.appendFileSync(s1.a, 'degisti\n');
+    // aynı servis örneği ikinci depoyu da sorgular (ortak önbellek)
+    const m1 = await svc.statusMap(s1.root, LIB);
+    const m2 = await svc.statusMap(s2.root, LIB);
+    assert.equal(m1.get(s1.rel), 'surumGuncelDegil');
+    assert.equal(m2.has(s2.rel), false);
+    // s2'ye aynı yolda, aynı sürümle tag basılınca s1 sonucu s2'ye sızmamalı
+    await svc.bump(s2.root, LIB, { rel: s2.rel, abs: s2.a, level: 'yama', note: 'n' });
+    assert.equal((await svc.statusMap(s2.root, LIB)).has(s2.rel), false, 's2 değişmedi');
+    assert.equal((await svc.statusMap(s1.root, LIB)).get(s1.rel), 'surumGuncelDegil');
+  } finally { rmrf(s1.d); rmrf(s2.d); }
+});
