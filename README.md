@@ -1,74 +1,242 @@
-# Prompt havuzu
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Node.js 18 or newer" src="https://img.shields.io/badge/node-%3E%3D18-339933.svg">
+  <img alt="Dependencies: 0" src="https://img.shields.io/badge/dependencies-0-brightgreen.svg">
+  <img alt="Platform: Windows, macOS, Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg">
+</p>
 
-Promptlarını tek yerde topla, ara, düzenle, git ile geçmişini tut ve istersen Claude Code marketplace'i olarak projelerine dağıt.
+<p align="center">
+  <a href="#quick-start">Quick start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#publishing-to-claude-code">Claude Code</a> &middot;
+  <a href="#configuration">Configuration</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-## Başlatma
+**Prompt havuzu** ("prompt pool" in Turkish) is a local web app that keeps your prompts as plain Markdown files, gives each collection its own git repository, and publishes the ones you choose as a [Claude Code](https://claude.com/claude-code) plugin marketplace. It runs on your machine, needs only Node.js and git, and has no runtime dependencies.
 
-Gereken: Node.js 18 veya üstü, git (geçmiş için). Başka kurulum yok.
+> The interface is in Turkish. This README gives the English meaning of each Turkish label the first time it appears.
 
-1. Windows: `start.bat` dosyasına çift tıkla
-2. macOS/Linux: `./start.sh`
-3. Elle: `node tools/ui/server.js --open` (port 4317, doluysa sonraki boş port)
+## Why
 
-Arayüz yalnızca bu bilgisayardan erişilebilir (127.0.0.1). Durdurmak için terminalde Ctrl+C.
+- **Prompts stay files.** Every prompt is one `.md` file with optional frontmatter. No database, no lock-in.
+- **Git is the history.** Each marketplace folder is its own git repository, so every change, version and tag is plain git.
+- **Local only.** The server listens on `127.0.0.1` and has no telemetry (see [Security and privacy](#security-and-privacy)).
+- **Ships to Claude Code.** Prompts marked as command, agent or skill are converted into Claude Code plugins you can install in any project.
+- **No build, no install step.** `node tools/ui/server.js` is all it takes.
 
-## İlk kullanım
+## Features
 
-Promptlar araç klasörünün dışında, bir **library kökünde** tutulur. Kökün altındaki her klasör ayrı bir marketplace, yani ayrı bir git deposudur.
+- **Marketplace, Plugin, Prompt tree** across several marketplaces at once, with keyboard navigation and context menus.
+- **Search** that ignores case and Turkish diacritics, plus filters (press `Ctrl+K`).
+- **Frontmatter editor** that preserves unknown keys and formatting, so git diffs stay small.
+- **Save and commit in one step:** fill the commit message box (**Commit mesajı**) and save; only that file is committed. A Git panel handles the rest.
+- **Per-prompt history tab** (**Geçmiş**): commits, diffs, version tags, and restoring an older version into the editor.
+- **Prompt versions:** the **+1** button bumps `versiyon`, commits only that file and creates an annotated tag `prompt/<name>/vX.Y.Z`.
+- **Variables:** `{{variable}}` placeholders; **Kopyala** (Copy) asks for values and copies the filled text.
+- **Import** of old `.txt` files (**İçe aktar**), **move** between plugins and marketplaces, rename, tags. Deleting moves files to `.pp/trash/`; there is no permanent delete.
+- **Package publishing** to `plugins/<package>/`, with a stated reason for every prompt that is skipped.
+- **Remote repositories:** add or edit a remote, check it, push (including pending tags), update by fast-forward only, and clone a marketplace from a Git URL.
 
-1. İlk açılışta "Kuruluma devam et" ekranı çıkar. **Ayarlar**'ı aç, library kökünü seç. Windows'ta `D:\` sürücüsü varsa orada bir library klasörü önerilir. Klasör yoksa oluşturulmasını onaylarsın. Araç klasörünün içi seçilemez.
-2. Soldaki ağacın başlığındaki **+ Marketplace** ile yeni bir marketplace oluştur (örn. `ornek-promptlar`). Git deposu (dal `main`) ve iskelet dosyaları hazırlanır, otomatik commit atılmaz. Git deposu olmayan mevcut bir klasör ağaçta "Git deposu olmayan klasörler" altında görünür; "Git'i başlat" diyebilirsin.
-3. Ağaç üç seviyelidir: **Marketplace → Plugin → Prompt**. Plugin, marketplace'in `prompts/` klasöründeki bir alt klasördür ve yayında aynı adla plugin olur. Tüm marketplace'ler ağaçta, aramada ve filtrelerde birlikte görünür. Bir marketplace'e, plugin'e ya da içindeki bir prompta tıklayınca o marketplace **etkin** olur (sayfa yenilenmez). Editör, Git paneli, sürüm, içe aktarma ve yayın etkin marketplace'te çalışır; üst çubuktaki **Marketplace: ad** düğmesi hangisinin etkin olduğunu gösterir.
-4. **+ Plugin** ile klasör açarsın (ad `claude-`, `anthropic-` gibi öneklerle başlayamaz; `gelen-kutusu` ayrılmıştır). **+ Prompt** ya da plugin satırındaki `+` o plugin'e yeni prompt ekler. `prompts/` kökündeki klasörsüz promptlar "Klasörsüz promptlar" altında, `gelen-kutusu` "Gelen kutusu" altında, `plugins/`, `.claude-plugin/` ve `pp.config.json` gibi dosyalar kapalı gelen "Teknik dosyalar" altında görünür.
-5. **İçe aktar**: eski `.txt` klasörünün yolunu gir, dosyaları seç. Varsayılan hedef Gelen kutusu'dur (`prompts/gelen-kutusu`); istersen bir plugin seçebilirsin. Orijinallere dokunulmaz.
-6. Promptları başka plugin'e ya da başka marketplace'e taşı (sağ tık, `⋯` menüsü, Shift+F10), yeniden adlandır (F2), etiketle. Marketplace'ler arası taşımada sürüm tag'leri ve geçmiş kaynak depoda kalır, hedefte commit atılmamış yeni dosya olarak görünür.
-7. Editörde **Commit mesajı** kutusunu doldurup Kaydet'e basarsan dosya kaydedilir ve yalnızca o dosya commit edilir; kutu boşsa yalnızca kaydedilir ("Commit bekliyor" görünür). **Git** panelinden de commit atabilirsin. **+1** düğmesi `versiyon` alanını artırır, commit ve `prompt/<ad>/vX.Y.Z` tag'i atar (sürüm notu zorunlu). Her promptun **Geçmiş** sekmesinde farkları görür, eski sürümü editöre alabilirsin.
-8. **Marketplace**: promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç, sonra panelden yayınla.
+## Quick start
 
-Kullanıcı ayarları (library kökü, etkin marketplace) şu dosyada tutulur; yolu Ayarlar penceresinde de görünür:
+Requirements: **Node.js 18 or newer** and **git** on your `PATH`. Git is mandatory: without it the setup check reports "Git bulunamadı" (git not found) and blocks the app.
 
-1. Windows: `%APPDATA%\prompt-havuzu\config.json`
-2. macOS: `~/Library/Application Support/prompt-havuzu/config.json` (`XDG_CONFIG_HOME` varsa `$XDG_CONFIG_HOME/prompt-havuzu/config.json`)
-3. Linux: `$XDG_CONFIG_HOME/prompt-havuzu/config.json`, yoksa `~/.config/prompt-havuzu/config.json`
-4. `PP_CONFIG=<dosya>` ortam değişkeni bunların hepsini geçersiz kılar.
+```bash
+git clone https://github.com/OWNER/prompt-havuzu.git
+cd prompt-havuzu
+node tools/ui/server.js --open
+```
 
-## Klasör yapısı
+Launchers are included: `start.bat` (Windows) and `./start.sh` (macOS, Linux). Both run the same command. The app starts on port 4317 (if taken, the next 10 ports are tried) and `--open` opens your browser.
 
-Library kökü altında, her marketplace klasöründe (ayrı git deposu):
+On first run the app shows a setup screen (**Kuruluma devam et**, continue setup). Open **Ayarlar** (Settings) and choose a **library root**: a folder **outside** this repository where your marketplaces will live. You can let the app create it.
 
-1. `prompts/`: tek kaynak. Her plugin bir alt klasördür (`prompts/<plugin>/`), her prompt bir `.md` dosyası.
-2. `plugins/` ve `.claude-plugin/`: yayınlayınca otomatik üretilir. Elle düzenleme, kaynakta düzenle.
-3. `.pp/trash/`: silinenler buraya taşınır (git'e girmez).
-4. `pp.config.json`: marketplace ayarları (arayüz yazar).
+## Usage
 
-## Prompt dosyası alanları
+1. **Pick the library root** in **Ayarlar**. Every folder under it is a separate marketplace and a separate git repository.
+2. **Create a marketplace** with **+ Marketplace**. This runs `git init` (branch `main`) and writes the skeleton. No commit is made automatically. The same dialog can clone from a remote instead (**Uzak depodan klonla**).
+3. **Add a plugin and prompts** with **+ Plugin** and **+ Prompt**. A plugin is a folder under `prompts/` and becomes a plugin of the same name when published.
+4. **Edit, commit, version.** Edit the frontmatter and body, write a commit message, press the save button (**Kaydet**, `Ctrl+S`). Use **+1** to cut a prompt version and the **Geçmiş** tab to review history.
+5. **Publish and install.** Set `tur` (type) to `komut`, `ajan` or `skill`, open the package page, and press **Yayınla** (Publish). Then add the marketplace in Claude Code (next section).
 
-Hepsi isteğe bağlı. Tanımadığımız alanlara dokunulmaz.
+<details>
+<summary>Tree details</summary>
 
-1. `baslik`, `etiketler`, `projeler`, `durum` (taslak, kararlı, arşiv), `versiyon` (yayınlanan son sürüm, +1 ile artar; boşsa ilk +1 `1.0.0` olur), `olusturma`
-2. `tur`: `komut`, `ajan` veya `skill` yazarsan yayınlanabilir olur
-3. `paket`: hangi pluginin içine gireceği. Yeni promptlar bulunduğu plugin klasörünün adını yazar; klasörle uyuşmazsa editörde "Alanı klasöre eşitle" düğmesi çıkar
-4. `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model`: Claude Code dosyasına dönüştürülür
+- The tree has three levels: **Marketplace**, **Plugin**, **Prompt**. Clicking a node makes that marketplace the **active** one. The editor, Git panel, versions, import and publishing act on the active marketplace; the tree, search and filters cover all of them.
+- Special nodes: **Klasörsüz promptlar** (loose prompts directly in `prompts/`), **Gelen kutusu** (inbox, `prompts/gelen-kutusu`, never published) and **Teknik dosyalar** (technical files such as `plugins/`, `.claude-plugin/` and `pp.config.json`).
+- Plugin names cannot start with reserved prefixes such as `claude-` or `anthropic-`.
+- Folders without a git repository are listed separately and can be initialised with **Git'i başlat** (Initialise git).
+- Moving a prompt to another marketplace leaves its history and tags in the source repository; the target sees a new, uncommitted file.
 
-Metin içinde `{{degisken}}` yazarsan **Kopyala** düğmesi değerleri sorar ve doldurup panoya koyar.
+</details>
 
-## Projelerde kullanım
+## Publishing to Claude Code
 
-Marketplace panelinde komutlar hazır gelir. Özeti:
+Source prompts live in `prompts/`. Publishing generates the `plugins/` and `.claude-plugin/` output, which you should not edit by hand.
 
-1. Bir kez: `claude plugin marketplace add <marketplace klasörü>`
-2. Her projede: `claude plugin install <paket>@<marketplace>`
-3. Promptları değiştirince: panelden yayınla, projelerde `claude plugin marketplace update <marketplace>`
-4. Doğrulamak için: `claude plugin validate <marketplace klasörü>`
+```mermaid
+flowchart LR
+  A["prompts/&lt;plugin&gt;/*.md<br/>(source of truth)"] --> B{"valid tur?"}
+  B -- "no" --> S["skipped, with a reason"]
+  B -- "komut / ajan / skill" --> C["plugins/&lt;package&gt;/<br/>commands, agents, skills"]
+  C --> D[".claude-plugin/<br/>marketplace.json"]
+  D --> E["git commit and tag<br/>paket/&lt;name&gt;/vX.Y.Z"]
+  E --> F["claude plugin marketplace add"]
+```
 
-Komut söz dizimi Claude Code sürümüne göre değişebilir. Şüphede `claude plugin --help` çalıştır.
+**Yayınla** on the package page writes the plugin output, updates `plugin.json` and `marketplace.json`, commits those files, creates the annotated tag `paket/<name>/vX.Y.Z` and can push to a remote. **Marketplace'i güncelle** (update marketplace) regenerates all packages without bumping versions, tagging or pushing. Both refuse to run while prompt changes are uncommitted.
 
-## Kısayollar
+In your projects:
 
-1. Ctrl+S: kaydet
-2. Ctrl+K: aramaya git
-3. Esc: pencereyi kapat
+```bash
+claude plugin marketplace add <marketplace-folder-or-git-url>
+claude plugin install <package>@<marketplace>
+claude plugin marketplace update <marketplace>
+claude plugin validate <marketplace-folder>
+```
 
-## Lisans
+Claude Code's command syntax can change between versions. When in doubt, run `claude plugin --help`.
 
-MIT. Ayrıntı için `LICENSE` dosyasına bak.
+<details>
+<summary>Why a prompt is not published</summary>
+
+A prompt that cannot be published is never dropped silently. Reasons shown in the UI:
+
+| Code | Meaning |
+|---|---|
+| `turYok` | Publish fields are filled but `tur` is missing |
+| `turGecersiz` | `tur` is not `komut`, `ajan` or `skill` |
+| `onYuzKapanmamis` | Frontmatter is not closed (no second `---`) |
+| `dosyaBuyuk` | File is larger than 2 MB |
+| `yayinDisi` | No `tur`: intentionally not published |
+| `durumHaric` | `durum` (status) is not in the marketplace's `export.durumlar` list |
+| `paketDisiKlasor` | Folder is not part of a package (inbox or excluded folder) |
+
+</details>
+
+## Prompt files
+
+Every prompt is a Markdown file. All fields are optional and unknown keys are left untouched. Example:
+
+```markdown
+---
+baslik: Code review
+etiketler: [review, git]
+durum: kararlı
+versiyon: 1.0.0
+tur: komut
+paket: ornek
+komut_adi: review
+aciklama: Review the staged changes
+izinli_araclar: Bash(git diff:*), Read
+model: sonnet
+---
+Review the staged changes with this focus: {{focus}}
+```
+
+| Field | Purpose |
+|---|---|
+| `baslik`, `etiketler`, `projeler`, `olusturma` | Title, tags, projects it is used in, creation date |
+| `durum` | Status: `taslak` (draft), `kararlı` (stable), `arşiv` (archive) |
+| `versiyon` | Last released version as `X.Y.Z`; set by **+1** (an empty field becomes `1.0.0` on the first bump) |
+| `tur` | `komut` (command), `ajan` (agent) or `skill`; required to publish |
+| `paket` | Plugin the prompt belongs to; new prompts get their folder name |
+| `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model` | Converted to Claude Code frontmatter (for example `izinli_araclar` becomes `allowed-tools` or `tools`) |
+
+## Configuration
+
+User settings (`libraryRoot`, `activeMarketplace`, `remoteCheck`) live in a JSON file:
+
+| OS | Path |
+|---|---|
+| Windows | `%APPDATA%\prompt-havuzu\config.json` |
+| macOS | `~/Library/Application Support/prompt-havuzu/config.json` (or `$XDG_CONFIG_HOME/prompt-havuzu/config.json` if set) |
+| Linux | `$XDG_CONFIG_HOME/prompt-havuzu/config.json`, otherwise `~/.config/prompt-havuzu/config.json` |
+
+| Option | Effect |
+|---|---|
+| `PP_CONFIG=<file>` | Overrides the settings file location on every platform |
+| `--port <n>` or `PORT=<n>` | Port, default `4317`; the next 10 ports are tried if it is taken |
+| `--open` | Open the browser on start |
+
+The old `--root` flag and `PROMPT_ROOT` variable were removed; choose the library root in **Ayarlar**. That dialog also has "Uzak depoyu kontrol et" (check the remote): on startup (at most once per hour) or manually only.
+
+Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (new marketplaces use `prompts`), `marketplace` (`name`, `owner`, `plugin`, `description`, `version`), `packages`, and `export` (`durumlar`, `haricKlasorler`).
+
+<details>
+<summary>Marketplace folder layout</summary>
+
+```text
+<library root>/
+  <marketplace>/            # its own git repository
+    prompts/                # source of truth (libraryDir)
+      <plugin>/*.md
+      gelen-kutusu/         # inbox, never published
+    plugins/                # generated by publishing
+    .claude-plugin/         # generated marketplace.json
+    .pp/trash/              # deleted files, not tracked by git
+    pp.config.json
+```
+
+</details>
+
+## Security and privacy
+
+- The server binds to `127.0.0.1` only and rejects requests whose `Host` is not `127.0.0.1`, `localhost` or `[::1]`.
+- Every non-GET request to `/api/*` needs the `X-PP: 1` header, and an `Origin` header, if present, must match the host.
+- The served page carries a strict Content-Security-Policy (`default-src 'self'`, no framing); only three static files are served.
+- File access is confined to the active marketplace and refuses `.git`. Git runs via `execFile` without a shell.
+- There is no telemetry and no HTTP client in the code. The only network traffic is git talking to remotes **you** configure: clone, check, push and update. The startup remote check only runs when a remote exists and can be switched to manual.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Architecture
+
+```mermaid
+flowchart TB
+  UI["public/index.html<br/>single-file UI"] -->|"fetch /api/*"| S["server.js<br/>HTTP and routes"]
+  UI --- SH["fm.js, rules.js<br/>shared by UI and server"]
+  S --- SH
+  S --> L["lib/ services<br/>index, catalog, version, publish, remote"]
+  L --> G["GitService<br/>git via execFile"]
+  G --> R[("Marketplace repos<br/>in the library root")]
+  L --> R
+```
+
+`server.js` is a dependency-free HTTP server. Services in `tools/ui/lib/` receive their dependencies through constructors, and only `GitService` knows git commands. `fm.js` (frontmatter parser and writer) and `rules.js` (naming, versioning and publish rules) run in both Node and the browser, so both sides share one implementation.
+
+## Development
+
+```bash
+npm test --prefix tools/ui
+```
+
+This runs `node --test` with no dependencies. Tests use temporary folders and `PP_CONFIG` only, with git configuration isolated, so they never touch your real settings or library.
+
+```text
+tools/ui/
+  server.js       HTTP server and routes
+  lib/            server-side services
+  public/         index.html, fm.js, rules.js
+  test/           node:test suites
+start.bat, start.sh     launchers
+```
+
+## Troubleshooting
+
+- **The setup screen keeps appearing:** open **Ayarlar**, choose a library root, and make sure git is installed and on `PATH`.
+- **The library root is rejected:** it cannot be inside this tool's own repository; pick a folder elsewhere.
+- **Port in use:** the app tries the next 10 ports, or pass `--port <n>`.
+- **Publish refuses to run:** commit your prompt changes first.
+- **Push or clone fails:** the error dialog shows the git output; check credentials and the remote URL.
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) first.
+
+## License
+
+[MIT](LICENSE) &copy; Kaan TÜRKER
+
+<!-- Replace OWNER in the clone URL above with the GitHub user or organization that hosts this repository. -->
