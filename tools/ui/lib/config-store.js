@@ -6,11 +6,15 @@ const fsp = fs.promises;
 const path = require('path');
 const { userConfigFile } = require('./paths');
 
-const DEFAULTS = Object.freeze({ version: 1, libraryRoot: '', activeMarketplace: '' });
+const DEFAULTS = Object.freeze({ version: 1, libraryRoot: '', activeMarketplace: '', remoteCheck: 'acilista' });
+const REMOTE_CHECKS = ['acilista', 'elle'];
 
 function normalize(raw) {
   const s = (v) => (typeof v === 'string' ? v : '');
-  return { version: 1, libraryRoot: s(raw.libraryRoot), activeMarketplace: s(raw.activeMarketplace) };
+  return {
+    version: 1, libraryRoot: s(raw.libraryRoot), activeMarketplace: s(raw.activeMarketplace),
+    remoteCheck: REMOTE_CHECKS.includes(raw.remoteCheck) ? raw.remoteCheck : 'acilista'
+  };
 }
 
 class ConfigStore {
@@ -55,4 +59,4 @@ class ConfigStore {
 
 async function missing(p) { try { await fsp.access(p); return false; } catch (e) { return true; } }
 
-module.exports = { ConfigStore, DEFAULTS };
+module.exports = { ConfigStore, DEFAULTS, REMOTE_CHECKS };

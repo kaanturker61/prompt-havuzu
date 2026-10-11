@@ -233,12 +233,13 @@ test('sunucu: sürüm kuralları (D1)', { skip: !gitAvailable && 'git yok' }, as
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).marketplace.version, '1.2.3');
 
-    // c) yayından sonra plugin.json
+    // c) eski yayın rotası plugin.json'a sürüm yazmaz (sürüm paket yayınıyla gelir: server.paket.test.js)
     await srv.call('POST', '/api/file', { path: 'prompts/k.md', raw: '---\ntur: komut\n---\ngovde\n' });
     r = await srv.call('POST', '/api/marketplace/publish', { all: true });
     assert.equal(r.data.done.length, 1);
     const pj = JSON.parse(fs.readFileSync(path.join(mk, 'plugins', 'mk', '.claude-plugin', 'plugin.json'), 'utf8'));
-    assert.equal(pj.version, '1.2.3');
+    assert.equal(pj.version, undefined);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(mk, '.claude-plugin', 'marketplace.json'), 'utf8')).version, '1.2.3', 'katalog sürümü marketplace.json içinde');
 
     // d) biçimi bozuk eski değer reddedilmez, uyarı verir
     writeCfg('1.0');

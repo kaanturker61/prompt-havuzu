@@ -116,8 +116,8 @@ test('ok: root doğru; kök değişince onRootChange çağrılır', real, async 
   try {
     const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
     const { svc, store, git } = await build(d, { cfg: { libraryRoot: lib } });
-    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
-    const b = path.join(lib, 'b'); fs.mkdirSync(b); await git.init(b);
+    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a); fs.writeFileSync(path.join(a, 'pp.config.json'), '{}');
+    const b = path.join(lib, 'b'); fs.mkdirSync(b); await git.init(b); fs.writeFileSync(path.join(b, 'pp.config.json'), '{}');
     const seen = [];
     svc.onRootChange((now, prev) => seen.push([now, prev]));
     await store.save({ libraryRoot: lib, activeMarketplace: 'a' });
@@ -145,8 +145,13 @@ test('uyarılar: kokAracReposunuIceriyor ve kokBaskaDepoda; ok kalır', real, as
     await store.save({ libraryRoot: path.join(outer, 'lib2'), activeMarketplace: 'm' });
     let st = await svc.evaluate();
     assert.equal(st.ok, true);
-    assert.deepEqual(codes(st), ['kokBaskaDepoda']);
+    assert.deepEqual(codes(st), ['kokBaskaDepoda', 'ppConfigYok']);
     assert.equal(st.issues[0].level, 'warn');
+    const pc = st.issues.find((i) => i.code === 'ppConfigYok');
+    assert.equal(pc.level, 'warn'); assert.equal(pc.action, 'ppConfigOlustur');
+    assert.equal(st.rootOk, true, 'ppConfigYok uyarıdır, rootOk değişmez');
+    fs.writeFileSync(path.join(outer, 'lib2', 'm', 'pp.config.json'), '{}');
+    assert.deepEqual(codes(await svc.evaluate()), ['kokBaskaDepoda']);
     await store.save({ libraryRoot: d, activeMarketplace: 'dis' });
     st = await svc.evaluate();
     assert.ok(codes(st).includes('kokAracReposunuIceriyor'));

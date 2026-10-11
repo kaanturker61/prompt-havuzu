@@ -134,6 +134,7 @@ test('RESERVED_DIRS server.js IGNORE ile aynı kaynaktan gelir', () => {
   assert.equal(Rules.INBOX_DIR, 'gelen-kutusu');
 });
 
-test('MSG.paketUyusmuyorBilgi', () => {
-  assert.equal(Rules.MSG.paketUyusmuyorBilgi('kod', 'x'), 'Dosya "kod" plugin\'inde ama "paket" alanı "x". Yayın şimdilik alana göre yapılır; alanı klasöre eşitle.');
+test('MSG.paketUyusmuyor', () => {
+  assert.equal(Rules.MSG.paketUyusmuyor('kod', 'x'), 'Dosya "kod" paketinin klasöründe ama "paket" alanı "x". Paket klasörden alınır; alanı düzelt ya da dosyayı taşı.');
+  assert.equal(Rules.MSG.paketUyusmuyorBilgi, undefined);
 });

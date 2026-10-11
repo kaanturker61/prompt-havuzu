@@ -117,6 +117,9 @@ class SetupService {
       add('marketplaceGitYok', 'error', `Seçili marketplace'te git başlatılmamış: ${active}${why}`, folder, 'gitBaslat');
       return done();
     }
+    if (!fs.existsSync(path.join(folder, 'pp.config.json'))) {
+      add('ppConfigYok', 'warn', "Bu marketplace'te pp.config.json yok. Prompt Havuzu ayarlarını oluştur.", folder, 'ppConfigOlustur');
+    }
     return done(folder);
   }
 }

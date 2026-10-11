@@ -56,6 +56,9 @@ class VersionService {
     return map;
   }
 
+  // Genel takma ad: paket sürüm önerisi prompt tag'lerini yeniden okumaz.
+  tagsByAd(root) { return this._tagsByAd(root); }
+
   // cands: [{ rel, abs, last }] -> Map<rel, true|false|null>; null = karşılaştırılamadı (yol tag'de yok).
   async _changed(root, cands) {
     const result = new Map();

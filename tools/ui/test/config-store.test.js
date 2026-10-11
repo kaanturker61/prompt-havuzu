@@ -10,7 +10,7 @@ test('dosya yoksa varsayılanlar gelir', async () => {
   const d = tmpDir();
   try {
     const { config, warning } = await new ConfigStore({ file: path.join(d, 'c.json') }).load();
-    assert.deepEqual(config, { version: 1, libraryRoot: '', activeMarketplace: '' });
+    assert.deepEqual(config, { version: 1, libraryRoot: '', activeMarketplace: '', remoteCheck: 'acilista' });
     assert.equal(warning, null);
   } finally { rmrf(d); }
 });
@@ -21,7 +21,7 @@ test('save/load gidiş-dönüşü ve dizin otomatik oluşur', async () => {
     const f = path.join(d, 'ic', 'ice', 'c.json');
     const s = new ConfigStore({ file: f });
     await s.save({ libraryRoot: 'D:/X', activeMarketplace: 'm' });
-    assert.deepEqual((await s.load()).config, { version: 1, libraryRoot: 'D:/X', activeMarketplace: 'm' });
+    assert.deepEqual((await s.load()).config, { version: 1, libraryRoot: 'D:/X', activeMarketplace: 'm', remoteCheck: 'acilista' });
     assert.equal(fs.readdirSync(path.dirname(f)).length, 1, 'tmp dosyası kalmamalı');
   } finally { rmrf(d); }
 });
@@ -53,4 +53,18 @@ test('nesne olmayan JSON bozuk sayılır', async () => {
 test('defaultFile: PP_CONFIG kullanılır', () => {
   const f = path.resolve('x', 'cfg.json');
   assert.equal(ConfigStore.defaultFile({ PP_CONFIG: f }), f);
+});
+
+test('remoteCheck: varsayılan acilista, geçersiz değer normalize edilir, bilinmeyen anahtarlar atılır', async () => {
+  const d = tmpDir();
+  try {
+    const s = new ConfigStore({ file: path.join(d, 'c.json') });
+    await s.save({ libraryRoot: 'X', remoteCheck: 'elle', baskaAnahtar: 1 });
+    let c = (await s.load()).config;
+    assert.equal(c.remoteCheck, 'elle'); assert.equal('baskaAnahtar' in c, false);
+    await s.save({ libraryRoot: 'X', remoteCheck: 'saatlik' });
+    assert.equal((await s.load()).config.remoteCheck, 'acilista');
+    fs.writeFileSync(path.join(d, 'c.json'), JSON.stringify({ libraryRoot: 'Y' }));
+    assert.equal((await s.load()).config.remoteCheck, 'acilista');
+  } finally { rmrf(d); }
 });

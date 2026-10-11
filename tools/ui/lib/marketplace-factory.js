@@ -6,13 +6,14 @@ const fsp = fs.promises;
 const os = require('os');
 const path = require('path');
 const FM = require('../public/fm.js');
+const Rules = require('../public/rules.js');
 const { UndoStack } = require('./undo');
+const { describeNetError } = require('./net-errors');
 
-const RESERVED = ['claude-plugins-official', 'anthropic-marketplace', 'anthropic-plugins', 'claude-code-marketplace'];
-
-function fail(status, message) {
+function fail(status, message, code) {
   const e = new Error(message);
   e.status = status;
+  if (code) e.code = code;
   return e;
 }
 
@@ -38,7 +39,8 @@ class MarketplaceFactory {
     if (!/[\p{L}\p{N}]/u.test(String(raw || ''))) throw fail(400, 'Geçersiz marketplace adı');
     const name = FM.slug(String(raw));
     if (!name) throw fail(400, 'Geçersiz marketplace adı');
-    if (RESERVED.includes(name)) throw fail(400, "Bu ad resmi Anthropic marketplace'lerine ayrılmış: " + name);
+    const bad = Rules.checkMarketplaceName(name);
+    if (bad) throw fail(400, bad);
     return name;
   }
 
@@ -83,6 +85,35 @@ class MarketplaceFactory {
     return { name: slug, dir };
   }
 
+  // Uzak depodan klonlar (GitHub/GitLab/yerel yol). Klasörü yalnızca clone oluşturur; hata olursa silinir.
+  // Dönüş: { name, dir, url, warnings: [{ code, message }] }. Hatalar: 400 urlGecersiz/adGecersiz, 409 klasorVar, 502 ağ.
+  async cloneRemote(libraryRoot, url, { name } = {}) {
+    const n = Rules.normalizeRepoUrl(url);
+    if (n.error) throw fail(400, n.error, 'urlGecersiz');
+    let slug;
+    try { slug = MarketplaceFactory.validateName(name || n.slugName); } catch (e) { e.code = 'adGecersiz'; throw e; }
+    const dir = path.join(libraryRoot, slug);
+    if (await exists(dir)) throw fail(409, 'Bu adda bir klasör zaten var: ' + slug, 'klasorVar');
+    const undo = new UndoStack();
+    // Klasörü yalnızca clone oluşturur; başarısız olursa yarım kalanı sileriz.
+    undo.push(() => fsp.rm(dir, { recursive: true, force: true, maxRetries: 3 }));
+    try {
+      await this.git.clone(libraryRoot, n.url, slug, { interactive: true });
+      if (!(await this.git.isRepoRoot(dir))) throw new Error('Klonlanan klasör bir git deposu kökü değil');
+    } catch (e) {
+      await undo.rollback().catch(() => {});
+      const code = e.netCode || (e.timedOut ? 'zamanAsimi' : 'bilinmiyor');
+      const err = fail(502, 'Depo klonlanamadı: ' + describeNetError(code, { url: n.url, dir: libraryRoot }), code);
+      err.detail = String(e.stderr || e.message || '').trim().slice(0, 600);
+      throw err;
+    }
+    const warnings = [];
+    if (!(await exists(path.join(dir, 'pp.config.json')))) warnings.push({ code: 'ppConfigYok', message: 'Bu depoda pp.config.json yok. Prompt Havuzu ayarlarını oluştur.' });
+    if (!(await exists(path.join(dir, '.claude-plugin', 'marketplace.json')))) warnings.push({ code: 'manifestYok', message: '.claude-plugin/marketplace.json yok.' });
+    if (!(await this.git.hasCommits(dir))) warnings.push({ code: 'bosDepo', message: 'Depo boş (henüz commit yok).' });
+    return { name: slug, dir, url: n.url, warnings };
+  }
+
   // Var olan klasör: yalnızca eksik olanları ekler, var olan hiçbir şeye dokunmaz.
   async initExisting(dir, { description, owner } = {}) {
     const base = path.basename(dir);
@@ -123,4 +154,4 @@ class MarketplaceFactory {
   }
 }
 
-module.exports = { MarketplaceFactory, RESERVED };
+module.exports = { MarketplaceFactory };

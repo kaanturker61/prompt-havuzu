@@ -31,4 +31,30 @@ function gitEnv(dir, { identity = true } = {}) {
   return env;
 }
 
-module.exports = { gitAvailable, tmpDir, rmrf, gitEnv };
+// Senkron git yardımcısı (testlerde hazırlık için).
+function sh(cwd, args, env) {
+  const r = spawnSync('git', args, { cwd, env: { ...process.env, ...env }, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error('git ' + args.join(' ') + ' başarısız: ' + (r.stderr || r.stdout));
+  return r.stdout;
+}
+
+// tmp/<name> altında main dallı boş bir depo kurar. env: gitEnv(tmp).
+function makeRepo(tmp, name = 'repo') {
+  const dir = path.join(tmp, name);
+  fs.mkdirSync(dir, { recursive: true });
+  const env = gitEnv(tmp);
+  sh(dir, ['init', '-q'], env);
+  sh(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'], env);
+  return dir;
+}
+
+// Boş bare depo (uzak depo yerine). İçerik çalışma kopyasından push edilir.
+function makeBare(tmp, name = 'uzak.git') {
+  const dir = path.join(tmp, name);
+  fs.mkdirSync(dir, { recursive: true });
+  sh(dir, ['init', '--bare', '-q'], gitEnv(tmp));
+  sh(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'], gitEnv(tmp));
+  return dir;
+}
+
+module.exports = { gitAvailable, tmpDir, rmrf, gitEnv, sh, makeRepo, makeBare };

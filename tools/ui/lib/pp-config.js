@@ -9,7 +9,8 @@ const Rules = require('../public/rules.js');
 const DEFAULTS = {
   libraryDir: 'library',
   marketplace: { name: 'prompt-havuzu', owner: '', plugin: 'benim-promptlarim', description: 'Kişisel prompt havuzu', version: Rules.DEFAULT_VERSION },
-  packages: {}
+  packages: {},
+  export: { durumlar: ['kararlı', ''], haricKlasorler: [Rules.INBOX_DIR] }
 };
 
 const configFileAt = (dir) => path.join(dir, 'pp.config.json');
@@ -22,7 +23,12 @@ async function loadConfigAt(dir) {
   }
   const marketplace = { ...DEFAULTS.marketplace, ...(c.marketplace || {}) };
   marketplace.version = Rules.normalizeVersion(marketplace.version);
-  return { ...DEFAULTS, ...c, marketplace, packages: { ...(c.packages || {}) } };
+  const ex = c.export && typeof c.export === 'object' ? c.export : {};
+  const exp = {
+    durumlar: Array.isArray(ex.durumlar) ? ex.durumlar.map((x) => String(x == null ? '' : x)) : DEFAULTS.export.durumlar.slice(),
+    haricKlasorler: Array.isArray(ex.haricKlasorler) ? ex.haricKlasorler.map(String).filter(Boolean) : DEFAULTS.export.haricKlasorler.slice()
+  };
+  return { ...DEFAULTS, ...c, marketplace, packages: { ...(c.packages || {}) }, export: exp };
 }
 
 async function saveConfigAt(dir, c, atomicWrite) {

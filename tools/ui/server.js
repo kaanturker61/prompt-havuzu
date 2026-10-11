@@ -29,6 +29,15 @@ const { LibraryCatalog } = require('./lib/library-catalog');
 const { PackageService, PackageError } = require('./lib/package-service');
 const { PromptHistory, HistoryError } = require('./lib/prompt-history');
 const { UndoStack } = require('./lib/undo');
+const { PackageExporter } = require('./lib/exporter');
+const { ManifestWriter } = require('./lib/manifest-writer');
+const { PackageCatalog } = require('./lib/package-catalog');
+const { VersionAdvisor } = require('./lib/version-advisor');
+const { PackagePublisher } = require('./lib/publisher');
+const { RemoteSync } = require('./lib/remote-sync');
+const { OpLock } = require('./lib/op-lock');
+const { StateStore } = require('./lib/state-store');
+const { REMOTE_CHECKS } = require('./lib/config-store');
 
 /* ------------------------------------------------------------------ ayarlar */
 
@@ -74,6 +83,32 @@ const packages = new PackageService({
   fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt, Rules, FM
 });
 const history = new PromptHistory({ git: gitService, FM, Rules });
+const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM });
+const manifests = new ManifestWriter({ root: () => root(), fsp, atomicWrite, FM, Rules });
+const packageCatalog = new PackageCatalog({
+  listPrompts: (cfg) => index.listMd(root(), cfg.libraryDir, { includeBig: true }),
+  exporter, readIfExists, root: () => root(), Rules, FM
+});
+const advisor = new VersionAdvisor({ git: gitService, versions, exporter, Rules, FM });
+const opLock = new OpLock();
+const stateStore = new StateStore();
+// HEAD ya da tag'ler değişince dizin ve katalog önbellekleri temizlenir (PromptHistory/VersionService kendiliğinden geçersizleşir).
+const afterGitChange = (dir) => { index.clear(dir); catalog.invalidate(); };
+const remoteSync = new RemoteSync({ git: gitService, state: stateStore, lock: opLock, Rules, onChanged: afterGitChange });
+const publisher = new PackagePublisher({
+  git: gitService, catalog: packageCatalog, exporter, manifests, advisor, state: stateStore, lock: opLock, remoteSync, Rules, FM,
+  config: {
+    load: () => loadConfig(),
+    // pp.config.json'u yazar; özgün baytlarını geri yazacak adımı ekler.
+    save: async (cfg, undo) => {
+      const file = ppConfig.configFileAt(root());
+      const prev = await fsp.readFile(file).catch(() => null);
+      undo.push(async () => { if (prev === null) await fsp.rm(file, { force: true }); else await fsp.writeFile(file, prev); });
+      await saveConfig(cfg);
+    }
+  },
+  onChanged: afterGitChange
+});
 const histErr = (e) => (e instanceof HistoryError ? httpErr(e.status, e.message, { code: e.code }) : e);
 const pkgErr = (e) => (e instanceof PackageError ? httpErr(e.status, e.message, e.data) : e);
 const vErr = (e) => (e instanceof VersionError ? httpErr(e.status, e.message, e.data) : e);
@@ -160,201 +195,84 @@ const listMd = (relDir, opts) => index.listMd(root(), relDir, opts);
 
 /* ------------------------------------------------------------------ marketplace */
 
-const TUR_DIR = { komut: 'commands', ajan: 'agents', skill: 'skills' };
-
 const normTur = Rules.normTur;
 
-function targetFor(tur, paket, ad) {
-  return tur === 'skill' ? `plugins/${paket}/skills/${ad}/SKILL.md` : `plugins/${paket}/${TUR_DIR[tur]}/${ad}.md`;
-}
+// Dışa aktarma planı: promptlar klasöre göre paketlere bölünür (lib/package-catalog.js).
+const publishPlan = (cfg) => packageCatalog.build(cfg);
 
-function renderTarget(it, tur, ad) {
-  const m = it.meta;
-  const desc = str(m.aciklama) || it.title || ad;
-  const fm = [];
-  if (tur === 'komut') {
-    fm.push(['description', desc]);
-    if (m.arguman_ipucu) fm.push(['argument-hint', str(m.arguman_ipucu)]);
-    if (m.izinli_araclar) fm.push(['allowed-tools', str(m.izinli_araclar)]);
-    if (m.model) fm.push(['model', str(m.model)]);
-  } else if (tur === 'ajan') {
-    fm.push(['name', ad], ['description', desc]);
-    if (m.izinli_araclar) fm.push(['tools', str(m.izinli_araclar)]);
-    if (m.model) fm.push(['model', str(m.model)]);
-  } else {
-    fm.push(['name', ad], ['description', desc]);
-    if (m.izinli_araclar) fm.push(['allowed-tools', str(m.izinli_araclar)]);
-  }
-  const head = fm.map(([k, v]) => `${k}: ${FM.fmtScalar(v)}`).join('\n');
-  return `---\n${head}\n---\n${it.body.replace(/^\n+/, '').replace(/\s+$/, '')}\n`;
-}
-
-async function scanPluginFiles() {
-  const out = [];
-  let pk;
-  try { pk = await fsp.readdir(path.join(root(), 'plugins'), { withFileTypes: true }); } catch (e) { return out; }
-  for (const d of pk) {
-    if (!d.isDirectory()) continue;
-    for (const kind of ['commands', 'agents']) {
-      let fl = [];
-      try { fl = await fsp.readdir(path.join(root(), 'plugins', d.name, kind)); } catch (e) { /* yok */ }
-      for (const f of fl) if (/\.md$/i.test(f)) out.push({ target: `plugins/${d.name}/${kind}/${f}`, paket: d.name });
-    }
-    let sk = [];
-    try { sk = await fsp.readdir(path.join(root(), 'plugins', d.name, 'skills'), { withFileTypes: true }); } catch (e) { /* yok */ }
-    for (const s of sk) {
-      if (s.isDirectory() && await exists(path.join(root(), 'plugins', d.name, 'skills', s.name, 'SKILL.md'))) {
-        out.push({ target: `plugins/${d.name}/skills/${s.name}/SKILL.md`, paket: d.name });
-      }
-    }
-  }
-  return out;
-}
-
-async function publishPlan(cfg) {
-  const items = await listMd(cfg.libraryDir, { includeBig: true });
-  const plans = [];
-  const skipped = [];
-  const cands = []; // orphan eşleştirmesi için aday ad ve paket
-  const defPaket = FM.slug(cfg.marketplace.plugin);
-  for (const it of items) {
-    if (it.tooBig) {
-      const s = { source: it.path, baslik: path.basename(it.path), ...it.check };
-      skipped.push(s);
-      cands.push({ s, ad: FM.slug(path.basename(it.path, path.extname(it.path))), paket: defPaket });
-      continue;
-    }
-    const m = it.meta;
-    const tur = normTur(m.tur);
-    if (!tur) {
-      const s = { source: it.path, baslik: it.title, ...it.check };
-      skipped.push(s);
-      cands.push({ s, ad: FM.slug(str(m.komut_adi) || path.basename(it.path, path.extname(it.path))), paket: FM.slug(str(m.paket) || cfg.marketplace.plugin) });
-      continue;
-    }
-    const paket = FM.slug(str(m.paket) || cfg.marketplace.plugin);
-    const ad = FM.slug(str(m.komut_adi) || path.basename(it.path, path.extname(it.path)));
-    const target = targetFor(tur, paket, ad);
-    const expected = renderTarget(it, tur, ad);
-    const cur = await readIfExists(path.join(root(), target));
-    const state = cur === null ? 'yok' : (cur.replace(/\r\n/g, '\n') === expected ? 'guncel' : 'eski');
-    const issues = [];
-    if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: 'İçerik boş' });
-    if (str(m.komut_adi) && FM.slug(str(m.komut_adi)) === 'adsiz') {
-      issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(str(m.komut_adi)) });
-    }
-    if (!str(m.aciklama)) {
-      issues.push({
-        code: 'aciklamaBos',
-        level: tur === 'komut' ? 'info' : 'warn',
-        msg: tur === 'komut' ? 'Açıklama boş, başlık kullanılacak' : 'Açıklama boş. Claude, bu ' + (tur === 'ajan' ? 'ajanı' : 'skill\'i') + ' ne zaman kullanacağını açıklamadan seçer'
-      });
-    }
-    plans.push({ source: it.path, baslik: it.title, tur, paket, ad, target, expected, state, issues });
-  }
-  const byTarget = new Map();
-  for (const p of plans) {
-    if (!byTarget.has(p.target)) byTarget.set(p.target, []);
-    byTarget.get(p.target).push(p);
-  }
-  for (const [t, list] of byTarget) {
-    if (list.length > 1) {
-      for (const p of list) p.issues.push({ code: 'hedefCakisiyor', level: 'error', msg: 'Aynı hedef dosya birden fazla prompt tarafından kullanılıyor: ' + t });
-    }
-  }
-  const expectedTargets = new Set(plans.map((p) => p.target));
-  const orphans = (await scanPluginFiles()).filter((f) => !expectedTargets.has(f.target));
-  for (const o of orphans) {
-    const mt = /^plugins\/[^/]+\/(?:commands|agents)\/(.+)\.md$/i.exec(o.target) || /^plugins\/[^/]+\/skills\/([^/]+)\/SKILL\.md$/.exec(o.target);
-    if (!mt) continue;
-    const hit = cands.find((c) => c.s.level === 'warn' && c.ad === FM.slug(mt[1]) && c.paket === FM.slug(o.paket));
-    if (hit) o.likelySource = { source: hit.s.source, code: hit.s.code, reason: hit.s.reason };
-  }
-  const bySource = new Map(plans.map((p) => [p.source, p]));
-  const byTargetFirst = new Map(plans.map((p) => [p.target, p]));
-  const bySkipped = new Map(skipped.map((x) => [x.source, x]));
-  return { plans, skipped, orphans, bySource, byTarget: byTargetFirst, bySkipped };
-}
-
-function defaultOwner(cfg) { return cfg.marketplace.owner || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })(); }
-
-async function readJson(abs) { try { return JSON.parse(await fsp.readFile(abs, 'utf8')); } catch (e) { return {}; } }
-
-async function writePluginJson(paket, cfg) {
-  const file = path.join(root(), 'plugins', paket, '.claude-plugin', 'plugin.json');
-  const cur = await readJson(file);
-  const next = { ...cur, name: paket };
-  next.description = cur.description || (cfg.packages[paket] && cfg.packages[paket].description) || `${paket}: ${cfg.marketplace.description}`;
-  next.author = cur.author || { name: defaultOwner(cfg) };
-  next.version = cfg.marketplace.version;
-  await atomicWrite(file, JSON.stringify(next, null, 2) + '\n', { mkdir: true });
-}
-
-async function writeMarketplace(cfg, packages) {
-  const file = path.join(root(), '.claude-plugin', 'marketplace.json');
-  const cur = await readJson(file);
-  const mk = cfg.marketplace;
-  const next = {
-    ...cur,
-    name: FM.slug(mk.name),
-    description: mk.description,
-    owner: { ...(cur.owner || {}), name: defaultOwner(cfg) }
-  };
-  const prev = new Map((cur.plugins || []).map((p) => [p.name, p]));
-  const own = [];
-  for (const name of packages) {
-    const pj = await readJson(path.join(root(), 'plugins', name, '.claude-plugin', 'plugin.json'));
-    own.push({ ...(prev.get(name) || {}), name, source: './plugins/' + name, description: pj.description || `${name}: ${mk.description}` });
-  }
-  const external = (cur.plugins || []).filter((p) => !(typeof p.source === 'string' && p.source.startsWith('./plugins/')));
-  next.plugins = own.concat(external);
-  await atomicWrite(file, JSON.stringify(next, null, 2) + '\n', { mkdir: true });
-}
-
+// Eski (kullanımdan kalkan) rotalar ve init için: plugin.json sürümüne dokunmadan manifestleri yazar.
 async function marketplaceSync(cfg, plan) {
-  const packages = Array.from(new Set(plan.plans.map((p) => p.paket).concat(plan.orphans.map((o) => o.paket))));
-  if (!packages.length) packages.push(FM.slug(cfg.marketplace.plugin));
-  for (const pk of packages) await writePluginJson(pk, cfg);
-  await writeMarketplace(cfg, packages);
-  const readme = path.join(root(), 'plugins', 'README.md');
-  if (!(await exists(readme))) {
-    await atomicWrite(readme, `# plugins\n\nBu klasördeki komut, ajan ve skill dosyaları \`${cfg.libraryDir}/\` içindeki promptlardan otomatik üretilir.\nDüzenlemeyi kaynakta yap, sonra arayüzden yayınla. Burada yapılan değişiklikler bir sonraki yayında ezilir.\n`, { mkdir: true });
-  }
-  return packages;
+  const names = Array.from(new Set(plan.plans.map((p) => p.paket).concat(plan.orphans.map((o) => o.paket))));
+  const undo = new UndoStack();
+  for (const pk of names) await manifests.writePluginJson(pk, cfg, { version: null }, undo);
+  await manifests.writeMarketplace(cfg, { version: cfg.marketplace.version }, undo);
+  await manifests.ensureReadme(cfg, undo);
+  undo.clear();
+  return names;
 }
 
 function quoteArg(p) { return /\s/.test(p) ? `"${p}"` : p; }
+
+// Etkin marketplace'in tercih edilen uzak deposu (yoksa null).
+async function primaryRemote() {
+  const list = await gitService.remotes(root()).catch(() => []);
+  return list.find((r) => r.name === 'origin') || list[0] || null;
+}
 
 async function marketplaceStatus() {
   const cfg = await loadConfig();
   const plan = await publishPlan(cfg);
   const mkFile = path.join(root(), '.claude-plugin', 'marketplace.json');
-  const mkJson = await exists(mkFile) ? await readJson(mkFile) : null;
+  const mkJson = await exists(mkFile) ? await manifests.readJson(mkFile) : null;
   const mkName = FM.slug(cfg.marketplace.name);
   const packages = Array.from(new Set(plan.plans.map((p) => p.paket)));
-  if (!packages.length) packages.push(FM.slug(cfg.marketplace.plugin));
+  const listed = (await manifests.listed()).map((l) => l.name);
   const configIssues = [];
   const verErr = Rules.checkVersion(cfg.marketplace.version);
   if (verErr) configIssues.push({ code: 'surumGecersiz', level: 'warn', message: verErr });
+  const skipped = plan.skipped.filter((x) => x.level === 'warn');
+  for (const p of plan.plans) {
+    for (const i of p.issues) {
+      if (i.code === 'paketUyusmuyor' || i.code === 'paketCokDegerli') skipped.push({ source: p.source, baslik: p.baslik, code: i.code, level: 'warn', reason: i.msg });
+    }
+  }
+  const remote = await primaryRemote();
+  let commands;
+  if (remote) {
+    const ac = Rules.marketplaceAddCommand(remote.url);
+    commands = {
+      add: `claude plugin marketplace add ${quoteArg(ac.primary)}`,
+      addInSession: `/plugin marketplace add ${quoteArg(ac.primary)}`,
+      alternatives: ac.alternatives.map((a) => `claude plugin marketplace add ${quoteArg(a)}`),
+      pinHint: `${ac.primary}#<dal-veya-etiket>`,
+      addNote: null
+    };
+  } else {
+    commands = {
+      add: `claude plugin marketplace add ${quoteArg(root())}`,
+      addInSession: `/plugin marketplace add ${quoteArg(root())}`,
+      alternatives: [], pinHint: null,
+      addNote: 'Yerel yol: plugin\'ler yerinde yüklenir, sürüm takibi yapılmaz'
+    };
+  }
+  commands.validate = `claude plugin validate ${quoteArg(root())}`;
+  commands.install = listed.map((p) => ({ plugin: p, cmd: `claude plugin install ${p}@${mkName}`, inSession: `/plugin install ${p}@${mkName}` }));
   return {
     config: cfg.marketplace,
+    export: cfg.export,
     configIssues,
     root: root(),
     marketplaceName: mkName,
     marketplaceExists: !!mkJson,
     marketplacePlugins: mkJson ? (mkJson.plugins || []).map((p) => p.name) : [],
     items: plan.plans.map(({ expected, ...rest }) => rest),
-    skipped: plan.skipped.filter((x) => x.level === 'warn'),
-    unpublishedCount: plan.skipped.filter((x) => x.level === 'info').length,
+    skipped,
+    unpublishedCount: plan.skipped.filter((x) => x.code === 'yayinDisi').length,
     orphans: plan.orphans,
     packages,
-    commands: {
-      validate: `claude plugin validate ${quoteArg(root())}`,
-      add: `claude plugin marketplace add ${quoteArg(root())}`,
-      addInSession: `/plugin marketplace add ${quoteArg(root())}`,
-      update: `claude plugin marketplace update ${mkName}`,
-      install: packages.map((p) => ({ plugin: p, cmd: `claude plugin install ${p}@${mkName}`, inSession: `/plugin install ${p}@${mkName}` }))
-    }
+    listed,
+    remote: remote ? { name: remote.name, url: remote.url, provider: Rules.repoProvider(remote.url) } : null,
+    commands
   };
 }
 
@@ -463,8 +381,9 @@ route('GET', '/api/info', async () => infoView(), { open: true });
 async function settingsView() {
   const st = await setup.evaluate();
   const sug = paths.suggestedRoot();
+  const { config } = await configStore.load();
   return {
-    configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace,
+    configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace, remoteCheck: config.remoteCheck,
     suggestedRoot: sug, suggestedRootNote: sug ? null : paths.suggestedRootNote(), toolRoot: TOOL_DIR, setup: st
   };
 }
@@ -472,6 +391,13 @@ async function settingsView() {
 route('GET', '/api/settings', async () => settingsView(), { open: true });
 
 route('PUT', '/api/settings', async ({ body }) => {
+  if (body.remoteCheck !== undefined && !REMOTE_CHECKS.includes(body.remoteCheck)) throw httpErr(400, 'Geçersiz değer', { field: 'remoteCheck' });
+  // Yalnızca uzak depo kontrol ayarı gelirse library kökü doğrulaması atlanır.
+  if (body.remoteCheck !== undefined && (body.libraryRoot === undefined || body.libraryRoot === null || body.libraryRoot === '')) {
+    const { config } = await configStore.load();
+    try { await configStore.save({ ...config, remoteCheck: body.remoteCheck }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    return settingsView();
+  }
   let d = String(body.libraryRoot == null ? '' : body.libraryRoot).trim().replace(/^["']|["']$/g, '');
   if (!d) throw httpErr(400, 'Library kökü gerekli');
   if (d === '~' || d.startsWith('~/') || d.startsWith('~\\')) d = path.join(os.homedir(), d.slice(1));
@@ -488,7 +414,7 @@ route('PUT', '/api/settings', async ({ body }) => {
     throw httpErr(400, 'Bu yol bir klasör değil: ' + d);
   }
   const { config } = await configStore.load();
-  const next = { ...config, libraryRoot: d };
+  const next = { ...config, libraryRoot: d, ...(body.remoteCheck !== undefined ? { remoteCheck: body.remoteCheck } : {}) };
   // Kayıtlı marketplace yeni kökte yoksa boşalt.
   if (next.activeMarketplace && !(await registry.folderOf(d, next.activeMarketplace))) next.activeMarketplace = '';
   const saveCfg = async (c) => {
@@ -526,6 +452,47 @@ route('POST', '/api/marketplaces', async ({ body }) => {
   catalog.invalidate();
   const view = await marketplacesView();
   return { ok: true, marketplace: view.items.find((i) => i.name === made.name) || null, setup: view.setup };
+}, { open: true });
+
+// Uzak depodan klonlama: etkin marketplace'ten bağımsız (X-PP-MP kapsamı dışı). Ağ kilidi library köküne göre.
+route('POST', '/api/marketplaces/clone', async ({ body }) => {
+  const st = await requireRootOk();
+  let made;
+  try {
+    made = await opLock.run(st.libraryRoot, 'ag', () => factory.cloneRemote(st.libraryRoot, body.url, { name: body.name }));
+  } catch (e) {
+    if (e.status && !e.data) throw httpErr(e.status, e.message, { code: e.code, ...(e.detail ? { detail: e.detail } : {}) });
+    throw e;
+  }
+  if (body.activate !== false) {
+    const { config } = await configStore.load();
+    try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+  }
+  setup.invalidate();
+  catalog.invalidate();
+  const view = await marketplacesView();
+  return { ok: true, marketplace: view.items.find((i) => i.name === made.name) || null, setup: view.setup, warnings: made.warnings };
+}, { open: true });
+
+// pp.config.json yoksa marketplace.json'dan oluşturur. Commit atılmaz.
+route('POST', '/api/marketplaces/pp-config', async ({ body }) => {
+  const st = await requireRootOk();
+  const name = String(body.name || '');
+  const dir = await registry.folderOf(st.libraryRoot, name);
+  if (!dir) throw httpErr(404, 'Klasör bulunamadı: ' + name);
+  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, 'Araç reposu marketplace olarak kullanılamaz');
+  const file = ppConfig.configFileAt(dir);
+  if (await exists(file)) throw httpErr(409, 'Bu marketplace\'te pp.config.json zaten var');
+  let mj = {};
+  try { mj = JSON.parse(await fsp.readFile(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8')); } catch (e) { /* manifest yok */ }
+  const slug = FM.slug(str(mj.name) || name);
+  const owner = str(mj.owner && mj.owner.name) || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })();
+  const description = str(mj.description) || `Prompt havuzu: ${slug}`;
+  await atomicWrite(file, templates.ppConfig({ name: slug, description, owner }));
+  setup.invalidate();
+  catalog.invalidate();
+  const view = await marketplacesView();
+  return { ok: true, marketplace: view.items.find((i) => i.name === name) || null, setup: view.setup };
 }, { open: true });
 
 route('POST', '/api/marketplaces/activate', async ({ body }) => {
@@ -598,12 +565,16 @@ route('GET', '/api/file', async ({ q }) => {
     const err = pub && pub.issues.find((i) => i.level === 'error');
     if (sk) publishCheck = { code: sk.code, level: sk.level, reason: sk.reason, ...(sk.fields ? { fields: sk.fields } : {}) };
     else if (err) publishCheck = { code: err.code, level: 'error', reason: err.msg };
+    else {
+      const pw = pub && pub.issues.find((i) => i.code === 'paketUyusmuyor' || i.code === 'paketCokDegerli');
+      if (pw) publishCheck = { code: pw.code, level: 'warn', reason: pw.msg };
+    }
   }
   return {
     path: rel, raw, mtime: Math.round(st.mtimeMs), isPrompt, isMd,
     publishCheck,
     generatedFrom: gen ? gen.source : null,
-    publish: pub ? { target: pub.target, state: pub.state, paket: pub.paket, ad: pub.ad, tur: pub.tur } : null
+    publish: pub ? { target: pub.target, state: pub.state, paket: pub.paket, ad: pub.ad, tur: pub.tur, paketKaynagi: pub.paketKaynagi } : null
   };
 });
 
@@ -696,6 +667,68 @@ route('POST', '/api/package/rename', async ({ body }) => {
   } catch (e) { throw pkgErr(e); }
 });
 
+/* ---- paket sayfası ve yayın (Aşama 4) ---- */
+
+const lastTagOf = (base) => (base.tags[0] ? { name: base.tags[0].name, version: base.tags[0].version, commit: base.tags[0].commit, date: base.tags[0].date } : null);
+
+function packageSummary(cfg, pkg, analysis, pending, listed) {
+  const pk = cfg.packages || {};
+  const changedCount = analysis.prompts.filter((p) => p.change !== 'ayni').length + analysis.removed.length + (analysis.descChanged ? 1 : 0);
+  return {
+    name: pkg.name,
+    description: str((pk[pkg.name] || {}).description),
+    version: analysis.base.headVersion || null,
+    baseVersion: analysis.base.version || null,
+    lastTag: lastTagOf(analysis.base),
+    exportedCount: pkg.prompts.length,
+    excludedCount: pkg.excluded.length,
+    changedCount,
+    blocking: packageCatalog.blocking(pkg).length,
+    proposal: { level: analysis.level, version: analysis.version, tagOnly: analysis.tagOnly, noChange: analysis.noChange, reasons: analysis.reasons },
+    pendingPush: pending.some((t) => { const p = Rules.parsePackageTag(t); return !!p && p.ad === pkg.name; }),
+    listed: listed.has(pkg.name)
+  };
+}
+
+route('GET', '/api/packages', async () => {
+  const cfg = await loadConfig();
+  const built = await publishPlan(cfg);
+  const st = await stateStore.get(root());
+  const listed = new Set((await manifests.listed()).map((l) => l.name));
+  const out = [];
+  for (const name of Array.from(built.packages.keys()).sort((a, b) => a.localeCompare(b, 'tr'))) {
+    const pkg = built.packages.get(name);
+    out.push(packageSummary(cfg, pkg, await advisor.analyze(root(), pkg, cfg), st.pendingTags, listed));
+  }
+  return { packages: out, export: cfg.export };
+});
+
+route('GET', '/api/package', async ({ q }) => {
+  const name = String(q.get('name') || '');
+  const cfg = await loadConfig();
+  const built = await publishPlan(cfg);
+  const d = await publisher.details(root(), cfg, built, name);
+  if (!d) throw httpErr(404, 'Paket bulunamadı: ' + name);
+  const listed = new Set((await manifests.listed()).map((l) => l.name));
+  const remotes = await gitService.remotes(root()).catch(() => []);
+  return {
+    ...packageSummary(cfg, d.pkg, d.analysis, d.pending, listed),
+    prompts: d.analysis.prompts,
+    removed: d.analysis.removed,
+    excluded: d.pkg.excluded.map((x) => ({ source: x.source, baslik: x.baslik, code: x.code, level: x.level, reason: x.reason })),
+    tags: d.analysis.base.tags,
+    issues: packageCatalog.blocking(d.pkg),
+    dirty: d.dirty,
+    marketplaceVersion: d.catalogVersion,
+    remote: (remotes.find((r) => r.name === 'origin') || remotes[0] || {}).name || null
+  };
+});
+
+route('POST', '/api/package/publish', async ({ body }) => publisher.publish(root(), {
+  name: String(body.name || ''), version: body.version, marketplaceVersion: body.marketplaceVersion,
+  push: !!body.push, remote: body.remote
+}));
+
 /* ---- marketplace'ler arası taşıma ---- */
 
 // K2'nin tek, belgelenmiş istisnası: kaynak etkin marketplace'tir, hedef başka bir marketplace'tir. Commit atılmaz.
@@ -714,6 +747,7 @@ route('POST', '/api/prompts/transfer', async ({ body }) => {
   const target = items.find((m) => m.name === toMp);
   if (!target) throw httpErr(404, 'Marketplace bulunamadı: ' + toMp);
   if (!target.valid) throw httpErr(400, 'Hedef marketplace geçerli bir git deposu değil: ' + toMp);
+  if (!target.hasPpConfig) throw httpErr(400, 'Hedefte Prompt Havuzu ayarı (pp.config.json) yok. Önce hedef marketplace için ayar dosyasını oluştur.', { code: 'hedefPpConfigYok' });
   const toPlugin = String(body.toPlugin || '');
   if (!toPlugin) throw httpErr(400, 'Hedef plugin gerekli');
   if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, 'Geçersiz plugin adı');
@@ -817,6 +851,27 @@ route('GET', '/api/git/diff', async ({ q }) => {
   return { diff: cap(await gitService.showCommit(root(), hash, { stat: true })) };
 });
 
+/* ---- uzak depo (yalnızca etkin marketplace; X-PP-MP korumalı) ---- */
+
+route('GET', '/api/git/remotes', async () => remoteSync.status(root()));
+
+route('POST', '/api/git/remotes', async ({ body }) => ({ ok: true, remote: await remoteSync.addRemote(root(), String(body.name || ''), body.url) }));
+
+route('PUT', '/api/git/remotes', async ({ body }) => ({ ok: true, remote: await remoteSync.setRemote(root(), String(body.name || ''), body.url) }));
+
+route('POST', '/api/git/push', async ({ body }) => {
+  const res = await remoteSync.push(root(), { remote: body.remote });
+  const s = await remoteSync.status(root());
+  return { ...res, ahead: s.ahead, behind: s.behind, pendingTags: s.pendingTags };
+});
+
+route('POST', '/api/git/fetch', async ({ body }) => {
+  const { config } = await configStore.load();
+  return remoteSync.fetch(root(), { remote: body.remote, background: !!body.background, setting: config.remoteCheck });
+});
+
+route('POST', '/api/git/pull', async ({ body }) => remoteSync.pull(root(), { remote: body.remote }));
+
 /* ---- geçmiş (yalnızca etkin marketplace; X-PP-MP korumalı) ---- */
 
 route('GET', '/api/history/versions', async ({ q }) => {
@@ -913,12 +968,29 @@ route('POST', '/api/marketplace/init', async ({ body }) => {
   };
   const verErr = Rules.checkVersion(cfg.marketplace.version);
   if (verErr) throw httpErr(400, verErr, { field: 'version' });
+  const nameErr = Rules.checkMarketplaceName(cfg.marketplace.name);
+  if (nameErr) throw httpErr(400, nameErr, { field: 'name' });
+  if (m.export !== undefined) {
+    const ex = m.export || {};
+    if (!Array.isArray(ex.durumlar) || !ex.durumlar.length) throw httpErr(400, 'En az bir durum seçilmeli', { field: 'export' });
+    cfg.export = {
+      durumlar: ex.durumlar.map((x) => String(x == null ? '' : x).trim()),
+      haricKlasorler: Array.isArray(ex.haricKlasorler) ? ex.haricKlasorler.map((x) => String(x).trim()).filter(Boolean) : cfg.export.haricKlasorler
+    };
+  }
   await saveConfig(cfg);
-  const plan = await publishPlan(cfg);
-  const packages = await marketplaceSync(cfg, plan);
-  return { ok: true, packages };
+  // plugin.json dosyalarına dokunulmaz; yalnızca marketplace.json üst alanları (ve katalog sürümü) yazılır.
+  const undo = new UndoStack();
+  await manifests.writeMarketplace(cfg, { version: cfg.marketplace.version }, undo);
+  undo.clear();
+  catalog.invalidate();
+  return { ok: true, packages: (await manifests.listed()).map((l) => l.name) };
 });
 
+// Marketplace'i güncelle: tüm paketleri dışa aktarır, marketplace.json yazar. Sürüm artırmaz, tag atmaz, push etmez.
+route('POST', '/api/marketplace/update', async () => publisher.updateAll(root()));
+
+// Kullanımdan kalktı: arayüz paket yayını için /api/package/publish kullanır. Geriye uyum için korunur.
 route('POST', '/api/marketplace/publish', async ({ body }) => {
   const cfg = await loadConfig();
   const plan = await publishPlan(cfg);
@@ -947,6 +1019,7 @@ route('POST', '/api/marketplace/publish', async ({ body }) => {
   return { ok: true, done, failed, skipped };
 });
 
+// Kullanımdan kalktı (bkz. yukarıdaki not).
 route('POST', '/api/marketplace/unpublish', async ({ body }) => {
   const { abs, rel } = safePath(body.target);
   if (!/^plugins\//.test(rel)) throw httpErr(400, 'Yalnızca plugins/ altı kaldırılabilir');

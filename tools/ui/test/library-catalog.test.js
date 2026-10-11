@@ -178,3 +178,20 @@ test('discover TTL dolunca yenilenir', async () => {
   await cat.marketplaces('/x', '');
   assert.equal(n, 2);
 });
+
+test('yayinUyari: paketUyusmuyor engelleyici olunca sayılır; durumu dışarıda kalan (durumHaric) sayılmaz', real, async () => {
+  const f = await fixture();
+  try {
+    // p.md: durum "aktif" (dışa aktarılmaz) ve paket alanı uyuşmuyor -> sayılmaz
+    assert.equal((await f.catalog.tree(f.lib, 'a')).marketplaces[0].yayinUyari, 1);
+    // durumu dışa aktarılan değere çevrilince uyuşmazlık engelleyicidir ve sayılır
+    put(path.join(f.lib, 'a'), 'prompts/ornek/p.md', '---\nbaslik: Merhaba Dünya\ndurum: kararlı\ntur: komut\npaket: baska\n---\nselam dünya\n');
+    f.catalog.invalidate();
+    const t = await f.catalog.tree(f.lib, 'a');
+    assert.equal(t.marketplaces[0].yayinUyari, 2);
+    assert.deepEqual((await f.catalog.facets(f.lib, 'a')).yayinUyariByMp, { a: 2, b: 0 });
+    // durumHaric (info) uyarı sayısına girmez: taslak yapılınca düşer
+    put(path.join(f.lib, 'a'), 'prompts/ornek/p.md', '---\nbaslik: Merhaba Dünya\ndurum: taslak\ntur: komut\npaket: baska\n---\nselam dünya\n');
+    assert.equal((await f.catalog.tree(f.lib, 'a')).marketplaces[0].yayinUyari, 1);
+  } finally { rmrf(f.d); }
+});

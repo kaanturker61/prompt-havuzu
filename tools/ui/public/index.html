@@ -290,6 +290,10 @@ details summary { cursor: pointer; }
 .res[aria-selected="true"] { background: var(--pool-tint); }
 .menu .mi:focus { background: var(--pool-tint); outline: 0; }
 .crumbs .link { font-size: inherit; }
+.ptable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ptable th, .ptable td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ptable caption { text-align: left; font-weight: 600; padding: 4px 0; }
+.pkrel { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .warnband { display: flex; align-items: flex-start; gap: 10px; max-width: 980px; margin: 0 auto 14px; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
 .warnband ul { margin: 0; padding: 0; list-style: none; flex: 1; }
 .setup-list { list-style: none; margin: 16px 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
@@ -312,7 +316,7 @@ details summary { cursor: pointer; }
   <nav class="actions" aria-label="İşlemler">
     <button class="btn primary" data-act="new-prompt" data-needs-setup>Yeni prompt</button>
     <button class="btn" data-act="import" data-needs-setup>İçe aktar</button>
-    <button class="btn" data-act="git" data-needs-setup>Git<span id="gitBadge" class="badge" hidden></span></button>
+    <button class="btn" data-act="git" data-needs-setup>Git<span id="gitBadge" class="badge" hidden></span><span id="gitDown" class="badge" hidden></span></button>
     <button class="btn" data-act="market" data-needs-setup>Marketplace<span id="mkBadge" class="badge warn" hidden></span></button>
     <button class="btn" data-act="settings">Ayarlar</button>
   </nav>
@@ -875,7 +879,7 @@ function menuItemsFor(it) {
       items.push(mk('Yolu kopyala', 'm-copy-path'));
       break;
     case 'plugin':
-      items.push(mk('Yeni prompt', 'm-new-prompt', { name: it.node.name }), mk('Açıklamayı düzenle', 'm-desc', { name: it.node.name }),
+      items.push(mk('Yeni prompt', 'm-new-prompt', { name: it.node.name }), mk('Paket sayfasını aç', 'open-package', { name: it.node.name }), mk('Açıklamayı düzenle', 'm-desc', { name: it.node.name }),
         mk('Yeniden adlandır', 'm-rename-plugin', { name: it.node.name }), mk('Sil (çöp kutusuna taşı)', 'm-delete-plugin', { name: it.node.name, danger: true }));
       break;
     case 'dir':
@@ -993,6 +997,15 @@ function curCheck() {
   return Rules.publishCheck({ meta: FM.meta(c.parsed), hasFm: c.parsed.hasFm, fmBroken: Rules.isFmBroken(computeRaw(), c.parsed.hasFm) });
 }
 
+// Durumu dışa aktarılmayan değerdeyse bilgi (engellemez).
+function exportCheck() {
+  const ex = S.info && S.info.config && S.info.config.export; const c = S.cur;
+  if (!ex || !c || !c.isPrompt || !normTur(FM.meta(c.parsed).tur)) return null;
+  const d = str(FM.meta(c.parsed).durum).trim();
+  return Rules.durumAllowed(d, ex.durumlar) ? null : { code: 'durumHaric', level: 'info', reason: Rules.MSG.durumHaric(d, ex.durumlar) };
+}
+const curNotice = () => { const k = curCheck(); return k && k.level === 'warn' ? k : exportCheck(); };
+
 function pubPill() {
   const c = S.cur; const m = FM.meta(c.parsed); const tur = normTur(m.tur);
   const chk = curCheck();
@@ -1010,6 +1023,8 @@ function editPaneHtml() {
   const tur = normTur(m.tur);
   const shownBody = c.parsed.body.slice(c.lead.length);
   const chk = curCheck();
+  const nt = curNotice();
+  const pkgCl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
   const pubOpen = ls.get('pp.pubOpen', false) || !!tur || !!(chk && chk.level === 'warn');
   const rawTur = str(m.tur).trim();
   const durumVal = fold(str(m.durum));
@@ -1035,7 +1050,7 @@ function editPaneHtml() {
   </div>
   <details class="pub" id="pubBox" ${pubOpen ? 'open' : ''}>
     <summary><b>Claude Code yayın ayarları</b><span id="pubPill">${pubPill()}</span></summary>
-    <div id="pubWarn" class="issue warn" role="status" aria-live="polite" ${chk && chk.level === 'warn' ? '' : 'hidden'}>${chk && chk.level === 'warn' ? esc(chk.reason) : ''}</div>
+    <div id="pubWarn" class="issue ${nt && nt.level === 'warn' ? 'warn' : 'info'}" role="status" aria-live="polite" ${nt ? '' : 'hidden'}>${nt ? esc(nt.reason) : ''}</div>
     <div class="meta">
       <label for="pTur">Tür</label>
       <select id="pTur" data-f="tur">
@@ -1045,14 +1060,14 @@ function editPaneHtml() {
         <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>Ajan (subagent)</option>
         <option value="skill" ${tur === 'skill' ? 'selected' : ''}>Skill</option>
       </select>
-      <label for="pPaket">Paket</label><div><input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(pluginOfPath(c.path) || mk.plugin)}" aria-describedby="paketHint"><div id="paketHint" class="issue warn" role="status" hidden></div></div>
+      <label for="pPaket">Paket</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">Paket: ${esc(pkgCl.paket)} (klasörden)</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(mk.plugin)}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
       <label for="pAd">Ad</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
       <label for="pAcik">Açıklama</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?">
       <label for="pArg">Argüman ipucu</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="[dosya yolu]">
       <label for="pArac">İzinli araçlar</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
       <label for="pModel">Model</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
     </div>
-    <div class="pubfoot"><button type="button" class="btn" data-act="publish-now" ${tur ? '' : 'disabled'}>Kaydet ve yayınla</button><span class="hint" id="pubUsage">${usage}</span></div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">Paket sayfasını aç</button><span class="hint" id="pubUsage">${usage}</span></div>
   </details>
   <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="Prompt metni" placeholder="Prompt metnini buraya yaz. {{degisken}} biçiminde yer tutucular kullanabilirsin.">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
@@ -1118,6 +1133,7 @@ function renderMain() {
   if (!setupOk()) { renderPick(); return; }
   renderMainInner();
   paintWarnBand();
+  paintRemoteBand();
 }
 
 // mp › plugin › dosya (marketplace adı ağaçta o düğüme götürür).
@@ -1190,7 +1206,6 @@ function setField(key, value) {
   updateDirty();
   if (key === 'tur') {
     c.turClearedExplicitly = !str(value).trim();
-    const pb = $('#pubBox button[data-act="publish-now"]'); if (pb) pb.disabled = !normTur(value);
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
   if (key === 'paket') paintPaketHint();
@@ -1234,7 +1249,7 @@ function paintPaketHint() {
   const alan = str(FM.meta(c.parsed).paket).trim();
   const bad = cl.kind === 'paket' && !!alan && FM.slug(alan) !== cl.paket;
   h.hidden = !bad;
-  h.innerHTML = bad ? esc(Rules.MSG.paketUyusmuyorBilgi(cl.klasor, alan)) + ' <button type="button" class="btn sm" data-act="paket-esitle">Alanı klasöre eşitle</button>' : '';
+  h.innerHTML = bad ? esc(Rules.MSG.paketUyusmuyor(cl.klasor, alan)) + ' <button type="button" class="btn sm" data-act="paket-esitle">Alanı klasöre eşitle</button> <button type="button" class="btn sm" data-act="m-move" data-path="' + esc(c.path) + '">Dosyayı taşı</button>' : '';
 }
 
 function refreshPubWarn() {
@@ -1242,8 +1257,8 @@ function refreshPubWarn() {
   const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill();
   const w = $('#pubWarn');
   if (w) {
-    const warn = !!(chk && chk.level === 'warn');
-    w.hidden = !warn; w.textContent = warn ? chk.reason : '';
+    const nt = curNotice();
+    w.hidden = !nt; w.textContent = nt ? nt.reason : ''; w.className = 'issue ' + (nt && nt.level === 'warn' ? 'warn' : 'info');
   }
 }
 
@@ -1808,18 +1823,62 @@ async function openNewMarketplace() {
   openModal({
     title: 'Yeni marketplace',
     html: `<form class="stack" id="newMkForm" novalidate>
+      <fieldset><legend>Nasıl eklensin?</legend><div class="inline"><label class="inline"><input type="radio" name="nmMode" value="bos" checked> Boş oluştur</label><label class="inline"><input type="radio" name="nmMode" value="klon"> Uzak depodan klonla</label></div></fieldset>
+      <div id="nmCloneBox" class="stack" hidden>
+        <label>GitHub veya GitLab linki<input id="nmUrl" autocomplete="off" placeholder="https://github.com/kullanıcı/depo" aria-describedby="nmUrlHint"></label>
+        <p class="hint" id="nmUrlHint" style="margin:0">Kimlik bilgisi penceresi açılabilir. Klonlama birkaç dakika sürebilir.</p>
+        <label>Klasör adı<input id="nmCloneName" autocomplete="off"></label>
+      </div>
+      <div id="nmNewBox" class="stack">
       <label>Ad<input id="nmName" autocomplete="off" aria-describedby="nmSlug nmErr" placeholder="Örn. ornek-promptlar" autofocus></label>
       <p class="hint" id="nmSlug" style="margin:0"></p>
       <label>Açıklama<input id="nmDesc" autocomplete="off"></label>
       <label>Sahip<input id="nmOwner" autocomplete="off" placeholder="Boşsa sistem kullanıcısı kullanılır"></label>
+      </div>
       <p class="issue error" id="nmErr" role="alert" style="margin:0" hidden></p>
       <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
     onMount: (b) => {
       $('#nmName', b).addEventListener('input', (e) => { $('#nmSlug', b).textContent = hasWord(e.target.value) ? 'Klasör adı: ' + FM.slug(e.target.value) : ''; });
+      const mode = () => $$('input[name="nmMode"]', b).find((x) => x.checked).value;
+      $$('input[name="nmMode"]', b).forEach((x) => x.addEventListener('change', () => {
+        const k = mode() === 'klon';
+        $('#nmCloneBox', b).hidden = !k; $('#nmNewBox', b).hidden = k;
+        $('#newMkForm button.primary', b).textContent = k ? 'Klonla' : 'Oluştur';
+        (k ? $('#nmUrl', b) : $('#nmName', b)).focus();
+      }));
+      $('#nmUrl', b).addEventListener('input', (e) => {
+        const n = Rules.normalizeRepoUrl(e.target.value);
+        if (!n.error && !$('#nmCloneName', b).dataset.touched) $('#nmCloneName', b).value = n.slugName;
+      });
+      $('#nmCloneName', b).addEventListener('input', (e) => { e.target.dataset.touched = '1'; });
       $('#newMkForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = $('#nmName', b).value.trim();
         showFieldErr('nmErr', '');
+        if (mode() === 'klon') {
+          const n = Rules.normalizeRepoUrl($('#nmUrl', b).value);
+          if (n.error) { showFieldErr('nmErr', n.error); $('#nmUrl', b).focus(); return; }
+          const cname = $('#nmCloneName', b).value.trim();
+          if (!(await confirmDiscard())) return;
+          const btn = $('#newMkForm button.primary', b);
+          btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Klonlanıyor…';
+          try {
+            const r = await api('POST', '/api/marketplaces/clone', { url: n.url, name: cname || undefined, activate: true });
+            closeModal();
+            const made = r.marketplace && r.marketplace.name;
+            adoptInfo(await get('/api/info'));
+            await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
+            if (made) { S.mpOpen.add(made); saveMpOpen(); S.sel = { mp: made, key: nodeKey(made, '') }; S.focusKey = nodeKey(made, ''); ensureDefaultExp(made); }
+            renderFilters(); renderList(); renderMain();
+            if (r.warnings && r.warnings.length) cloneResultModal(r); else toast('Marketplace klonlandı');
+            backgroundRemoteCheck();
+          } catch (err) {
+            btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = 'Klonla';
+            showFieldErr('nmErr', err.message + (err.data && err.data.detail ? ' (' + err.data.detail + ')' : ''));
+            (err.status === 409 ? $('#nmCloneName', b) : $('#nmUrl', b)).focus();
+          }
+          return;
+        }
+        const name = $('#nmName', b).value.trim();
         if (!hasWord(name)) { showFieldErr('nmErr', 'Bir ad gir'); $('#nmName', b).focus(); return; }
         if (!(await confirmDiscard())) return;
         try {
@@ -1920,7 +1979,6 @@ function openNewPrompt(o) {
         FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = TEMPLATES[f.get('tpl')] || TEMPLATES.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
-        FM.set(p, 'paket', FM.slug(plugin)); // yayın paketi klasörle aynı olsun
         p.body = '\n' + t.body;
         closeModal();
         if (activeName() !== m.name) { toast('Etkin marketplace değişti, prompt oluşturulmadı', 'error'); return; }
@@ -2147,11 +2205,12 @@ async function openGit(tab) {
   openModal({ title: gitTitle(), wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
   await loadGit();
   if (tab === 'log') return paintGitLog();
+  if (tab === 'remote') return paintGitRemote();
   paintGit();
 }
 
 function gitTabs(on) {
-  return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">Değişiklikler${S.git && S.git.isRepo ? ' (' + S.git.files.length + ')' : ''}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">Geçmiş</button></div><div style="height:14px"></div>`;
+  return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">Değişiklikler${S.git && S.git.isRepo ? ' (' + S.git.files.length + ')' : ''}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">Geçmiş</button><button class="tab ${on === 'remote' ? 'on' : ''}" data-act="git-tab" data-tab="remote">Uzak depo</button></div><div style="height:14px"></div>`;
 }
 
 function paintGit() {
@@ -2269,66 +2328,91 @@ async function gitCommit() {
 /* -------------------------------------------------------------- marketplace */
 const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">Kopyala</button></div>`;
 
+const DURUM_OPTS = [['kararlı', 'Kararlı'], ['taslak', 'Taslak'], ['arşiv', 'Arşiv'], ['', 'Durumu boş']];
+
 function mkListHtml(st) {
   const skipped = st.skipped || [];
-  if (!st.items.length && !st.orphans.length && !skipped.length) {
-    return '<div class="empty" style="border:1px solid var(--line2);border-radius:6px">Henüz yayınlanacak prompt yok. Bir promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç (komut, ajan veya skill).</div>'
-      + (st.unpublishedCount > 0 ? `<p class="hint">${st.unpublishedCount} prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>` : '');
-  }
-  const stPill = (s) => s === 'guncel' ? '<span class="pill ok">Yayında, güncel</span>' : s === 'eski' ? '<span class="pill warn">Kaynak değişti</span>' : '<span class="pill warn">Yayınlanmadı</span>';
+  const stPill = (s) => s === 'guncel' ? '<span class="pill ok">Çıktı güncel</span>' : s === 'eski' ? '<span class="pill warn">Kaynak değişti</span>' : '<span class="pill warn">Çıktı yok</span>';
   let h = '';
+  if (!st.items.length && !st.orphans.length && !skipped.length) {
+    h += '<div class="empty" style="border:1px solid var(--line2);border-radius:6px">Henüz dışa aktarılacak prompt yok. Bir promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç (komut, ajan veya skill).</div>';
+  }
   if (skipped.length) {
-    h += `<h3>Yayınlanmayacak promptlar (${skipped.length})</h3><div class="mklist">${skipped.map((x) => `<div class="mkrow"><div>
+    h += `<h3>Yayını engelleyen promptlar (${skipped.length})</h3><div class="mklist">${skipped.map((x) => `<div class="mkrow"><div>
       <button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik)}</button>
       <div class="hint mono">${esc(x.source)}</div>
       <div class="issue warn">${esc(x.reason)}</div></div><div></div><div></div></div>`).join('')}</div>`;
   }
-  h += '<div class="mklist">';
-  h += st.items.map((i) => `<div class="mkrow"><div>
+  if (st.items.length) {
+    h += '<div class="mklist">' + st.items.map((i) => `<div class="mkrow"><div>
       <button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.baslik)}</button> <span class="pill">${esc(i.tur)}</span> <span class="pill">${esc(i.paket)}</span>
       <div class="hint mono">${esc(i.target)}</div>
       ${i.issues.map((x) => `<div class="issue ${x.level}">${esc(x.msg)}</div>`).join('')}</div>
-      <div>${stPill(i.state)}</div>
-      <div class="mkbtns">${i.state !== 'guncel' && !i.issues.some((x) => x.level === 'error') ? `<button class="btn sm" data-act="mk-publish" data-path="${esc(i.source)}">${i.state === 'yok' ? 'Yayınla' : 'Güncelle'}</button>` : ''}${i.state !== 'yok' ? `<button class="btn sm ghost" data-act="mk-unpublish" data-target="${esc(i.target)}">Kaldır</button>` : ''}</div></div>`).join('');
-  h += '</div>';
+      <div>${stPill(i.state)}</div><div></div></div>`).join('') + '</div>';
+  }
   if (st.unpublishedCount > 0) h += `<p class="hint">${st.unpublishedCount} prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>`;
   if (st.orphans.length) {
-    h += `<h3>Kaynağı kalmayan dosyalar</h3><p class="hint">Bu dosyaların havuzda karşılığı yok: kaynak silinmiş, taşınmış ya da adı değişmiş olabilir. Kaldırınca çöp kutusuna taşınır.</p><div class="mklist">${st.orphans.map((o) => `<div class="mkrow"><div><div class="mono">${esc(o.target)}</div>${o.likelySource ? `<div class="issue warn">Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="${esc(o.likelySource.source)}">${esc((skipped.find((x) => x.source === o.likelySource.source) || {}).baslik || o.likelySource.source)}</button>: ${esc(o.likelySource.reason)}</div>` : ''}</div><div></div><div class="mkbtns"><button class="btn sm" data-act="mk-unpublish" data-target="${esc(o.target)}">Kaldır</button></div></div>`).join('')}</div>`;
+    h += `<h3>Kaynağı kalmayan dosyalar</h3><p class="hint">Bu dosyaların havuzda karşılığı yok: kaynak silinmiş, taşınmış ya da adı değişmiş olabilir. "Marketplace'i güncelle" bunları çöp kutusuna taşır.</p><div class="mklist">${st.orphans.map((o) => `<div class="mkrow"><div><div class="mono">${esc(o.target)}</div>${o.likelySource ? `<div class="issue warn">Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="${esc(o.likelySource.source)}">${esc((skipped.find((x) => x.source === o.likelySource.source) || {}).baslik || o.likelySource.source)}</button>: ${esc(o.likelySource.reason)}</div>` : ''}</div><div></div><div></div></div>`).join('')}</div>`;
   }
   return h;
 }
 
 function mkCmdsHtml(st) {
   const c = st.commands;
-  return `<p class="hint">Bir kez, bilgisayarında (terminalde):</p>${cmdLine(c.validate)}${cmdLine(c.add)}
-    <p class="hint" style="margin-top:12px">Sonra her projede istediğin paketi kur:</p>${c.install.map((i) => cmdLine(i.cmd)).join('')}
-    <p class="hint" style="margin-top:12px">Havuzu değiştirip yeniden yayınladıktan sonra projelerde güncelle:</p>${cmdLine(c.update)}
+  const alt = (c.alternatives || []).length ? `<p class="hint">Alternatif (tam URL):</p>${c.alternatives.map(cmdLine).join('')}` : '';
+  const pin = c.pinHint ? `<p class="hint">Belirli bir dal ya da etikete sabitlemek için sonuna <code>#ref</code> ekle: <code>${esc(c.pinHint)}</code></p>` : '';
+  return `<p class="hint">Bir kez, bilgisayarında (terminalde):</p>${cmdLine(c.validate)}${cmdLine(c.add)}${alt}${pin}
+    ${c.addNote ? `<p class="hint">${esc(c.addNote)}</p>` : ''}
+    <p class="hint" style="margin-top:12px">Sonra her projede istediğin paketi kur (yalnızca yayınlanmış paketler):</p>${c.install.length ? c.install.map((i) => cmdLine(i.cmd)).join('') : '<p class="hint">Henüz yayınlanmış paket yok. Paket sayfasından Yayınla.</p>'}
     <p class="hint" style="margin-top:12px">Claude Code oturumunda aynı işler <code>/plugin marketplace add …</code> ve <code>/plugin install …</code> ile de yapılır. Kurulan komutlar <code>/paket:ad</code> biçiminde çağrılır.</p>`;
+}
+
+function mkPackagesHtml(list) {
+  if (!list || !list.length) return '<p class="hint">Henüz paket yok. Ağaçta "Yeni plugin" ile bir klasör aç ve içine prompt koy.</p>';
+  return `<div class="mklist">${list.map((p) => `<div class="mkrow"><div><b>${esc(p.name)}</b> <span class="pill">${p.version ? 'v' + esc(p.version) : 'yayınlanmadı'}</span>
+      ${p.lastTag ? `<span class="hint">son etiket: ${esc(p.lastTag.name)}</span>` : ''}
+      <div class="hint">${p.changedCount} değişiklik${p.blocking ? ` · <span class="issue error">${p.blocking} engelleyici sorun</span>` : ''}${p.pendingPush ? ' · <span class="pill warn">Push bekliyor</span>' : ''}</div></div><div></div>
+      <div class="mkbtns"><button class="btn sm" data-act="open-package" data-name="${esc(p.name)}" data-from="panel">Aç</button></div></div>`).join('')}</div>`;
 }
 
 function marketHtml(st) {
   const c = st.config;
+  const mpn = mpByName(activeName());
+  const noCfg = mpn && mpn.hasPpConfig === false;
   const cfgIssues = (st.configIssues || []).map((x) => `<div class="issue ${esc(x.level)}" role="status">${esc(x.message)}</div>`).join('');
-  return `<h3>Ayarlar</h3>${cfgIssues}
+  const ex = st.export || { durumlar: ['kararlı', ''] };
+  return `${noCfg ? `<div class="issue warn" role="status">Bu marketplace'te Prompt Havuzu ayarı (pp.config.json) yok. <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">Ayar dosyası oluştur</button></div>` : ''}
+    <h3>Ayarlar</h3>${cfgIssues}
     <form class="grid2" id="mkForm">
       <label>Marketplace adı<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
       <label>Sahip<input name="owner" value="${esc(c.owner)}" placeholder="Adın" autocomplete="off"></label>
-      <label>Varsayılan paket<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
-      <label>Sürüm<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr">
+      <label>Klasörsüz promptlar için paket<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
+      <label>Katalog sürümü<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
+        <div id="mkVerHint" class="hint">Her paket yayınında bir yama artar; yayın ekranında değiştirebilirsin.</div>
         <div id="mkVerErr" class="issue error" role="alert" hidden></div></label>
       <label class="span2">Açıklama<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
+      <fieldset class="span2" aria-describedby="mkExpErr"><legend>Dışa aktarılacak durumlar</legend>
+        <div class="inline">${DURUM_OPTS.map(([v, t]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${t}</label>`).join(' ')}</div>
+        <div id="mkExpErr" class="issue error" role="alert" hidden></div></fieldset>
       <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">Marketplace dosyalarını yaz</button>
         <span class="hint" id="mkState">${st.marketplaceExists ? 'marketplace.json mevcut: ' + esc(st.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı'}</span></div>
     </form>
-    <h3>Yayınlanacak promptlar</h3>
-    <div class="inline" style="margin-bottom:8px"><span class="hint">Promptun türünü, promptu açıp "Claude Code yayın ayarları" bölümünden seçersin.</span><span class="grow"></span><button class="btn" data-act="mk-publish-all">Tümünü yayınla</button></div>
+    <h3>Paketler</h3>
+    <div id="mkPkgs"><p class="hint">Yükleniyor…</p></div>
+    <div class="inline" style="margin:12px 0 8px"><span class="hint">Yayınlanan sürüm numarası paketin Yayınla düğmesiyle artar. Push edilirse yeni kurulumlar bu içeriği mevcut sürüm numarasıyla alır; paketi Yayınla önerilir. Bu işlem katalog sürümünü artırmaz.</span><span class="grow"></span><button class="btn" data-act="mk-update">Marketplace'i güncelle</button></div>
+    <h3>Dışa aktarma durumu</h3>
     <div id="mkList">${mkListHtml(st)}</div>
     <h3>Projelerde kullanım</h3><div id="mkCmds">${mkCmdsHtml(st)}</div>`;
 }
 
+async function loadMkPackages() {
+  const box = $('#mkPkgs'); if (!box) return;
+  try { const r = await get('/api/packages'); S.pkgList = r.packages; if ($('#mkPkgs')) $('#mkPkgs').innerHTML = mkPackagesHtml(r.packages); } catch (e) { if ($('#mkPkgs')) $('#mkPkgs').innerHTML = `<p class="issue error">${esc(e.message)}</p>`; }
+}
+
 async function openMarket() {
   openModal({ title: 'Marketplace: ' + activeName(), wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
-  try { S.mk = await get('/api/marketplace/status'); $('#mBody').innerHTML = marketHtml(S.mk); } catch (e) { closeModal(); fail(e); }
+  try { S.mk = await get('/api/marketplace/status'); $('#mBody').innerHTML = marketHtml(S.mk); loadMkPackages(); } catch (e) { closeModal(); fail(e); }
 }
 
 async function mkReload() {
@@ -2337,42 +2421,374 @@ async function mkReload() {
     const l = $('#mkList'); if (l) l.innerHTML = mkListHtml(S.mk);
     const c = $('#mkCmds'); if (c) c.innerHTML = mkCmdsHtml(S.mk);
     const s = $('#mkState'); if (s) s.textContent = S.mk.marketplaceExists ? 'marketplace.json mevcut: ' + (S.mk.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı';
+    loadMkPackages();
   } catch (e) { fail(e); }
   afterWrite();
 }
 
-function mkResultModal(r) {
-  const list = (arr) => `<ul class="reslist">${arr.map((x) => `<li><span class="mono">${esc(x.source)}</span><div class="issue ${x.code === 'icerikBos' || x.code === 'hedefCakisiyor' ? 'error' : 'warn'}">${esc(x.reason)}</div></li>`).join('')}</ul>`;
-  const sk = r.skipped || [];
-  openModal({
-    title: 'Yayın sonucu', wide: true,
-    html: `<p>${r.done.length} dosya yayınlandı.</p>
-      ${r.failed.length ? `<h3>Yayınlanamayanlar (${r.failed.length})</h3>${list(r.failed)}` : ''}
-      ${sk.length ? `<h3>Atlananlar (${sk.length})</h3>${list(sk)}` : ''}
-      <div class="foot"><button class="btn primary" data-act="close" autofocus>Tamam</button></div>`,
-    onClose: () => { openMarket().then(() => { const b = $('#mBody [data-act="mk-publish-all"]'); if (b) b.focus(); }); }
-  });
+// "Marketplace'i güncelle": tüm paketleri dışa aktarır, katalog sürümünü artırmaz, tag atmaz, push etmez.
+async function mkUpdate() {
+  const st = S.mk; if (!st) return;
+  const writes = st.items.filter((i) => i.state !== 'guncel').length;
+  const removes = st.orphans.length;
+  const txt = `${writes} dosya yazılacak, ${removes} dosya kaldırılacak (çöp kutusuna). Katalog sürümü artmaz, etiket atılmaz, push edilmez.`
+    + (removes ? ' Kaldırılacaklar: ' + st.orphans.slice(0, 6).map((o) => o.target).join(', ') + (removes > 6 ? ' …' : '') : '');
+  const a = await askChoice({ title: "Marketplace'i güncelle", text: txt, choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Güncelle', kind: 'primary' }] });
+  if (a !== 'yes') { openMarket(); return; }
+  try {
+    const r = await api('POST', '/api/marketplace/update', {});
+    const sk = (r.skippedPackages || []).length ? ' Engelleyici sorunu olan paketler atlandı: ' + r.skippedPackages.map((x) => x.name).join(', ') + '.' : '';
+    toast((r.commit ? 'Marketplace güncellendi' : 'Değişiklik yok') + sk, sk ? 'error' : 'ok', sk ? 7000 : 3000);
+  } catch (e) { fail(e); }
+  await openMarket();
+  const b = $('#mBody [data-act="mk-update"]'); if (b) b.focus();
+  afterWrite();
 }
 
-async function mkPublish(body, okMsg) {
+/* ------------------------------------------------------------ paket sayfası */
+const CHANGE_LABEL = { yeni: 'Yeni', degisti: 'Değişti', ayni: 'Değişmedi' };
+const LEVEL_NAME = { buyuk: 'Büyük', kucuk: 'Küçük', yama: 'Yama' };
+
+async function openPackage(name, from) {
+  S.pkReturn = from || 'tree';
+  openModal({ title: 'Paket: ' + name, wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true, onClose: pkClosed });
+  S.pk = { name, msg: null };
+  await pkLoad();
+}
+
+function pkClosed() {
+  const name = S.pk && S.pk.name; const from = S.pkReturn;
+  S.pk = null;
+  // Odak yalnızca kullanıcı pencereyi kapattıysa (başka bir yere gidilmediyse) giriş noktasına döner.
+  setTimeout(() => {
+    const ae = document.activeElement;
+    if (ae && ae !== document.body) return;
+    if (from === 'panel') { const b = $('.actions [data-act="market"]'); if (b) b.focus(); return; }
+    const it = Array.from(S.modelMap.values()).find((x) => x.kind === 'plugin' && x.mp === activeName() && FM.slug(x.node.name) === name);
+    if (it) focusKey(it.key);
+  }, 0);
+}
+
+async function pkLoad() {
+  const pk = S.pk; if (!pk) return;
   try {
-    const r = await api('POST', '/api/marketplace/publish', body);
-    const problem = r.failed.length || (r.skipped && r.skipped.length);
-    if (!problem) toast(r.done.length ? r.done.length + ' dosya yayınlandı' : (okMsg || 'Yayınlanacak yeni bir şey yok'));
-    await mkReload();
-    if (problem) mkResultModal(r);
-    const c = S.cur; if (c && c.tab === 'edit') { const r2 = await get('/api/file?' + qs({ path: c.path })); c.publish = r2.publish; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); }
+    const d = await get('/api/package?' + qs({ name: pk.name }));
+    if (S.pk !== pk) return;
+    pk.d = d;
+    const b = $('#mBody'); if (!b) return;
+    b.innerHTML = pkHtml(d);
+    const h = $('#pkHead'); if (h && !pk.noFocus) h.focus();
+    pk.noFocus = true;
+    pkValidate();
+  } catch (e) { closeModal(); fail(e); }
+}
+
+// Seçilebilir sürüm seçenekleri: [{ id, label, value }]
+function pkOptions(d) {
+  const p = d.proposal; const base = d.baseVersion;
+  if (!base) return [{ id: 'ilk', label: 'İlk sürüm ' + Rules.DEFAULT_VERSION + ' (önerilen)', value: Rules.DEFAULT_VERSION }];
+  if (p.tagOnly) return [{ id: 'etiket', label: 'Mevcut ' + base + ' sürümünü etiketle (önerilen)', value: base }];
+  return Rules.VERSION_LEVELS.map((lv) => ({ id: lv, label: LEVEL_NAME[lv] + ' ' + Rules.bumpVersion(base, lv) + (p.level === lv ? ' (önerilen)' : ''), value: Rules.bumpVersion(base, lv) }));
+}
+
+function pkHtml(d) {
+  const pk = S.pk;
+  const opts = pkOptions(d);
+  const sel = d.proposal.tagOnly || !d.baseVersion ? opts[0].id : (d.proposal.level || 'yama');
+  const dirty = d.dirty || [];
+  const blockers = d.issues || [];
+  const hasRemote = !!d.remote;
+  const msg = pk.msg ? `<div class="issue ${pk.msg.kind}" role="alert">${esc(pk.msg.text)}${pk.msg.retry ? ' <button class="btn sm" data-act="pk-push">Tekrar dene</button>' : ''}</div>` : '';
+  const rows = d.prompts.map((p) => `<tr><td><button class="link" data-act="open-close" data-path="${esc(p.source)}">${esc(p.baslik || p.source)}</button></td><td>${esc(p.tur)}</td><td><code>/${esc(d.name)}:${esc(p.ad)}</code></td>
+      <td>${esc(p.oldVersiyon || '')}${p.oldVersiyon || p.versiyon ? ' → ' : ''}${esc(p.versiyon || '—')}${p.tagged === false ? ' <span class="pill warn">Etiketsiz</span>' : ''}</td>
+      <td><span class="pill ${p.change === 'ayni' ? '' : 'warn'}">${CHANGE_LABEL[p.change]}</span></td><td>${p.level ? esc(LEVEL_NAME[p.level]) : '—'}</td></tr>`
+    + p.issues.filter((i) => i.code === 'surumArtirilmamis').map((i) => `<tr><td colspan="6" class="issue warn">${esc(i.msg)}</td></tr>`).join('')).join('')
+    + d.removed.map((r) => `<tr><td colspan="3" class="mono">${esc(r.target)}</td><td>—</td><td><span class="pill bad">Kaldırıldı</span></td><td>${esc(LEVEL_NAME[r.level])}</td></tr>`).join('');
+  return `<h2 id="pkHead" tabindex="-1" style="margin:0 0 6px">Paket: ${esc(d.name)}</h2>
+    <p class="hint" style="margin:0 0 8px">Etkin marketplace: <b>${esc(activeName())}</b> · Sürüm: ${d.version ? 'v' + esc(d.version) : 'yayınlanmadı'} · Son etiket: ${d.lastTag ? esc(d.lastTag.name) + ' (' + esc(fmtDate(d.lastTag.date)) + ')' : 'yok'}
+      ${d.pendingPush ? ' <span class="pill warn">Push bekliyor</span> <button class="btn sm" data-act="pk-push">Push et</button>' : ''}</p>
+    ${msg}
+    <div class="inline" style="margin-bottom:10px"><label class="grow">Açıklama<input id="pkDesc" value="${esc(d.description)}" autocomplete="off"></label><button class="btn sm" data-act="pk-desc">Kaydet</button></div>
+    ${blockers.length ? `<div class="issue error" role="alert"><b>Yayını engelleyen sorunlar (${blockers.length})</b><ul>${blockers.map((i) => `<li>${i.source ? `<button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.source)}</button>: ` : ''}${esc(i.msg)}${i.code === 'paketUyusmuyor' && i.source ? ` <button class="btn sm" data-act="pk-esitle" data-path="${esc(i.source)}">Alanı klasöre eşitle</button>` : ''}</li>`).join('')}</ul></div>` : ''}
+    <table class="ptable"><caption>Paketteki promptlar</caption><thead><tr><th scope="col">Prompt</th><th scope="col">Tür</th><th scope="col">Ad</th><th scope="col">Versiyon</th><th scope="col">Değişim</th><th scope="col">Seviye</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Pakette dışa aktarılacak prompt yok.</td></tr>'}</tbody></table>
+    <details style="margin:10px 0"><summary>Dışa aktarılmayanlar (${d.excluded.length})</summary><ul>${d.excluded.map((x) => `<li><button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik || x.source)}</button> <span class="hint">${esc(x.reason)}</span></li>`).join('') || '<li class="hint">Yok</li>'}</ul></details>
+    <fieldset class="pkrel"><legend>Yeni sürüm</legend>
+      <div class="stack">
+        ${opts.map((o) => `<label class="inline"><input type="radio" name="pkLevel" value="${esc(o.value)}" data-id="${esc(o.id)}" ${o.id === sel ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}
+        <label class="inline"><input type="radio" name="pkLevel" value="" data-id="ozel" ${!opts.some((o) => o.id === sel) ? 'checked' : ''}> Özel <input id="pkCustom" placeholder="1.2.3" autocomplete="off" aria-describedby="pkVerErr" style="width:110px"></label>
+        <div id="pkVerErr" class="issue error" role="alert" hidden></div>
+        <div class="hint">${esc(d.proposal.reasons.join(' · '))}</div>
+        <label>Katalog sürümü <input id="pkCat" value="${esc(d.marketplaceVersion.proposal || d.marketplaceVersion.current)}" autocomplete="off" aria-describedby="pkCatErr" style="width:110px"></label>
+        <div class="hint">Mevcut: ${esc(d.marketplaceVersion.current)}. "Marketplace'i güncelle" bunu artırmaz.</div>
+        <div id="pkCatErr" class="issue error" role="alert" hidden></div>
+        <label class="inline"><input type="checkbox" id="pkPush" ${hasRemote ? 'checked' : 'disabled'} aria-describedby="pkPushWhy"> Push et${hasRemote ? ' (' + esc(d.remote) + ')' : ''}</label>
+        <div class="hint" id="pkPushWhy">${hasRemote ? '' : 'Uzak depo yok, yerelde yayınlanacak.'}</div>
+        ${dirty.length ? `<div class="issue warn" role="alert">Önce kaydet (commit): ${dirty.slice(0, 5).map(esc).join(', ')}${dirty.length > 5 ? ' …' : ''} <button class="btn sm" data-act="pk-git">Git panelini aç</button></div>` : ''}
+        <div class="foot-left"><button class="btn primary" id="pkGo" data-act="pk-publish" aria-describedby="pkWhy">${d.proposal.tagOnly ? esc(d.baseVersion) + ' sürümünü etiketle' : 'Yayınla'}</button><span class="hint" id="pkWhy"></span></div>
+        <div id="pkConfirm" aria-live="assertive"></div>
+        <div id="pkProg" aria-live="polite" class="hint"></div>
+      </div></fieldset>`;
+}
+
+// Seçili sürüm: { value, custom }
+function pkChosen() {
+  const r = $$('input[name="pkLevel"]').find((x) => x.checked);
+  if (!r) return { value: '', custom: false };
+  return r.dataset.id === 'ozel' ? { value: ($('#pkCustom').value || '').trim(), custom: true } : { value: r.value, custom: false };
+}
+
+// Anında doğrulama; Yayınla düğmesini ve nedenini günceller. Geçerliyse true.
+function pkValidate() {
+  const pk = S.pk; const d = pk && pk.d; if (!d || !$('#pkGo')) return false;
+  const ch = pkChosen();
+  const why = [];
+  let verErr = '';
+  if (ch.custom || d.baseVersion) {
+    verErr = Rules.checkVersion(ch.value) || '';
+    if (!verErr && d.baseVersion) {
+      const cmp = Rules.compareVersions(ch.value, d.baseVersion);
+      if (cmp < 0 || (cmp === 0 && !d.proposal.tagOnly)) verErr = 'Sürüm son yayından (' + d.baseVersion + ') büyük olmalı';
+    }
+    if (!verErr && d.tags.some((t) => t.version === ch.value)) verErr = 'Bu sürümün etiketi zaten var: paket/' + d.name + '/v' + ch.value;
+  }
+  const cat = ($('#pkCat').value || '').trim();
+  let catErr = Rules.checkVersion(cat) || '';
+  if (!catErr && Rules.compareVersions(cat, Rules.coerceVersion(d.marketplaceVersion.current).version || '0.0.0') < 0) catErr = 'Katalog sürümü mevcut sürümden (' + d.marketplaceVersion.current + ') küçük olamaz';
+  showFieldErr('pkVerErr', verErr); showFieldErr('pkCatErr', catErr);
+  const cu = $('#pkCustom'); if (cu) { if (verErr && ch.custom) cu.setAttribute('aria-invalid', 'true'); else cu.removeAttribute('aria-invalid'); }
+  if ((d.issues || []).length) why.push('Önce engelleyici sorunları gider.');
+  if ((d.dirty || []).length) why.push('Önce kaydedilmemiş dosyaları commit et.');
+  if (!d.exportedCount) why.push('Pakette yayınlanacak prompt yok.');
+  if (d.proposal.noChange && !ch.custom) why.push('Son yayından beri değişiklik yok.');
+  if (verErr) why.push(verErr);
+  if (catErr) why.push(catErr);
+  $('#pkGo').disabled = why.length > 0;
+  $('#pkWhy').textContent = why.join(' ');
+  return why.length === 0;
+}
+
+// Yayınla: onay bilgisi sayfa içinde gösterilir (pencere değişmez).
+function pkAsk() {
+  const pk = S.pk; const d = pk && pk.d; if (!d || !pkValidate()) return;
+  const ch = pkChosen(); const cat = $('#pkCat').value.trim(); const push = !!$('#pkPush').checked && !$('#pkPush').disabled;
+  const w = d.prompts.filter((p) => p.change !== 'ayni').length; const rm = d.removed.length;
+  const text = `${d.name} ${ch.value} olarak yayınlanacak: ${w} dosya yazılacak, ${rm} dosya kaldırılacak, katalog sürümü ${cat}, commit + paket/${d.name}/v${ch.value} etiketi${push ? ', ' + d.remote + "'e push" : ''}.`;
+  pk.pending = { version: ch.value, marketplaceVersion: cat, push };
+  $('#pkConfirm').innerHTML = `<div class="issue warn" role="alert">${esc(text)}</div><div class="foot-left"><button class="btn primary" data-act="pk-confirm" id="pkOk">Onayla ve yayınla</button><button class="btn" data-act="pk-cancel">Vazgeç</button></div>`;
+  $('#pkOk').focus();
+}
+
+async function pkPublish() {
+  const pk = S.pk; const d = pk && pk.d; if (!d || !pk.pending) return;
+  const body = { name: d.name, ...pk.pending };
+  $('#pkConfirm').innerHTML = '';
+  const go = $('#pkGo'); if (go) go.disabled = true;
+  const steps = ['Doğrulanıyor ve çıktı yazılıyor…', 'Commit ve etiket atılıyor…'].concat(body.push ? ['Push ediliyor…'] : []);
+  let i = 0;
+  const prog = $('#pkProg'); if (prog) prog.textContent = steps[0];
+  const tick = setInterval(() => { i = Math.min(i + 1, steps.length - 1); const p2 = $('#pkProg'); if (p2) p2.textContent = steps[i]; }, 1500);
+  try {
+    const r = await api('POST', '/api/package/publish', body);
+    clearInterval(tick);
+    toast(d.name + ' ' + r.version + ' yayınlandı' + (r.push && r.push.ok ? ', push edildi' : ''), 'ok', 4000);
+    if (S.pk) S.pk.msg = r.push && !r.push.ok ? { kind: 'warn', text: 'Yerelde yayınlandı, push bekliyor: ' + r.push.error, retry: true } : null;
+    afterWrite(); if (S.cur && S.cur.tab === 'hist') loadHistory();
+  } catch (e) {
+    clearInterval(tick);
+    if (S.pk) S.pk.msg = { kind: 'error', text: e.message + (e.data && e.data.needIdentity ? ' (Git panelinden kimliği gir)' : '') };
+  }
+  if (S.pk) { S.pk.pending = null; S.pk.noFocus = false; await pkLoad(); }
+}
+
+async function pkPushOnly() {
+  const pk = S.pk; if (!pk) return;
+  try {
+    const r = await api('POST', '/api/git/push', {});
+    pk.msg = r.ok ? { kind: 'info', text: 'Push edildi.' } : { kind: 'warn', text: 'Push başarısız: ' + r.error, retry: true };
+    if (r.ok) toast('Push edildi');
+  } catch (e) { pk.msg = { kind: 'error', text: e.message }; }
+  pk.noFocus = false; await pkLoad(); loadGit();
+}
+
+async function pkAlignField(path) {
+  try {
+    const r = await get('/api/file?' + qs({ path }));
+    const p = FM.parse(r.raw);
+    const cl = Rules.classifyPromptPath(path, libDirOf());
+    FM.set(p, 'paket', cl.paket);
+    await api('PUT', '/api/file', { path, raw: FM.stringify(p), baseMtime: r.mtime });
+    toast('Paket alanı klasöre eşitlendi. Commit etmeyi unutma.');
+  } catch (e) { fail(e); }
+  afterWrite();
+  if (S.pk) { S.pk.noFocus = true; await pkLoad(); }
+}
+
+/* ------------------------------------------------------- uzak depo (Aşama 4) */
+const PROVIDER_LABEL = { github: 'GitHub', gitlab: 'GitLab', diger: 'Diğer' };
+
+async function paintGitRemote() {
+  const body = $('#mBody');
+  if (!S.git.isRepo) return paintGit();
+  const tok = S.glTok = (S.glTok || 0) + 1;
+  body.innerHTML = gitTabs('remote') + '<div id="rmBody"><p class="hint">Yükleniyor…</p></div>';
+  let r;
+  try { r = await get('/api/git/remotes'); } catch (e) { if (tok === S.glTok && $('#rmBody')) $('#rmBody').innerHTML = `<p class="issue error">${esc(e.message)}</p>`; return; }
+  if (tok !== S.glTok || !$('#rmBody')) return;
+  S.remote = r;
+  const lc = r.lastCheck;
+  const time = lc && lc.at ? new Date(lc.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : null;
+  const canPull = r.behind > 0 && r.ahead === 0;
+  const whyNo = !r.remotes.length ? 'Uzak depo tanımlı değil.' : r.behind === 0 ? 'Uzak depoda yeni commit yok.' : r.ahead > 0 ? 'Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş; bu araç birleştirme yapmaz.' : '';
+  const hasR = r.remotes.length > 0;
+  $('#rmBody').innerHTML = `<p class="hint" style="margin:0">Etkin depo: <b>${esc(activeName())}</b></p>
+    ${r.remotes.length ? `<div class="mklist">${r.remotes.map((x) => `<div class="mkrow"><div><b>${esc(x.name)}</b> <span class="pill">${PROVIDER_LABEL[x.provider]}</span><div class="hint mono">${esc(x.url)}</div></div><div></div><div class="mkbtns"><button class="btn sm" data-act="remote-edit" data-name="${esc(x.name)}" data-url="${esc(x.url)}">Düzenle</button></div></div>`).join('')}</div>` : '<p class="hint">Henüz uzak depo yok. Aşağıdan GitHub ya da GitLab linkini ekle.</p>'}
+    <form class="stack" id="rmAdd" novalidate style="margin:10px 0"><h3>Uzak depo ekle</h3>
+      <div class="inline"><label>Ad<input id="rmName" value="${r.remotes.length ? '' : 'origin'}" autocomplete="off" style="width:110px"></label><label class="grow">URL<input id="rmUrl" autocomplete="off" aria-describedby="rmUrlHint rmErr" placeholder="https://github.com/kullanıcı/depo"></label><button class="btn" data-act="remote-add">Ekle</button></div>
+      <div class="hint" id="rmUrlHint">GitHub: https://github.com/kullanıcı/depo ya da git@github.com:kullanıcı/depo.git · GitLab: https://gitlab.com/grup/proje ya da git@gitlab.com:grup/proje.git</div>
+      <div class="issue error" id="rmErr" role="alert" hidden></div></form>
+    ${hasR ? `<h3>Durum</h3><p>Dal <b>${esc(r.branch || '?')}</b>${r.upstream ? ' → ' + esc(r.upstream) : ''} · ${r.ahead} önde · ${r.behind} geride${time ? ' (son kontrol: ' + esc(time) + ')' : ''}</p>
+      ${lc && lc.ok === false ? `<div class="issue warn" role="status">Son kontrol başarısız: ${esc(lc.error || '')}</div>` : ''}
+      ${r.pendingTags.length ? `<p class="issue warn">Push bekleyen etiketler: ${r.pendingTags.map(esc).join(', ')}</p>` : ''}
+      <div class="inline"><button class="btn primary" data-act="remote-push">Push et</button><button class="btn" data-act="remote-fetch">Kontrol et</button>
+        <button class="btn" data-act="remote-pull" ${canPull ? '' : 'disabled'} aria-describedby="rmWhy">Güncelle (yalnızca ileri sarma)</button></div>
+      <div class="hint" id="rmWhy">${esc(canPull ? 'Uzak depodaki ' + r.behind + ' yeni commit ileri sarma ile alınır; birleştirme commit\'i üretilmez.' : whyNo)}</div>
+      <div id="rmMsg" aria-live="polite"></div>
+      ${lc && lc.newCommits && lc.newCommits.length ? `<h3>Yeni commit'ler</h3><ul>${lc.newCommits.map((c) => `<li>${esc(c.subject)} <span class="hint">${esc(c.short)}, ${esc(fmtDate(c.date))}</span></li>`).join('')}</ul>` : ''}
+      ${lc && lc.newTags && lc.newTags.length ? `<h3>Yeni etiketler</h3><ul>${lc.newTags.map((t) => `<li><code>${esc(t)}</code></li>`).join('')}</ul>` : ''}` : ''}`;
+}
+
+function rmMsg(html, kind) {
+  const m = $('#rmMsg'); if (m) m.innerHTML = `<div class="issue ${kind || 'warn'}" role="alert">${html}</div>`;
+}
+
+async function remoteAdd() {
+  const name = $('#rmName').value.trim(); const raw = $('#rmUrl').value.trim();
+  showFieldErr('rmErr', '');
+  const ne = Rules.checkRemoteName(name);
+  if (ne) { showFieldErr('rmErr', ne); $('#rmName').focus(); return; }
+  const n = Rules.normalizeRepoUrl(raw);
+  if (n.error) { showFieldErr('rmErr', n.error); $('#rmUrl').focus(); return; }
+  try { await api('POST', '/api/git/remotes', { name, url: n.url }); toast('Uzak depo eklendi'); await paintGitRemote(); } catch (e) { showFieldErr('rmErr', e.message); }
+}
+
+async function remoteEdit(name, url) {
+  const v = await askText({ title: 'Uzak depo adresini düzenle: ' + name, label: 'URL', value: url, ok: 'Kaydet' });
+  if (!v) { await paintGitRemote(); return; }
+  const n = Rules.normalizeRepoUrl(v);
+  if (n.error) { toast(n.error, 'error'); await openGit('remote'); return; }
+  try { await api('PUT', '/api/git/remotes', { name, url: n.url }); toast('Adres güncellendi'); } catch (e) { fail(e); }
+  await openGit('remote');
+}
+
+function netErrHtml(r) {
+  return esc(r.error) + (r.code === 'reddedildi' ? ' ' + cmdLine('git -C ' + (S.info.root || '') + ' pull --rebase') : '');
+}
+
+async function remotePush() {
+  try {
+    const r = await api('POST', '/api/git/push', {});
+    if (r.ok) { toast('Push edildi'); await paintGitRemote(); loadGit(); } else rmMsg(netErrHtml(r));
+  } catch (e) { rmMsg(esc(e.message), 'error'); }
+}
+
+async function remoteFetch(manual) {
+  try {
+    const r = await api('POST', '/api/git/fetch', {});
+    S.remoteCheck = r; paintRemoteBadge(); paintRemoteBand();
+    if (!r.ok) { if ($('#rmMsg')) rmMsg(netErrHtml(r)); else toast(r.error, 'error'); return r; }
+    if (manual) toast(r.behind ? r.behind + ' yeni commit var' : 'Uzak depo güncel');
+    if ($('#rmBody')) await paintGitRemote();
+    return r;
   } catch (e) { fail(e); }
 }
 
+// Yalnızca ileri sarma. Şeritten ve Uzak depo sekmesinden aynı eylem.
+async function remotePull() {
+  try {
+    const r = await api('POST', '/api/git/pull', {});
+    toast('Güncellendi' + (r.adoptedTags.length ? ': ' + r.adoptedTags.length + ' yeni etiket' : ''));
+    S.remoteCheck = { ok: true, behind: 0, ahead: 0, newTags: [], newCommits: [], checkedAt: new Date().toISOString() };
+    paintRemoteBadge(); paintRemoteBand();
+    await afterWrite(); if (S.cur && S.cur.tab === 'hist') loadHistory();
+    if ($('#rmBody')) await paintGitRemote();
+  } catch (e) {
+    const c = e.data && e.data.code;
+    let html = esc(e.message);
+    if (c === 'kirliCalismaAgaci') html = 'Önce değişiklikleri commit et. <button class="btn sm" data-act="git-tab" data-tab="changes">Değişiklikler sekmesini aç</button>';
+    else if (c === 'ayristi') html = esc('Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş. Bu araç birleştirme yapmaz.') + cmdLine('git -C ' + (S.info.root || '') + ' pull --rebase');
+    if ($('#rmMsg')) rmMsg(html);
+    else { toast(e.message, 'error', 8000); if (c === 'kirliCalismaAgaci' || c === 'ayristi') openGit('remote'); }
+  }
+}
+
+/* arka plan kontrolü, rozet ve şerit */
+async function backgroundRemoteCheck() {
+  if (!setupOk()) return;
+  const gen = S.gen;
+  try {
+    const r = await api('POST', '/api/git/fetch', { background: true });
+    if (gen !== S.gen) return;
+    if (r.skipped || r.code === 'remoteYok' || r.code === 'mesgul') { S.remoteCheck = null; }
+    else S.remoteCheck = r;
+  } catch (e) { return; }
+  paintRemoteBadge(); paintRemoteBand();
+}
+
+function paintRemoteBadge() {
+  const b = $('#gitDown'); if (!b) return;
+  const r = S.remoteCheck;
+  if (!r || !setupOk()) { b.hidden = true; return; }
+  if (r.ok === false) { b.hidden = false; b.className = 'badge warn'; b.textContent = '?'; b.title = 'Uzak depo kontrol edilemedi, elle kontrol et'; b.setAttribute('aria-label', b.title); return; }
+  const n = r.behind || 0;
+  b.hidden = !n; b.className = 'badge'; b.textContent = '↓' + n; b.title = 'Uzak depoda ' + n + ' yeni commit var'; b.setAttribute('aria-label', b.title);
+}
+
+function paintRemoteBand() {
+  const old = $('#remoteBand'); if (old) old.remove();
+  const r = S.remoteCheck;
+  if (!r || r.ok === false || !setupOk()) return;
+  const at = r.checkedAt || r.at || '';
+  if (!(r.behind > 0 || (r.newTags && r.newTags.length))) return;
+  if (ls.get(lsKey('dismissedCheck'), '') === at) return;
+  const band = document.createElement('div');
+  band.id = 'remoteBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
+  const parts = [];
+  if (r.behind) parts.push(r.behind + ' commit');
+  if (r.newTags && r.newTags.length) parts.push(r.newTags.slice(0, 3).join(', ') + (r.newTags.length > 3 ? ' …' : ''));
+  band.innerHTML = `<div style="flex:1">Uzak depoda yeni sürüm var: ${esc(parts.join(', '))}. <button class="link" data-act="remote-details">Ayrıntılar</button> <button class="btn sm" data-act="remote-pull" ${r.behind > 0 ? '' : 'disabled'}>Güncelle</button></div><button class="btn sm ghost" data-act="remote-band-close" aria-label="Bildirimi kapat">Kapat</button>`;
+  $('#main').prepend(band);
+}
+
+/* klonlama sonucu ve pp.config.json oluşturma */
+async function mkCreatePpConfig(name) {
+  try {
+    await api('POST', '/api/marketplaces/pp-config', { name });
+    S.info = await get('/api/info');
+    toast('pp.config.json oluşturuldu. Git panelinden commit atabilirsin.', 'ok', 5000);
+    await refreshAll(); applySetupUi();
+    if (!$('#overlay').hidden && $('#mkForm')) await openMarket();
+    paintWarnBand();
+  } catch (e) { fail(e); }
+}
+
+function cloneResultModal(r) {
+  openModal({
+    title: 'Klonlama tamamlandı',
+    html: `<p><b>${esc(r.marketplace ? r.marketplace.name : '')}</b> eklendi.</p>
+      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">Ayar dosyası oluştur</button>` : ''}</div>`).join('')}
+      <div class="foot"><button class="btn primary" data-act="close" autofocus>Tamam</button></div>`
+  });
+}
+
 /* ------------------------------------------------- kurulum durumu, marketplace geçişi */
-const ACTION_LABEL = { ayarlar: 'Ayarları aç', yeniMarketplace: 'Yeni marketplace', marketplaceSec: 'Ağaçtan seç', gitBaslat: "Git'i başlat" };
+const ACTION_LABEL = { ayarlar: 'Ayarları aç', yeniMarketplace: 'Yeni marketplace', marketplaceSec: 'Ağaçtan seç', gitBaslat: "Git'i başlat", ppConfigOlustur: 'Ayar dosyası oluştur' };
 
 function issueButton(i) {
   if (i.action === 'ayarlar') return '<button class="btn sm" data-act="settings">' + ACTION_LABEL.ayarlar + '</button>';
   if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + ACTION_LABEL.yeniMarketplace + '</button>';
   if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + ACTION_LABEL.marketplaceSec + '</button>';
   if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${ACTION_LABEL.gitBaslat}</button>`;
+  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + ACTION_LABEL.ppConfigOlustur + '</button>';
   return '';
 }
 
@@ -2403,7 +2819,7 @@ function paintWarnBand() {
   if (!warns.length) return;
   const band = document.createElement('div');
   band.id = 'warnBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
-  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">Uyarı</span> ${esc(i.message)} ${i.action === 'ayarlar' ? '<button class="link" data-act="settings">Ayarları aç</button>' : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="Uyarıyı kapat">Kapat</button>`;
+  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">Uyarı</span> ${esc(i.message)} ${i.action === 'ayarlar' ? '<button class="link" data-act="settings">Ayarları aç</button>' : ''}${i.action === 'ppConfigOlustur' ? '<button class="link" data-act="mk-ppconfig" data-name="' + esc(activeName()) + '">Ayar dosyası oluştur</button>' : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="Uyarıyı kapat">Kapat</button>`;
   $('#main').prepend(band);
 }
 
@@ -2468,9 +2884,11 @@ async function activateMarketplace(name, o) {
   adoptInfo(r.info);
   const m = mpByName(name);
   if (m && m.state === 'hazir') { S.mpOpen.add(name); saveMpOpen(); ensureDefaultExp(name); }
+  S.remoteCheck = null; paintRemoteBadge();
   if (setupOk()) await loadGit();
   renderMkBadge(); renderFilters(); renderList(); renderMain();
   if (!o.quiet) toast('Etkin marketplace: ' + name);
+  backgroundRemoteCheck();
   return true;
 }
 
@@ -2537,10 +2955,12 @@ function mkRowHtml(i, kind) {
     if (i.active) pills.push('<span class="pill ok">etkin</span>');
     if (!i.valid) pills.push(`<span class="pill bad">geçersiz: ${esc(i.reason || '')}</span>`);
     if (!i.hasManifest) pills.push('<span class="pill warn">manifest yok</span>');
+    if (i.valid && i.hasPpConfig === false) pills.push('<span class="pill warn">Prompt Havuzu ayarı yok</span>');
   } else pills.push(`<span class="pill ${tool ? '' : 'warn'}">${esc(i.reason)}</span>`);
   const btns = [];
   if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">Etkinleştir</button>`);
   // Geçerli olmayan ama .git içeren klasörde sunucu git başlatmayı reddeder; yalnızca git deposu olmayanlarda göster.
+  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">Ayar dosyası oluştur</button>`);
   if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">Git'i başlat</button>`);
   return `<div class="mkrow ${tool ? 'dim' : ''}"><div><b>${esc(i.name)}</b> ${pills.join(' ')}<div class="hint mono">${esc(i.path)}</div></div><div></div><div class="mkbtns">${btns.join('')}</div></div>`;
 }
@@ -2558,6 +2978,8 @@ function settingsHtml(s, m) {
       <p class="issue error" id="setRootErr" role="alert" style="margin:0" hidden></p>
       <div class="foot-left"><button class="btn primary">Kaydet</button><span class="hint">Ayar dosyası: <code>${esc(s.configPath)}</code></span></div>
     </form>
+    <h3>Uzak depo</h3>
+    <label>Uzak depoyu kontrol et<select id="setRemoteCheck"><option value="acilista" ${s.remoteCheck !== 'elle' ? 'selected' : ''}>Açılışta (saatte en fazla bir kez)</option><option value="elle" ${s.remoteCheck === 'elle' ? 'selected' : ''}>Yalnızca elle</option></select></label>
     <h3 id="setMkTitle" tabindex="-1">Marketplace'ler</h3>
     ${rows ? `<div class="mklist">${rows}</div>` : `<p class="hint">${rootBad ? 'Önce geçerli bir library kökü kaydet.' : 'Bu kökte henüz marketplace yok.'}</p>`}
     <div class="foot-left"><button type="button" class="btn" data-act="new-mp" ${rootBad ? 'disabled' : ''}>Yeni marketplace…</button>${rootBad ? '<span class="hint">Önce geçerli bir library kökü kaydet.</span>' : ''}</div>
@@ -2790,10 +3212,26 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'hist-load': await loadOldVersion(el.dataset.hash); break;
-    case 'publish-now': { if (await save()) await mkPublishCurrent(); break; }
+    case 'open-package': await openPackage(FM.slug(el.dataset.name), el.dataset.from === 'panel' ? 'panel' : 'tree'); break;
+    case 'pk-desc': try { await api('PUT', '/api/package', { name: S.pk.name, description: $('#pkDesc').value }); toast('Açıklama kaydedildi'); S.pk.noFocus = true; await pkLoad(); afterWrite(); } catch (e) { fail(e); } break;
+    case 'pk-publish': pkAsk(); break;
+    case 'pk-confirm': await pkPublish(); break;
+    case 'pk-cancel': { if (S.pk) S.pk.pending = null; const cf = $('#pkConfirm'); if (cf) cf.innerHTML = ''; const g = $('#pkGo'); if (g) g.focus(); break; }
+    case 'pk-push': await pkPushOnly(); break;
+    case 'pk-esitle': await pkAlignField(p); break;
+    case 'pk-git': closeModal(); openGit(); break;
+    case 'mk-update': await mkUpdate(); break;
+    case 'mk-ppconfig': await mkCreatePpConfig(el.dataset.name || activeName()); break;
+    case 'remote-add': ev.preventDefault(); await remoteAdd(); break;
+    case 'remote-edit': await remoteEdit(el.dataset.name, el.dataset.url); break;
+    case 'remote-push': await remotePush(); break;
+    case 'remote-fetch': await remoteFetch(true); break;
+    case 'remote-pull': await remotePull(); break;
+    case 'remote-details': openGit('remote'); break;
+    case 'remote-band-close': { const rc = S.remoteCheck; if (rc) ls.set(lsKey('dismissedCheck'), rc.checkedAt || rc.at || ''); paintRemoteBand(); break; }
     case 'copy-text': { const ok = await copyText(el.dataset.text); toast(ok ? 'Kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
     case 'git': openGit(); break;
-    case 'git-tab': el.dataset.tab === 'log' ? paintGitLog() : paintGit(); break;
+    case 'git-tab': el.dataset.tab === 'log' ? paintGitLog() : el.dataset.tab === 'remote' ? paintGitRemote() : paintGit(); break;
     case 'mk-git-init': await mkGitInit(el.dataset.name, el.dataset.confirm !== undefined); break;
     case 'mk-activate': if (await activateMarketplace(el.dataset.name)) closeModal(); break;
     case 'settings': openSettings(el.dataset.section); break;
@@ -2816,30 +3254,20 @@ document.addEventListener('click', async (ev) => {
       verBox.hidden = true; verBox.textContent = ''; verIn.removeAttribute('aria-invalid');
       const verErr = Rules.checkVersion(f.get('version'));
       if (verErr) { showVerErr(verErr); break; }
-      try { const r = await api('POST', '/api/marketplace/init', { config: Object.fromEntries(f.entries()) }); S.info = await get('/api/info'); toast('Marketplace dosyaları yazıldı: ' + r.packages.join(', ')); await mkReload(); }
+      const durumlar = f.getAll('exdurum');
+      showFieldErr('mkExpErr', '');
+      if (!durumlar.length) { showFieldErr('mkExpErr', 'En az bir durum seçilmeli'); break; }
+      const cfgBody = Object.fromEntries(f.entries()); delete cfgBody.exdurum;
+      const oldEx = (S.mk && S.mk.export) || { durumlar: [] };
+      const extra = oldEx.durumlar.filter((d) => !DURUM_OPTS.some(([v]) => fold(v).trim() === fold(d).trim()));
+      cfgBody.export = { durumlar: durumlar.concat(extra), haricKlasorler: oldEx.haricKlasorler };
+      try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast('Marketplace dosyaları yazıldı: ' + r.packages.join(', ')); await mkReload(); }
       catch (e) { if (e.status === 400 && e.data && e.data.field === 'version') showVerErr(e.message); else fail(e); }
       break;
     }
-    case 'mk-publish': await mkPublish({ paths: [p] }); break;
-    case 'mk-publish-all': await mkPublish({ all: true }, 'Hepsi zaten güncel'); break;
-    case 'mk-unpublish': try { await api('POST', '/api/marketplace/unpublish', { target: el.dataset.target }); toast('Kaldırıldı (çöp kutusuna taşındı)'); await mkReload(); } catch (e) { fail(e); } break;
     default: break;
   }
 });
-
-async function mkPublishCurrent() {
-  const c = S.cur; if (!c) return;
-  try {
-    const r = await api('POST', '/api/marketplace/publish', { paths: [c.path] });
-    if (r.failed.length) { toast(r.failed[0].reason, 'error'); return; }
-    if (r.skipped && r.skipped.length) { toast(r.skipped[0].reason, 'error'); return; }
-    toast(r.done.length ? 'Yayınlandı: ' + r.done[0] : 'Zaten güncel');
-    const r2 = await get('/api/file?' + qs({ path: c.path })); c.publish = r2.publish;
-    const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill();
-    const u = $('#pubUsage'); if (u && r2.publish) u.innerHTML = r2.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r2.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r2.publish.paket)}:${esc(r2.publish.ad)}</code>`;
-    afterWrite();
-  } catch (e) { fail(e); }
-}
 
 document.addEventListener('contextmenu', (ev) => {
   const row = ev.target.closest('#list [data-key]');
@@ -2854,6 +3282,7 @@ document.addEventListener('contextmenu', (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'q') { S.f.q = t.value; runSearch(); return; }
+  if (S.pk && t.closest && t.closest('.pkrel')) { pkValidate(); return; }
   if (!S.cur) return;
   if (t.id === 'commitMsg') { S.cur.commitMsg = t.value; updateDirty(); return; }
   if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
@@ -2868,6 +3297,8 @@ document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
   else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
+  else if (t.id === 'setRemoteCheck') { api('PUT', '/api/settings', { remoteCheck: t.value }).then(() => toast('Ayar kaydedildi')).catch(fail); }
+  else if (S.pk && t.closest && t.closest('.pkrel')) pkValidate();
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
   else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
@@ -2945,6 +3376,7 @@ async function init() {
   const last = setupOk() ? ls.get(lsKey('last'), null) : null;
   if (last) await openFile(last, { quiet: true }); else renderMain();
   if (!S.cur) renderMain();
+  backgroundRemoteCheck();
 }
 init();
 })();

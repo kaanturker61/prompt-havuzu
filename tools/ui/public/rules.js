@@ -19,10 +19,15 @@
     yayinDisi: 'Tür seçilmemiş (yayın dışı).',
     surumGuncelDegil: function (v) { return 'Son sürümden (v' + v + ') beri dosya değişti ama versiyon aynı. Yeni sürüm için +1\'e bas.'; },
     adUretilemedi: function (v) { return 'Ad üretilemedi ("' + v + '"), "adsiz" kullanılacak. "Ad" alanına harf veya rakam içeren bir değer yaz.'; },
-    // Aşama 4, bunu kendi engelleyici "paketUyusmuyor" iletisiyle değiştirir.
-    paketUyusmuyorBilgi: function (klasor, alan) {
-      return 'Dosya "' + klasor + '" plugin\'inde ama "paket" alanı "' + alan + '". Yayın şimdilik alana göre yapılır; alanı klasöre eşitle.';
-    }
+    paketUyusmuyor: function (klasor, alan) {
+      return 'Dosya "' + klasor + '" paketinin klasöründe ama "paket" alanı "' + alan + '". Paket klasörden alınır; alanı düzelt ya da dosyayı taşı.';
+    },
+    paketCokDegerli: '"paket" tek bir değer olmalı.',
+    durumHaric: function (durum, liste) {
+      const l = liste.map(function (x) { return x === '' ? '(boş)' : x; }).join(', ');
+      return (durum ? 'Durumu "' + durum + '".' : 'Durumu boş.') + ' Yalnızca şu durumlar dışa aktarılır: ' + l + '.';
+    },
+    surumArtirilmamis: function (v) { return 'İçerik değişmiş ama "versiyon" artırılmamış (' + v + '). Yama sayılacak.'; }
   };
 
   function str(v) { return Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v); }
@@ -168,7 +173,173 @@
     return { kind: 'paket', klasor: parts[0], paket: FM.slug(parts[0]) };
   }
 
+  /* ---- Aşama 4: paket, dışa aktarma ve uzak depo kuralları ---- */
+
+  const PACKAGE_TAG_PREFIX = 'paket/';
+  const PACKAGE_TAG_RE = /^paket\/(.+)\/v(\d+\.\d+\.\d+)$/;
+
+  // Artış seviyesi: 'buyuk'|'kucuk'|'yama'. Artış yoksa, geriye gidiş veya yorumlanamazsa null.
+  function levelBetween(oldV, newV) {
+    const a = coerceVersion(oldV); const b = coerceVersion(newV);
+    if (!a || !b || !b.version) return null;
+    if (!a.version) return 'kucuk';
+    if (compareVersions(b.version, a.version) <= 0) return null;
+    const x = a.version.split('.').map(Number); const y = b.version.split('.').map(Number);
+    if (y[0] > x[0]) return 'buyuk';
+    if (y[1] > x[1]) return 'kucuk';
+    return 'yama';
+  }
+
+  function maxLevel(levels) {
+    let best = -1;
+    (levels || []).forEach(function (l) {
+      const i = VERSION_LEVELS.indexOf(l);
+      if (i >= 0 && (best < 0 || i < best)) best = i;
+    });
+    return best < 0 ? null : VERSION_LEVELS[best];
+  }
+
+  function packageTag(ad, v) { return PACKAGE_TAG_PREFIX + ad + '/v' + v; }
+
+  function parsePackageTag(name) {
+    const m = PACKAGE_TAG_RE.exec(String(name));
+    if (!m || !SEMVER_RE.test(m[2]) || m[1].indexOf('/') >= 0) return null;
+    return { ad: m[1], version: m[2] };
+  }
+
+  /* Bir promptun hangi pakete gireceği. Paket klasörden alınır; `paket` alanı yalnızca klasörsüz promptlarda geçerlidir.
+   * Dönüş: { paket|null, kaynak: 'klasor'|'alan'|'varsayilan'|null, code?, level? } */
+  function resolvePackage(o) {
+    const cl = classifyPromptPath(o.rel, o.libraryDir);
+    const alanRaw = o.metaPaket;
+    const liste = Array.isArray(alanRaw) ? alanRaw.map(String).filter(Boolean) : null;
+    const alan = liste ? liste.join(', ') : (alanRaw == null ? '' : String(alanRaw).trim());
+    const haric = (o.haricKlasorler || []).map(function (x) { return FM.slug(x); });
+    if (cl.kind === 'disarida') return { paket: null, kaynak: null, code: 'kutuphaneDisi', level: 'info' };
+    if (cl.kind === 'gelenKutusu') return { paket: null, kaynak: 'klasor', code: 'paketDisiKlasor', level: 'info' };
+    if (cl.kind === 'paket') {
+      if (haric.indexOf(cl.paket) >= 0) return { paket: null, kaynak: 'klasor', code: 'paketDisiKlasor', level: 'info' };
+      if (liste && liste.length > 1) return { paket: cl.paket, kaynak: 'klasor', code: 'paketCokDegerli', level: 'warn' };
+      if (alan && FM.slug(alan) !== cl.paket) return { paket: cl.paket, kaynak: 'klasor', code: 'paketUyusmuyor', level: 'warn', alan: alan, klasor: cl.klasor };
+      return { paket: cl.paket, kaynak: 'klasor' };
+    }
+    // klasörsüz
+    if (liste && liste.length > 1) return { paket: null, kaynak: 'alan', code: 'paketCokDegerli', level: 'warn' };
+    if (alan) return { paket: FM.slug(alan), kaynak: 'alan' };
+    return { paket: o.defaultPaket ? FM.slug(o.defaultPaket) : null, kaynak: 'varsayilan', code: 'paketKlasoruYok', level: 'info' };
+  }
+
+  // durumlar: ['kararlı', ''] ('' = durumu boş). Türkçe karakter ve büyük-küçük harf yok sayılır.
+  function durumAllowed(durum, durumlar) {
+    const k = FM.fold(str(durum)).trim();
+    return (durumlar || []).some(function (d) { return FM.fold(str(d)).trim() === k; });
+  }
+
+  const MP_OFFICIAL = ['claude-code-marketplace', 'claude-code-plugins', 'claude-plugins-official', 'anthropic-marketplace',
+    'anthropic-plugins', 'agent-skills', 'anthropic-agent-skills', 'life-sciences', 'knowledge-work-plugins', 'claude-for-legal',
+    'claude-for-financial-services', 'financial-services-plugins', 'first-party-plugins', 'claude-tag-plugins'];
+  const MP_COMMUNITY = ['claude-community', 'claude-plugins-community', 'healthcare', 'anthropic-plugin-directory', 'claude-plugin-directory'];
+  const MP_INTERNAL = ['inline', 'builtin', 'skills-dir', 'synced', 'claude-plugin-test'];
+  const MP_SHORT = ['npm', 'pip', 'uv', 'cargo', 'github', 'gh'];
+
+  function mpKey(n) { return String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+
+  // Geçerliyse null, değilse Türkçe hata iletisi.
+  function checkMarketplaceName(n) {
+    const raw = String(n == null ? '' : n).trim();
+    if (!raw) return 'Marketplace adı gerekli';
+    if (raw.length > 128) return 'Marketplace adı 128 karakterden uzun olamaz';
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(raw) || raw.indexOf('..') >= 0) {
+      return 'Marketplace adı harf ya da rakamla başlamalı; yalnızca harf, rakam, ".", "_" ve "-" içerebilir: ' + raw;
+    }
+    const k = mpKey(raw);
+    if (MP_OFFICIAL.indexOf(k) >= 0 || /^claudeai-/.test(k)) return "Bu ad resmi Anthropic marketplace'lerine ayrılmış: " + raw;
+    if (MP_COMMUNITY.indexOf(k) >= 0) return 'Bu ad Claude dizinlerine ayrılmış: ' + raw;
+    if (MP_INTERNAL.indexOf(k) >= 0 || MP_SHORT.indexOf(k) >= 0) return 'Bu ad Claude Code tarafından ayrılmış: ' + raw;
+    return null;
+  }
+
+  function checkRemoteName(n) {
+    const s = String(n == null ? '' : n).trim();
+    if (!s) return 'Uzak depo adı gerekli';
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(s) || s.indexOf('..') >= 0 || /\.lock$/.test(s)) {
+      return 'Uzak depo adı küçük harf, rakam, ".", "_" ve "-" içermeli, harf ya da rakamla başlamalı (en çok 64 karakter)';
+    }
+    return null;
+  }
+
+  function isAbsLocal(u) { return /^\//.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^\\\\[^\\]/.test(u); }
+
+  function checkRemoteUrl(u) {
+    const s = String(u == null ? '' : u).trim();
+    if (!s) return 'URL gerekli';
+    if (s.charAt(0) === '-') return 'URL "-" ile başlayamaz';
+    if (/^[A-Za-z0-9+.-]+::/.test(s)) return 'Bu bağlantı türü güvenlik nedeniyle kapalı';
+    if (/[\x00-\x1f\x7f]/.test(s)) return 'URL boşluk veya kontrol karakteri içeremez';
+    if (/\s/.test(s) && !isAbsLocal(s)) return 'URL boşluk veya kontrol karakteri içeremez';
+    if (/^http:\/\//i.test(s)) return 'Şifresiz http kullanılmaz, https kullan';
+    if (/^https:\/\//i.test(s)) {
+      const m = /^https:\/\/([^/]*)(\/.*)?$/i.exec(s);
+      if (!m || !m[1]) return 'URL geçersiz';
+      if (m[1].indexOf('@') >= 0) return "Parola veya token URL'ye yazılmaz (düz metin olarak .git/config'e kaydedilir). Credential manager kullan.";
+      if (!m[2] || m[2] === '/') return 'URL depo yolunu içermeli (örnek: https://github.com/kullanıcı/depo)';
+      return null;
+    }
+    if (/^ssh:\/\/([^/@\s]+@)?[^/\s:]+(:\d+)?\/\S+/i.test(s)) return null;
+    if (/^file:\/\/\/\S+/i.test(s)) return null;
+    if (/^[\w.-]+@[\w.-]+:\S+$/.test(s)) return null;
+    if (isAbsLocal(s)) return null;
+    return 'Mutlak bir yol ya da URL gir';
+  }
+
+  function repoProvider(url) {
+    const s = String(url || '');
+    let host = '';
+    let m = /^(?:https:\/\/|ssh:\/\/)(?:[^@/]+@)?([^/:]+)/i.exec(s);
+    if (m) host = m[1];
+    else if ((m = /^[\w.-]+@([\w.-]+):/.exec(s))) host = m[1];
+    host = host.toLowerCase();
+    if (host === 'github.com') return 'github';
+    if (host === 'gitlab.com' || host.indexOf('gitlab.') === 0) return 'gitlab';
+    return 'diger';
+  }
+
+  // Form girdisini (kısaltma, tarayıcı linki, URL) git URL'sine çevirir. { url, provider, slugName } | { error }
+  function normalizeRepoUrl(input) {
+    let s = String(input == null ? '' : input).trim().replace(/\/+$/, '');
+    if (!s) return { error: 'URL gerekli' };
+    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s) && s.charAt(0) !== '.') {
+      s = 'https://github.com/' + s + '.git';
+    } else if (/^https:\/\//i.test(s)) {
+      const m = /^(https:\/\/)(?:www\.)?(github\.com)\/([^/]+)\/([^/]+)/i.exec(s);
+      if (m) s = m[1] + m[2] + '/' + m[3] + '/' + m[4].replace(/\.git$/i, '') + '.git';
+      else {
+        const cut = s.indexOf('/-/');
+        if (cut > 0) s = s.slice(0, cut).replace(/\/+$/, '');
+        if (!/\.git$/i.test(s)) s += '.git';
+      }
+    }
+    const err = checkRemoteUrl(s);
+    if (err) return { error: err };
+    const last = s.split(/[\\/:]/).filter(Boolean).pop() || '';
+    return { url: s, provider: repoProvider(s), slugName: FM.slug(last.replace(/\.git$/i, '')) };
+  }
+
+  // { primary, alternatives[] }: `claude plugin marketplace add` girdileri.
+  function marketplaceAddCommand(url) {
+    const s = String(url || '');
+    if (repoProvider(s) === 'github') {
+      const m = /github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/i.exec(s);
+      if (m) return { primary: m[1] + '/' + m[2], alternatives: [s] };
+    }
+    return { primary: s, alternatives: [] };
+  }
+
   return {
+    PACKAGE_TAG_PREFIX: PACKAGE_TAG_PREFIX, levelBetween: levelBetween, maxLevel: maxLevel,
+    packageTag: packageTag, parsePackageTag: parsePackageTag, resolvePackage: resolvePackage, durumAllowed: durumAllowed,
+    checkMarketplaceName: checkMarketplaceName, checkRemoteName: checkRemoteName, checkRemoteUrl: checkRemoteUrl,
+    normalizeRepoUrl: normalizeRepoUrl, repoProvider: repoProvider, marketplaceAddCommand: marketplaceAddCommand,
     INBOX_DIR: INBOX_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
     pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,

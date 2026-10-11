@@ -101,10 +101,19 @@ class LibraryCatalog {
   }
 
   // Yayın uyarısı: warn seviyeli atlananlar + içeriği boş (error) yayın adayları. Hedef çakışması sayılmaz.
-  _publishWarn(items) {
+  // Paket klasörüyle uyuşmayan "paket" alanı (durumu dışa aktarılan promptlarda) yayını engellediği için sayılır.
+  _publishWarn(items, cfg) {
     const { Rules } = this;
-    return items.filter((it) => (it.check && it.check.level === 'warn')
-      || (it.isMd && Rules.normTur(it.meta.tur) && !it.body.trim())).length;
+    const exp = (cfg && cfg.export) || null;
+    return items.filter((it) => {
+      if (it.check && it.check.level === 'warn') return true;
+      if (!it.isMd) return false;
+      if (Rules.normTur(it.meta.tur) && !it.body.trim()) return true;
+      if (!cfg) return false;
+      if (exp && !Rules.durumAllowed(str(it.meta.durum), exp.durumlar)) return false;
+      const r = Rules.resolvePackage({ rel: it.path, libraryDir: cfg.libraryDir, metaPaket: it.meta.paket, defaultPaket: cfg.marketplace.plugin, haricKlasorler: exp ? exp.haricKlasorler : [] });
+      return r.code === 'paketUyusmuyor' || r.code === 'paketCokDegerli';
+    }).length;
   }
 
   async _mpTree(m) {
@@ -145,7 +154,7 @@ class LibraryCatalog {
       base.plugins.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
     }
     base.count = items.filter((it) => it.isMd).length;
-    base.yayinUyari = this._publishWarn(items);
+    base.yayinUyari = this._publishWarn(items, cfg);
 
     // Teknik dosyalar: libraryDir ve IGNORE dışındaki her şey, meta hesaplanmadan.
     base.teknik = (await this._walk(m.path, '', { skip: new Set([libTop]) })).sort(byName);
@@ -230,7 +239,7 @@ class LibraryCatalog {
     let total = 0; let yayinUyari = 0;
     const yayinUyariByMp = {};
     for (const { m, list } of lists) {
-      const n = this._publishWarn(list);
+      const n = this._publishWarn(list, m.cfg);
       yayinUyariByMp[m.name] = n;
       yayinUyari += n;
       for (const it of list) {
