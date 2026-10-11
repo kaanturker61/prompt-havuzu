@@ -24,3 +24,10 @@ test('index.html LF satır sonlu; eski prompt bazlı yayın eylemleri kaldırıl
   assert.match(html, /data-act="remote-pull"/);
   assert.match(html, /Güncelle \(yalnızca ileri sarma\)/);
 });
+
+test('paket sayfası düzeni: radyo/onay satırı yan yana, açıklama alanı esnek', () => {
+  assert.match(html, /\.pkrel \.stack label\.inline \{ display: flex;/);
+  assert.match(html, /\.pkrel \.stack input\[type=radio\] \{ width: auto;/);
+  assert.match(html, /<label class="grow pkdesc">Açıklama<input id="pkDesc"/);
+  assert.match(html, /\.pkdesc input \{ flex: 1;/);
+});

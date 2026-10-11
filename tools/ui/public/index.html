@@ -294,6 +294,12 @@ details summary { cursor: pointer; }
 .ptable th, .ptable td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .ptable caption { text-align: left; font-weight: 600; padding: 4px 0; }
 .pkrel { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+/* Paket sayfası: ".stack label" (grid) ve ".stack input" (width:100%) kuralları radyo/onay kutusu satırlarını bozmasın */
+.pkrel .stack label.inline { display: flex; gap: 8px; align-items: center; }
+.pkrel .stack label.inline input { flex: none; }
+.pkrel .stack input[type=radio] { width: auto; padding: 0; border: revert; border-radius: revert; background: revert; margin: 0; }
+.pkdesc { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.pkdesc input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
 .warnband { display: flex; align-items: flex-start; gap: 10px; max-width: 980px; margin: 0 auto 14px; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
 .warnband ul { margin: 0; padding: 0; list-style: none; flex: 1; }
 .setup-list { list-style: none; margin: 16px 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
@@ -2508,7 +2514,7 @@ function pkHtml(d) {
     <p class="hint" style="margin:0 0 8px">Etkin marketplace: <b>${esc(activeName())}</b> · Sürüm: ${d.version ? 'v' + esc(d.version) : 'yayınlanmadı'} · Son etiket: ${d.lastTag ? esc(d.lastTag.name) + ' (' + esc(fmtDate(d.lastTag.date)) + ')' : 'yok'}
       ${d.pendingPush ? ' <span class="pill warn">Push bekliyor</span> <button class="btn sm" data-act="pk-push">Push et</button>' : ''}</p>
     ${msg}
-    <div class="inline" style="margin-bottom:10px"><label class="grow">Açıklama<input id="pkDesc" value="${esc(d.description)}" autocomplete="off"></label><button class="btn sm" data-act="pk-desc">Kaydet</button></div>
+    <div class="inline" style="margin-bottom:10px"><label class="grow pkdesc">Açıklama<input id="pkDesc" value="${esc(d.description)}" autocomplete="off"></label><button class="btn sm" data-act="pk-desc">Kaydet</button></div>
     ${blockers.length ? `<div class="issue error" role="alert"><b>Yayını engelleyen sorunlar (${blockers.length})</b><ul>${blockers.map((i) => `<li>${i.source ? `<button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.source)}</button>: ` : ''}${esc(i.msg)}${i.code === 'paketUyusmuyor' && i.source ? ` <button class="btn sm" data-act="pk-esitle" data-path="${esc(i.source)}">Alanı klasöre eşitle</button>` : ''}</li>`).join('')}</ul></div>` : ''}
     <table class="ptable"><caption>Paketteki promptlar</caption><thead><tr><th scope="col">Prompt</th><th scope="col">Tür</th><th scope="col">Ad</th><th scope="col">Versiyon</th><th scope="col">Değişim</th><th scope="col">Seviye</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Pakette dışa aktarılacak prompt yok.</td></tr>'}</tbody></table>
     <details style="margin:10px 0"><summary>Dışa aktarılmayanlar (${d.excluded.length})</summary><ul>${d.excluded.map((x) => `<li><button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik || x.source)}</button> <span class="hint">${esc(x.reason)}</span></li>`).join('') || '<li class="hint">Yok</li>'}</ul></details>
