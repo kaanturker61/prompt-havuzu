@@ -8,3 +8,18 @@ desktop.ini
 /plugins/
 /.claude-plugin/
 /pp.config.json
+/.claude/
+
+# Dahili çalışma notları ve geliştirme ajanı; yayına girmez.
+/docs/reports/
+/docs/ui_ux_test_sureci.md
+
+# Kullanıcı kılavuzu ve ekran görüntüleri yerelde kalır; yayına girmez.
+/docs/user-guide/
+/docs/images/
+
+# Uygulama planları yerelde kalır; yayına girmez.
+/docs/plans/
+
+# Claude Code proje yönergeleri yerelde kalır; yayına girmez.
+/CLAUDE.md
