@@ -43,7 +43,7 @@
 Requirements: **Node.js 18 or newer** and **git** on your `PATH`. Git is mandatory: without it the setup check reports "Git bulunamadı" (git not found) and blocks the app.
 
 ```bash
-git clone https://github.com/OWNER/prompt-havuzu.git
+git clone https://github.com/kaanturker61/prompt-havuzu.git
 cd prompt-havuzu
 node tools/ui/server.js --open
 ```
@@ -239,4 +239,4 @@ Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING
 
 [MIT](LICENSE) &copy; Kaan TÜRKER
 
-<!-- Replace OWNER in the clone URL above with the GitHub user or organization that hosts this repository. -->
+The license covers this tool. Your prompts live in your own marketplace repositories, outside this repository, and are not covered by it: choose a license for them separately (for example CC-BY-4.0 or CC0 for shared prompts) and add a `LICENSE` file to each marketplace you publish.

@@ -7,12 +7,10 @@ Thanks for your interest in Prompt havuzu. Bug reports, ideas and pull requests 
 You need Node.js 18 or newer and git. There is nothing to install.
 
 ```bash
-git clone https://github.com/OWNER/prompt-havuzu.git
+git clone https://github.com/kaanturker61/prompt-havuzu.git
 cd prompt-havuzu
 node tools/ui/server.js --open
 ```
-
-> `OWNER` is a placeholder: replace it with the GitHub user or organization that hosts this repository.
 
 On first run, choose a library root outside the repository in **Ayarlar** (Settings). For experiments, point `PP_CONFIG=<file>` at a throwaway settings file so your real settings stay untouched.
 

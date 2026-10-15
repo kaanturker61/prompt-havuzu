@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
+  "author": "Kaan TÜRKER",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaanturker61/prompt-havuzu.git",
+    "directory": "tools/ui"
+  },
+  "homepage": "https://github.com/kaanturker61/prompt-havuzu#readme",
+  "bugs": {
+    "url": "https://github.com/kaanturker61/prompt-havuzu/issues"
+  },
   "description": "Prompt havuzu için yerel arayüz (bağımlılıksız)",
   "scripts": {
     "start": "node server.js --open",
