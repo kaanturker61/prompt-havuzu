@@ -8,6 +8,7 @@ const { str, toList } = require('./prompt-index');
 
 const CONCURRENCY = 4;
 const MD_RE = /\.(md|markdown)$/i;
+const SEARCH_LIMIT = 300;
 
 // En fazla `limit` görev aynı anda çalışır; sonuçlar giriş sırasındadır.
 async function pool(items, limit, fn) {
@@ -67,6 +68,7 @@ class LibraryCatalog {
     const out = [];
     for (const e of ents) {
       if (this.ignore.has(e.name)) continue;
+      if (e.isSymbolicLink()) continue; // bağlantılar ağaçta görünmez (kök dışına çıkabilir)
       if (!rel && o.skip && o.skip.has(e.name)) continue;
       const childRel = rel ? rel + '/' + e.name : e.name;
       const childAbs = path.join(abs, e.name);
@@ -183,7 +185,8 @@ class LibraryCatalog {
     });
   }
 
-  async search(libraryRoot, active, q, o) {
+  // Arama sonucu en çok SEARCH_LIMIT öğe döner; total süzgeçlere uyan tüm eşleşmelerin sayısıdır (truncated: total > limit).
+  async searchEx(libraryRoot, active, q, o) {
     const { FM, Rules } = this;
     const lists = await this._allItems(libraryRoot, active, { scopeAll: o.scope === 'all', includeBig: false });
     const tokens = FM.fold(q || '').split(/\s+/).filter(Boolean);
@@ -227,7 +230,12 @@ class LibraryCatalog {
       }
     }
     res.sort((a, b) => (tokens.length ? b.score - a.score : 0) || b.mtime - a.mtime);
-    return res.slice(0, 300);
+    return { results: res.slice(0, SEARCH_LIMIT), total: res.length, limit: SEARCH_LIMIT, truncated: res.length > SEARCH_LIMIT };
+  }
+
+  // Yalnızca sonuç dizisi (eski çağıranlar için); sayım bilgisi gerekiyorsa searchEx kullanılır.
+  async search(libraryRoot, active, q, o) {
+    return (await this.searchEx(libraryRoot, active, q, o)).results;
   }
 
   /* ---------------------------------------------------------------- facet'ler */
@@ -258,4 +266,4 @@ class LibraryCatalog {
   }
 }
 
-module.exports = { LibraryCatalog, pool };
+module.exports = { LibraryCatalog, pool, SEARCH_LIMIT };

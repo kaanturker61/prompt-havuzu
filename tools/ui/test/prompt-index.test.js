@@ -68,3 +68,23 @@ test('IGNORE adları (tools dahil) yürüyüşte atlanır; listDirs', async () =
     assert.deepEqual(await ix.listDirs(d, 'prompts'), ['prompts', 'prompts/ok']);
   } finally { rmrf(d); }
 });
+
+test('sembolik bağlantı dosyası ve klasörü listelenmez, indekslenmez', async (t) => {
+  const { makeLink, removeLink } = require('./links');
+  const d = tmpDir(); const out = tmpDir();
+  const dirLink = path.join(d, 'prompts', 'kisayol'); const fileLink = path.join(d, 'prompts', 'dis.md'); const inLink = path.join(d, 'prompts', 'ic.md');
+  try {
+    put(d, 'prompts/ok/a.md', '---\nbaslik: A\n---\nNORMAL-ICERIK');
+    put(out, 'gizli.md', '---\nbaslik: Gizli\n---\nDISARI-GIZLI');
+    put(out, 'alt/derin.md', 'DISARI-GIZLI-2');
+    if (!makeLink(out, dirLink)) return t.skip('bağlantı kurulamadı (EPERM)');
+    const haveFile = makeLink(path.join(out, 'gizli.md'), fileLink, 'file');
+    if (haveFile) assert.ok(makeLink(path.join(d, 'prompts', 'ok', 'a.md'), inLink, 'file'));
+    const ix = mkIndex();
+    const list = await ix.listMd(d, 'prompts');
+    assert.deepEqual(list.map((i) => i.path), ['prompts/ok/a.md']);
+    assert.ok(!list.some((i) => i.fBody.includes('disari')), 'dış içerik indekslenmedi');
+    assert.deepEqual(await ix.listDirs(d, 'prompts'), ['prompts', 'prompts/ok']);
+    assert.deepEqual(Array.from(ix._cache.get(d).keys()), ['prompts/ok/a.md'], 'önbellekte bağlantı girdisi yok');
+  } finally { removeLink(dirLink); removeLink(fileLink); removeLink(inLink); rmrf(d); rmrf(out); }
+});

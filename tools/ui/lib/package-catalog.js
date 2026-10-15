@@ -80,6 +80,7 @@ class PackageCatalog {
       const expected = exporter.renderTarget(it, tur, ad);
       const cur = await this.readIfExists(path.join(this.root(), target));
       const issues = [];
+      if (Rules.isDeviceName(ad)) issues.push({ code: 'aygitAdi', level: 'error', msg: Rules.MSG.aygitAdi(ad) });
       if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: 'İçerik boş' });
       if (str(meta.komut_adi) && FM.slug(str(meta.komut_adi)) === 'adsiz') {
         issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(str(meta.komut_adi)) });

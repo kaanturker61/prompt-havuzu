@@ -52,6 +52,25 @@ test('create: ad doğrulama ve var olan klasör', real, async () => {
   } finally { rmrf(d); }
 });
 
+test('CON/nul/aux/com1/lpt1/prn/ok. 400, diskte klasör yok, ham git hatası yok', real, async () => {
+  const d = tmpDir();
+  try {
+    const { factory } = setup(d);
+    for (const name of ['CON', 'nul', 'aux', 'com1', 'LPT1', 'prn', 'Con', 'ok.', 'x.', ' ok. ']) {
+      await assert.rejects(factory.create(d, { name }), (e) => {
+        assert.equal(e.status, 400, name);
+        assert.ok(!/fatal|error:|git/i.test(e.message), 'ham git hatası yok: ' + e.message);
+        assert.match(e.message, name.trim().endsWith('.') ? /nokta ile bitemez/ : /Windows aygıt adı/, name);
+        return true;
+      });
+    }
+    assert.deepEqual(fs.readdirSync(d).filter((n) => n !== 'gitconfig'), [], 'diskte klasör oluşmadı');
+    // ham giriş geçerli, slug aygıt adı olmayan adlar çalışır
+    await factory.create(d, { name: 'Konsol Promptları' });
+    assert.ok(fs.existsSync(path.join(d, 'konsol-promptlari')));
+  } finally { rmrf(d); }
+});
+
 test('create geri alma: init sonrası hata klasörü tamamen siler', real, async () => {
   const d = tmpDir();
   try {

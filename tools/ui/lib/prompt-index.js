@@ -72,6 +72,7 @@ class PromptIndex {
       try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return; }
       for (const e of ents) {
         if (this.ignore.has(e.name)) continue;
+        if (e.isSymbolicLink()) continue; // bağlantılar (dosya ya da klasör) listelenmez, içeriği indekslenmez
         const r = rel + '/' + e.name;
         const a = path.join(abs, e.name);
         if (e.isDirectory()) await rec(a, r);
@@ -95,7 +96,7 @@ class PromptIndex {
       let ents;
       try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) { return; }
       for (const e of ents) {
-        if (!e.isDirectory() || this.ignore.has(e.name)) continue;
+        if (e.isSymbolicLink() || !e.isDirectory() || this.ignore.has(e.name)) continue;
         out.push(rel + '/' + e.name);
         await rec(path.join(abs, e.name), rel + '/' + e.name);
       }

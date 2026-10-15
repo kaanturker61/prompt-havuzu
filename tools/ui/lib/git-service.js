@@ -39,6 +39,31 @@ function classifyGitNetError(stderr, err) {
   return 'bilinmiyor';
 }
 
+// Yerel işlemlerin (commit, add ...) stderr çıktısını sınıflandırır (saf fonksiyon). Kimlik hatası ayrı yürür (GitError.isIdentityError).
+// Dönüş: kilit | eklenemedi | commitReddedildi | bilinmiyor
+const GIT_PATTERNS = [
+  ['kilit', /Unable to create '[^\r\n]*\.lock': File exists|Another git process seems to be running/i],
+  ['eklenemedi', /adding files failed|unable to index file|open\("[^"\r\n]*"\): No such file or directory/i]
+];
+
+// `-C <dir>` ve `-c <ayar>` çiftlerini atlayıp git alt komutunu (commit, add ...) bulur.
+function gitSubcommand(args) {
+  const a = Array.isArray(args) ? args : [];
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '-C' || a[i] === '-c') { i++; continue; }
+    if (!String(a[i]).startsWith('-')) return String(a[i]);
+  }
+  return '';
+}
+
+function classifyGitError(stderr, err) {
+  const text = String(stderr || (err && (err.stderr || err.message)) || '');
+  for (const [code, re] of GIT_PATTERNS) if (re.test(text)) return code;
+  // Başka kalıp yoksa başarısız olan commit'tir (commit hook'u reddi dahil; hook çıktısı stderr'dedir).
+  if (err && gitSubcommand(err.args) === 'commit') return 'commitReddedildi';
+  return 'bilinmiyor';
+}
+
 const ZERO_OID = '0'.repeat(40);
 const ANY_REF_RE = /^[A-Za-z0-9][A-Za-z0-9/._-]*$/;
 const REMOTE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -261,12 +286,17 @@ class GitService {
 
   async setConfig(dir, key, value) { await this.run(dir, ['config', key, value]); }
 
+  // Ayrık HEAD'de branch null, detached true, head kısa hash'tir. Doğmamış dalda (commit yok) symbolic-ref başarılı olur ve dal adı (main) döner.
   async status(dir) {
-    let branch = 'main';
-    try { branch = (await this.run(dir, ['symbolic-ref', '--short', 'HEAD'])).trim(); } catch (e) { /* ayrık HEAD */ }
+    let branch = 'main'; let detached = false; let head = null;
+    try { branch = (await this.run(dir, ['symbolic-ref', '--short', 'HEAD'])).trim(); } catch (e) {
+      // symbolic-ref başarısız ama HEAD bir commit'e çözülüyorsa HEAD ayrıktır. Çözülmüyorsa (depo bozuk) status komutu gerçek hatayı verir.
+      const short = await this.run(dir, ['rev-parse', '--short', 'HEAD']).then((s) => s.trim(), () => '');
+      if (short) { branch = null; detached = true; head = short; }
+    }
     const out = await this.run(dir, ['status', '--porcelain=v1', '-z', '-uall']);
     return {
-      isRepo: true, branch, files: parseStatus(out), hasCommits: await this.hasCommits(dir),
+      isRepo: true, branch, detached, head, files: parseStatus(out), hasCommits: await this.hasCommits(dir),
       identity: { name: await this.getConfig(dir, 'user.name'), email: await this.getConfig(dir, 'user.email') }
     };
   }
@@ -593,4 +623,4 @@ class GitService {
   }
 }
 
-module.exports = { GitService, GitError, GitNotFoundError, parseStatus, parseLogOutput, parseTagRefs, parseChangeLog, parseWordDiff, classifyGitNetError, HASH_RE };
+module.exports = { GitService, GitError, GitNotFoundError, parseStatus, parseLogOutput, parseTagRefs, parseChangeLog, parseWordDiff, classifyGitNetError, classifyGitError, HASH_RE };

@@ -135,6 +135,8 @@ class VersionAdvisor {
       if (n('degisti')) reasons.push(n('degisti') + ' değişen dosya');
       if (removed.length) reasons.push(removed.length + ' kaldırılan dosya');
       if (descChanged) reasons.push('Paket açıklaması değişti');
+      // Sürüm bileşeni üst sınıra (999999999) dayandıysa öneri üretilemez: version boş kalır, sürüm elle belirlenir.
+      if (!out.version) reasons.push('Sürüm üst sınıra ulaştı; yeni sürümü elle belirle');
     }
     return out;
   }

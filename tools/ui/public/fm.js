@@ -60,9 +60,29 @@
     return out.map(function (x) { return x.trim(); }).filter(function (x) { return x !== ''; });
   }
 
+  /* Satır sonu yorumunu atar: tırnak dışında ve öncesinde boşluk olan ilk "#" ile sonrası.
+   * Tırnak yalnızca değer ya da liste öğesi başında açılır ("it's" içindeki ' açmaz). */
+  function stripComment(v) {
+    let q = null;
+    let atStart = true; // yeni bir değer/öğe başlayabilir mi (baş, "[" ve "," sonrası; boşluklar atlanır)
+    for (let i = 0; i < v.length; i++) {
+      const c = v[i];
+      if (q) {
+        if (q === '"' && c === '\\') i++;
+        else if (c === q) { if (q === "'" && v[i + 1] === "'") i++; else q = null; }
+        continue;
+      }
+      if (c === '#' && i > 0 && /\s/.test(v[i - 1])) return v.slice(0, i).replace(/\s+$/, '');
+      if ((c === '"' || c === "'") && atStart) { q = c; atStart = false; continue; }
+      if (c === '[' || c === ',') atStart = true;
+      else if (!/\s/.test(c)) atStart = false;
+    }
+    return v;
+  }
+
   function parseValue(lines) {
     const first = KEY_RE.exec(lines[0]);
-    const v = (first[2] === undefined ? '' : first[2]).trim();
+    let v = (first[2] === undefined ? '' : first[2]).trim();
     const rest = lines.slice(1);
     if (v === '') {
       const items = rest.filter(function (l) { return /^\s*-\s+/.test(l); })
@@ -74,6 +94,8 @@
       const t = rest.map(function (l) { return l.replace(/^\s+/, ''); });
       return (v[0] === '>' ? t.join(' ') : t.join('\n')).trim();
     }
+    // Liste ve tırnaklı değerlerde yorum, kapanış denetiminden önce soyulur; düz metin dalı aşağıda olduğu gibi kalır.
+    if (v[0] === '[' || v[0] === '"' || v[0] === "'") v = stripComment(v);
     if (v[0] === '[' && v[v.length - 1] === ']') return splitInline(v.slice(1, -1)).map(unquote);
     if (v[0] === '"' || v[0] === "'") return unquote(v);
     return unquote(v.replace(/\s+#.*$/, ''));
@@ -158,9 +180,26 @@
     return String(a == null ? '' : a) === String(b == null ? '' : b);
   }
 
+  // Birden fazla yazılmış anahtarlar: [{ key, count }] (ilk görülme sırasıyla). meta() ve set() sonuncuyu etkin sayar.
+  function duplicateKeys(p) {
+    const order = []; const counts = {};
+    for (const e of p.entries) {
+      if (!e.key) continue;
+      if (!Object.prototype.hasOwnProperty.call(counts, e.key)) { counts[e.key] = 0; order.push(e.key); }
+      counts[e.key]++;
+    }
+    return order.filter(function (k) { return counts[k] > 1; }).map(function (k) { return { key: k, count: counts[k] }; });
+  }
+
+  /* Yinelenen anahtarda meta() sonuncuyu okur; set() de sonuncuyu günceller, değer boşsa tüm kopyaları siler.
+   * findLastIndex kullanılmaz (eski tarayıcılar): elle ters döngü. */
   function set(p, key, value) {
-    const i = p.entries.findIndex(function (e) { return e.key === key; });
-    if (isEmpty(value)) { if (i >= 0) p.entries.splice(i, 1); return p; }
+    let i = -1;
+    for (let k = p.entries.length - 1; k >= 0; k--) { if (p.entries[k].key === key) { i = k; break; } }
+    if (isEmpty(value)) {
+      for (let k = p.entries.length - 1; k >= 0; k--) { if (p.entries[k].key === key) p.entries.splice(k, 1); }
+      return p;
+    }
     if (typeof value === 'number') value = String(value);
     const entry = { key: key, value: value, lines: [key + ': ' + fmtValue(value)] };
     if (i >= 0) {
@@ -206,5 +245,5 @@
   }
 
   return { parse: parse, stringify: stringify, set: set, meta: meta, fold: fold, slug: slug,
-    fmtScalar: fmtScalar, placeholders: placeholders, fill: fill, same: same, CANON: CANON };
+    fmtScalar: fmtScalar, placeholders: placeholders, fill: fill, same: same, CANON: CANON, stripComment: stripComment, duplicateKeys: duplicateKeys };
 });

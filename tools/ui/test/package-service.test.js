@@ -119,6 +119,52 @@ test('rename: yalnızca büyük/küçük harf farkı (Windows dahil) [doğruland
   } finally { rmrf(d); }
 });
 
+test('bozuk pp.config.json: create/rename/setDescription 409, klasör kalmaz, dosya aynı (gerçek pp-config)', async () => {
+  const { PpConfigError } = ppConfig;
+  const conflict = (p, code) => assert.rejects(p, (e) => {
+    assert.ok(e instanceof PpConfigError, 'PpConfigError bekleniyordu: ' + e.name + ' ' + e.message);
+    assert.equal(e.status, 409); assert.equal(e.data.code, code);
+    return true;
+  });
+  // 1) servis ön koşulu bağlıyken (sunucudaki bağlantı)
+  for (const bad of ['garip{', 'null', '[]', '"x"', '5']) {
+    const { d, svc, cfgFile } = build({ assertHealthy: ppConfig.assertHealthy });
+    try {
+      fs.writeFileSync(cfgFile, bad);
+      await conflict(svc.create(d, 'prompts', { name: 'yeni', description: 'a' }), 'ppConfigBozuk');
+      await conflict(svc.create(d, 'prompts', { name: 'yeni' }), 'ppConfigBozuk');
+      await conflict(svc.rename(d, 'prompts', { from: 'eski', to: 'yeni' }), 'ppConfigBozuk');
+      await conflict(svc.setDescription(d, 'prompts', { name: 'eski', description: 'x' }), 'ppConfigBozuk');
+      assert.equal(fs.readFileSync(cfgFile, 'utf8'), bad);
+      assert.deepEqual(fs.readdirSync(path.join(d, 'prompts')), ['eski']);
+      assert.ok(fs.existsSync(path.join(d, 'prompts', 'eski', 'a.md')));
+    } finally { rmrf(d); }
+  }
+  // 2) ön koşul olmasa da gerçek saveConfigAt yazmayı reddeder; klasör geri alınır, 500'e çevrilmez
+  {
+    const { d, svc, cfgFile } = build();
+    try {
+      fs.writeFileSync(cfgFile, 'garip{');
+      await conflict(svc.create(d, 'prompts', { name: 'yeni', description: 'a' }), 'ppConfigBozuk');
+      assert.equal(fs.existsSync(path.join(d, 'prompts', 'yeni')), false, 'klasör geri alındı');
+      await conflict(svc.setDescription(d, 'prompts', { name: 'eski', description: 'x' }), 'ppConfigBozuk');
+      assert.equal(fs.readFileSync(cfgFile, 'utf8'), 'garip{');
+      assert.deepEqual(fs.readdirSync(d).sort(), ['pp.config.json', 'prompts']);
+    } finally { rmrf(d); }
+  }
+  // 3) geçersiz libraryDir
+  {
+    const { d, svc, cfgFile } = build({ assertHealthy: ppConfig.assertHealthy });
+    try {
+      fs.writeFileSync(cfgFile, JSON.stringify({ libraryDir: '../../x' }));
+      const before = fs.readFileSync(cfgFile);
+      await conflict(svc.create(d, 'prompts', { name: 'yeni', description: 'a' }), 'libraryDirGecersiz');
+      assert.deepEqual(fs.readFileSync(cfgFile), before);
+      assert.equal(fs.existsSync(path.join(d, 'prompts', 'yeni')), false);
+    } finally { rmrf(d); }
+  }
+});
+
 test('setDescription: plugin yoksa 404, boşsa 400, başarıda yazılır', async () => {
   const { d, svc, cfgFile } = build();
   try {

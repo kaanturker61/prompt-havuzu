@@ -11,7 +11,7 @@ const { GitService } = require('../lib/git-service');
 const { MarketplaceRegistry } = require('../lib/marketplace-registry');
 const { PromptIndex } = require('../lib/prompt-index');
 const { VersionService } = require('../lib/version-service');
-const { LibraryCatalog } = require('../lib/library-catalog');
+const { LibraryCatalog, SEARCH_LIMIT } = require('../lib/library-catalog');
 const { gitAvailable, tmpDir, rmrf, gitEnv } = require('./helpers');
 
 const real = { skip: !gitAvailable && 'git yok' };
@@ -193,5 +193,83 @@ test('yayinUyari: paketUyusmuyor engelleyici olunca sayılır; durumu dışarıd
     // durumHaric (info) uyarı sayısına girmez: taslak yapılınca düşer
     put(path.join(f.lib, 'a'), 'prompts/ornek/p.md', '---\nbaslik: Merhaba Dünya\ndurum: taslak\ntur: komut\npaket: baska\n---\nselam dünya\n');
     assert.equal((await f.catalog.tree(f.lib, 'a')).marketplaces[0].yayinUyari, 1);
+  } finally { rmrf(f.d); }
+});
+
+test('sembolik bağlantı dosyası ve klasörü ağaçta, aramada ve facet’te görünmez', real, async (t) => {
+  const { makeLink, removeLink } = require('./links');
+  const f = await fixture();
+  const out = path.join(f.d, 'dis'); fs.mkdirSync(out);
+  const dirLink = path.join(f.a, 'prompts', 'kisayol'); const fileLink = path.join(f.a, 'prompts', 'dis.md');
+  const techLink = path.join(f.a, 'dis-teknik');
+  try {
+    const baseCount = (await f.catalog.tree(f.lib, 'a')).marketplaces.find((m) => m.name === 'a').count;
+    put(f.d, 'dis/gizli.md', '---\nbaslik: Gizli\netiketler: [sizinti]\n---\nDISARI-GIZLI');
+    put(f.d, 'dis/alt/derin.md', 'DISARI-GIZLI');
+    if (!makeLink(out, dirLink)) return t.skip('bağlantı kurulamadı (EPERM)');
+    makeLink(path.join(out, 'gizli.md'), fileLink, 'file');
+    makeLink(out, techLink);
+    const tree = await f.catalog.tree(f.lib, 'a');
+    const a = tree.marketplaces.find((m) => m.name === 'a');
+    assert.equal(findNode(a, 'prompts/kisayol'), null);
+    assert.equal(findNode(a, 'prompts/dis.md'), null);
+    assert.equal(findNode(a, 'dis-teknik'), null, 'teknik dosyalarda da bağlantı yok');
+    assert.ok(!a.loose.some((n) => n.name === 'dis.md'));
+    assert.ok(!a.teknik.some((n) => n.name === 'dis-teknik'));
+    assert.equal(a.count, baseCount, 'sayım bağlantılardan etkilenmedi');
+    assert.deepEqual((await f.catalog.search(f.lib, 'a', 'DISARI-GIZLI', {})), []);
+    assert.deepEqual((await f.catalog.search(f.lib, 'a', '', { tags: 'sizinti' })), []);
+    assert.equal((await f.catalog.facets(f.lib, 'a')).tags.some((x) => x.name === 'sizinti'), false);
+  } finally { removeLink(dirLink); removeLink(fileLink); removeLink(techLink); rmrf(f.d); }
+});
+
+/* ---------- B-20: arama sonucu kesilirse sayım bildirilir ---------- */
+
+// n adet "ortaksozcuk" içeren prompt (+ 1 benzersiz) olan tek marketplace.
+async function bigFixture(n) {
+  const c = await build();
+  const m = path.join(c.lib, 'm'); fs.mkdirSync(m);
+  await c.git.init(m);
+  put(m, 'pp.config.json', pp());
+  for (let i = 0; i < n; i++) put(m, `prompts/p/n${String(i).padStart(4, '0')}.md`, `---\nbaslik: Not ${i}\netiketler: [${i % 2 ? 'tek' : 'cift'}]\n---\ngovde ortaksozcuk ${i}\n`);
+  put(m, 'prompts/p/ozel.md', '---\nbaslik: Özel\n---\nsadece benzersizsozcuk\n');
+  return { ...c, m };
+}
+
+test('searchEx: 305 eşleşmede results 300, total 305, limit 300, truncated true; search() yalnızca dizi döner (B-20)', real, async () => {
+  const f = await bigFixture(305);
+  try {
+    const ex = await f.catalog.searchEx(f.lib, 'm', 'ortaksozcuk', {});
+    assert.equal(ex.results.length, 300); assert.equal(ex.total, 305); assert.equal(ex.limit, 300); assert.equal(ex.truncated, true);
+    assert.deepEqual(Object.keys(ex).sort(), ['limit', 'results', 'total', 'truncated']);
+    // search() ince sarmalayıcı: aynı 300 sonuç, düz dizi
+    const arr = await f.catalog.search(f.lib, 'm', 'ortaksozcuk', {});
+    assert.ok(Array.isArray(arr)); assert.equal(arr.length, 300);
+    assert.deepEqual(arr, ex.results);
+    assert.equal(SEARCH_LIMIT, 300);
+    // süzgeç sonrası sayım: 305 prompt'un yarısı 'tek' etiketli
+    const tek = await f.catalog.searchEx(f.lib, 'm', '', { tags: 'tek' });
+    assert.equal(tek.total, 152); assert.equal(tek.truncated, false); assert.equal(tek.results.length, 152);
+    // boş sorgu tüm promptları sayar (306), yine kesilir
+    const hepsi = await f.catalog.searchEx(f.lib, 'm', '', {});
+    assert.equal(hepsi.total, 306); assert.equal(hepsi.results.length, 300); assert.equal(hepsi.truncated, true);
+    // daraltılmış sorgu
+    const ozel = await f.catalog.searchEx(f.lib, 'm', 'benzersizsozcuk', {});
+    assert.equal(ozel.total, 1); assert.equal(ozel.truncated, false); assert.equal(ozel.results[0].path, 'prompts/p/ozel.md');
+    const yok = await f.catalog.searchEx(f.lib, 'm', 'hicbirdeyok', {});
+    assert.deepEqual(yok, { results: [], total: 0, limit: 300, truncated: false });
+  } finally { rmrf(f.d); }
+});
+
+test('searchEx: tam 300 ve altında truncated false, total sonuç sayısına eşit (B-20)', real, async () => {
+  const f = await bigFixture(300);
+  try {
+    let ex = await f.catalog.searchEx(f.lib, 'm', 'ortaksozcuk', {});
+    assert.equal(ex.results.length, 300); assert.equal(ex.total, 300); assert.equal(ex.truncated, false, 'tam sınırda kesilme yok');
+    ex = await f.catalog.searchEx(f.lib, 'm', '', {}); // 301 prompt
+    assert.equal(ex.total, 301); assert.equal(ex.truncated, true);
+    fs.rmSync(path.join(f.m, 'prompts', 'p', 'ozel.md')); fs.rmSync(path.join(f.m, 'prompts', 'p', 'n0000.md'));
+    ex = await f.catalog.searchEx(f.lib, 'm', '', {}); // 299 prompt
+    assert.equal(ex.total, 299); assert.equal(ex.results.length, 299); assert.equal(ex.truncated, false);
   } finally { rmrf(f.d); }
 });

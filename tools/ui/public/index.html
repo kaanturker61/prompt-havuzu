@@ -103,6 +103,7 @@ main { overflow: auto; padding: 22px 28px 70px; min-width: 0; }
 .res { padding: 8px 12px 9px; border-left: 3px solid transparent; cursor: pointer; border-bottom: 1px solid var(--line2); }
 .res:hover, .res.active { background: var(--pool-tint); }
 .res.active { border-left-color: var(--pool); }
+.res-note { padding: 10px 12px 14px; }
 .rt { display: flex; align-items: center; gap: 7px; font-weight: 600; }
 .rp { color: var(--muted); font-size: 12px; margin-left: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rs { margin: 3px 0 0 15px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -307,6 +308,12 @@ details summary { cursor: pointer; }
 .setup-list li:last-child { border-bottom: 0; }
 .setup-list .msg { flex: 1 1 280px; overflow-wrap: anywhere; }
 .start h1:focus { outline: 0; }
+#fmWarn { margin: 0 0 12px; }
+.lostedit { margin: 18px 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
+.lostedit h2 { font-size: 15px; margin: 0 0 6px; }
+.start .lostedit p { max-width: none; color: var(--ink); }
+.lostedit textarea { width: 100%; box-sizing: border-box; min-height: 140px; max-height: 40vh; font: 12.5px/1.5 var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+.lostbtns { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
 .mkrow.dim { opacity: .6; }
 .fieldset-plain { border: 0; margin: 0; padding: 0; min-width: 0; }
 </style>
@@ -422,7 +429,19 @@ function toast(msg, kind, ms) {
   setTimeout(() => t.classList.add('out'), d);
   setTimeout(() => t.remove(), d + 300);
 }
-const fail = (e) => { if (e && e.setupRequired) return; toast(e && e.message ? e.message : String(e), 'error'); };
+// Hata iletisi: sunucunun Türkçe özeti + varsa git ayrıntısının ilk satırı (hook çıktısı kaybolmasın).
+// Hem api() hatasını (message, data.gitDetail) hem de PUT /api/file commitError nesnesini (error, gitDetail) kabul eder.
+function errText(e) {
+  if (e == null) return '';
+  if (typeof e !== 'object') return String(e);
+  const msg = e.message || e.error || '';
+  const detail = String((e.data && e.data.gitDetail) || e.gitDetail || '');
+  const line = detail.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || '';
+  const cut = line.length > 160 ? line.slice(0, 159) + '…' : line;
+  if (!cut || msg.includes(cut)) return msg;
+  return msg ? msg + ' (Ayrıntı: ' + cut + ')' : cut;
+}
+const fail = (e) => { if (e && e.setupRequired) return; toast(errText(e) || String(e), 'error'); };
 
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* eski tarayıcı */ }
@@ -459,8 +478,11 @@ const S = {
   sel: null,              // { mp, key } seçili ağaç düğümü
   focusKey: null,         // roving tabindex: odaktaki satır
   f: { q: '', tags: [], durum: '', tur: '', scope: 'library' },
-  results: null, cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null,
-  warnHidden: false
+  results: null, resultsInfo: null, // resultsInfo: { total, limit, truncated } (sunucu 300'de keser)
+  cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null,
+  warnHidden: false,
+  openSeq: 0,             // openFile çağrı sayacı: yavaş eski yanıt yenisini ezmesin
+  lostEdit: null          // kurulum bozulunca kurtarılan kaydedilmemiş metin: { mp, path, raw, commitMsg }
 };
 
 const setupOk = () => !!(S.info && S.info.setup && S.info.setup.ok);
@@ -672,7 +694,7 @@ function rowHtml(it, focusKey) {
     case 'gitless': label = 'Git deposu olmayan klasörler (' + it.node.length + ')'; icon = ICON.warn; cls = ' soft'; break;
     case 'gitlessItem': label = esc(it.node.name); pills = '<span class="pill warn">Git deposu değil</span>'; icon = ICON.gitless; cls = ' soft';
       acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">Git'i başlat</button>`; break;
-    case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = btn('menu', '⋯', it.node.name + ' için işlemler'); break;
+    case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', it.node.name + ' için işlemler') : ''; break;
     default: { // file
       const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
       label = esc(txt);
@@ -696,7 +718,11 @@ function rowHtml(it, focusKey) {
 function treeHtml() {
   S.model = treeModel();
   S.modelMap = new Map(S.model.filter((x) => x.kind !== 'note').map((x) => [x.key, x]));
-  if (!S.lib) return '<div class="empty">Yükleniyor…</div>';
+  if (!S.lib) {
+    // Kök sonradan kullanılamaz olduysa (örn. diskten silindi) S.lib boşalır; "Yükleniyor…" sonsuza dek kalmasın.
+    if (S.info && S.info.setup && !S.info.setup.rootOk) return '<div class="empty">Library kökü kullanılamıyor; kurulum ekranındaki adımları izle.</div>';
+    return '<div class="empty">Yükleniyor…</div>';
+  }
   if (!S.lib.marketplaces.length && !(S.lib.ignored || []).length) {
     return '<div class="empty">Henüz marketplace yok.<br><button class="btn sm primary" data-act="new-mp" style="margin-top:8px">Yeni marketplace</button></div>';
   }
@@ -720,6 +746,19 @@ function resultsHtml() {
   }).join('');
 }
 
+// Liste başlığı: sunucu 300'de kesmişse "Sonuçlar (300 / 3012)", değilse "Sonuçlar (N)". mpCount > 1 ise marketplace sayısı eklenir.
+function resultsTitle(results, info, mpCount) {
+  const n = results.length;
+  const cnt = info && info.truncated && info.total > n ? n + ' / ' + info.total : String(n);
+  return 'Sonuçlar (' + cnt + ')' + (mpCount > 1 ? ' · ' + mpCount + ' marketplace' : '');
+}
+
+// Sonuçlar kesilmişse listenin altına daraltma ipucu (HTML); aksi halde boş. `.res` olmadığı için data-ri sırasını ve klavye gezintisini etkilemez.
+function resultsNote(info) {
+  if (!info || !info.truncated) return '';
+  return `<div class="hint res-note" role="listitem">İlk ${esc(info.limit)} sonuç gösteriliyor. Daraltmak için etiket, durum, tür filtresi ya da daha uzun bir sözcük kullan.</div>`;
+}
+
 // Araç çubuğu düğmelerinin açık/kapalı durumu ve nedeni.
 function paintToolbar() {
   const rok = rootOk(); const m = activeMp(); const ok = setupOk();
@@ -741,9 +780,8 @@ function renderList() {
   const fk = hadFocus ? (hadFocus.dataset.key || null) : null; const fri = hadFocus ? hadFocus.dataset.ri : null;
   if (S.results) {
     list.setAttribute('role', 'list'); list.setAttribute('aria-label', 'Arama sonuçları');
-    list.innerHTML = resultsHtml();
-    const n = new Set(S.results.map((r) => r.mp)).size;
-    $('#listTitle').textContent = 'Sonuçlar (' + S.results.length + ')' + (n > 1 ? ' · ' + n + ' marketplace' : '');
+    list.innerHTML = resultsHtml() + resultsNote(S.resultsInfo);
+    $('#listTitle').textContent = resultsTitle(S.results, S.resultsInfo, new Set(S.results.map((r) => r.mp)).size);
     if (fri != null) { const el = list.querySelector('[data-ri="' + fri + '"]'); if (el) el.focus(); }
   } else {
     list.setAttribute('role', 'tree'); list.setAttribute('aria-label', 'Kütüphane');
@@ -758,9 +796,10 @@ function renderList() {
 const rowEl = (key) => $$('#list [data-key]').find((e) => e.dataset.key === key) || null;
 
 const runSearch = debounce(async () => {
-  if (!isFiltering()) { S.results = null; renderList(); return; }
+  if (!isFiltering()) { S.results = null; S.resultsInfo = null; renderList(); return; }
   try {
-    S.results = (await get('/api/search?' + qs({ q: S.f.q, tags: S.f.tags.join(','), durum: S.f.durum, tur: S.f.tur, scope: S.f.scope }))).results;
+    const r = await get('/api/search?' + qs({ q: S.f.q, tags: S.f.tags.join(','), durum: S.f.durum, tur: S.f.tur, scope: S.f.scope }));
+    S.results = r.results; S.resultsInfo = { total: r.total, limit: r.limit, truncated: !!r.truncated };
   } catch (e) { fail(e); }
   renderList();
 }, 140);
@@ -822,6 +861,38 @@ function closeModal() {
   if (s && s.onClose) s.onClose();
 }
 
+// Modal içinde Tab döngüsü kararı: son öğede Tab ilkine, ilk öğede Shift+Tab sonuncusuna sarar; odak pencere dışındaysa içeri alınır.
+// Dönen öğeye odak verilir; null = odak arada bir öğede, tarayıcı kendi sıralamasıyla ilerlesin.
+function tabTarget(items, active, shift) {
+  if (!items.length) return null;
+  const i = items.indexOf(active);
+  if (i < 0) return shift ? items[items.length - 1] : items[0];
+  if (shift && i === 0) return items[items.length - 1];
+  if (!shift && i === items.length - 1) return items[0];
+  return null;
+}
+
+// Açık #overlay penceresinde Tab ile gezilebilen görünür öğeler (DOM sırasıyla). Aynı gruptaki radyolardan yalnızca tarayıcının durağı alınır.
+function modalFocusables() {
+  const all = $$('button, input, select, textarea, summary, [tabindex]', $('.modal')).filter((el) =>
+    !el.disabled && !el.hidden && el.tabIndex >= 0 && el.type !== 'hidden' && el.getClientRects().length > 0);
+  return all.filter((el) => {
+    if (el.type !== 'radio' || !el.name) return true;
+    const grp = all.filter((x) => x.type === 'radio' && x.name === el.name && x.form === el.form);
+    const stop = grp.find((x) => x.checked) || grp[0];
+    return el === stop;
+  });
+}
+
+// Pencere (modal) açıkken Tab odağı pencerenin içinde tutar. İşlendiyse true.
+function trapTab(ev) {
+  if (ev.key !== 'Tab' || ev.ctrlKey || ev.altKey || ev.metaKey || $('#overlay').hidden) return false;
+  if (ev.target && ev.target.closest && ev.target.closest('.menu')) return false;
+  const next = tabTarget(modalFocusables(), document.activeElement, ev.shiftKey);
+  if (next) { ev.preventDefault(); next.focus(); }
+  return true;
+}
+
 function askText(o) {
   return new Promise((resolve) => {
     let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
@@ -874,6 +945,11 @@ function showMenu(x, y, items, returnKey) {
   const first = $('.mi', m); if (first) first.focus();
 }
 
+// Marketplace yapısının parçası olan yollar (pp.config.json, plugins/, .claude-plugin/, libraryDir ...) silinemez ya da taşınamaz:
+// sunucu 403 korunanYol döner, menüde de bu işlemler gösterilmez. Kural Rules.isProtectedPath'te (sunucuyla ortak).
+const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-delete-plugin'];
+const isProtectedItem = (it) => !!it.path && Rules.isProtectedPath(it.path, libDirOf(it.mp));
+
 // Düğüm türüne göre bağlam menüsü öğeleri.
 function menuItemsFor(it) {
   const mk = (label, act, extra) => ({ label, act, mp: it.mp, path: it.path, kind: it.kind, ...extra });
@@ -905,7 +981,7 @@ function menuItemsFor(it) {
     case 'inbox': items.push(mk('İçe aktar', 'import')); break;
     default: break;
   }
-  return items;
+  return isProtectedItem(it) ? items.filter((x) => !PROTECTED_ACTS.includes(x.act)) : items;
 }
 function openMenuFor(it, x, y) {
   const items = menuItemsFor(it);
@@ -948,6 +1024,12 @@ function updateDirty() {
   const n = $('#dirtyNote'); if (n) n.hidden = !c.dirty;
 }
 
+// Açık dosya kapanırken (silme, başka marketplace'e taşıma): son açılan kaydı ve sekme başlığını sıfırlar, kaydedilmemiş dosyanın "•" işareti kalmaz.
+function clearCur() {
+  S.cur = null; ls.set(lsKey('last'), null);
+  document.title = 'Prompt havuzu';
+}
+
 async function confirmDiscard() {
   if (!isDirty()) return true;
   const a = await askChoice({
@@ -961,12 +1043,17 @@ async function confirmDiscard() {
 
 async function openFile(p, o) {
   o = o || {};
-  if (S.cur && S.cur.path === p && !o.reload) { closeSide(); return; }
+  if (S.cur && S.cur.path === p && !o.reload) { S.openSeq++; closeSide(); return; } // açık dosyaya tıklamak, yoldaki başka açılışı da geçersiz kılar
   if (!(await confirmDiscard())) return;
   const gen = S.gen;
+  const seq = ++S.openSeq;
+  const stale = () => gen !== S.gen || seq !== S.openSeq; // marketplace değişti ya da daha yeni bir açılış başladı
   let r;
-  try { r = await get('/api/file?' + qs({ path: p })); } catch (e) { if (!o.quiet) fail(e); if (e.status === 404) ls.set(lsKey('last'), null); renderMain(); return; }
-  if (gen !== S.gen) return; // bu arada marketplace değişti
+  try { r = await get('/api/file?' + qs({ path: p })); } catch (e) {
+    if (stale()) return; // bayat hata toast ya da yeniden çizim üretmez
+    if (!o.quiet) fail(e); if (e.status === 404) ls.set(lsKey('last'), null); renderMain(); return;
+  }
+  if (stale()) return;
   const parsed = FM.parse(r.raw);
   const mp = activeName();
   S.cur = {
@@ -981,6 +1068,27 @@ async function openFile(p, o) {
   loadVersion();
   if (S.cur.tab === 'hist') loadHistory();
   document.title = 'Prompt havuzu';
+  await offerLostEdit();
+}
+
+// Kurulum bozulunca kurtarılan kaydedilmemiş metin (S.lostEdit), aynı marketplace ve yol yeniden açılınca geri yüklenmek üzere önerilir.
+// Pencere kapatılırsa ("Daha sonra") metin bellekte kalır; yalnızca "At" ya da geri yükleme siler.
+async function offerLostEdit() {
+  const l = S.lostEdit; const c = S.cur;
+  if (!l || !c || l.mp !== c.mp || l.path !== c.path) return;
+  const a = await askChoice({
+    title: 'Kaydedilmemiş metin bulundu',
+    text: 'Kurulum bozulmadan önce "' + base(c.path) + '" dosyasında kaydedilmemiş değişiklikler vardı' + (l.commitMsg ? ' (commit mesajın da korundu)' : '') + '. Geri yüklensin mi?',
+    choices: [{ id: 'later', label: 'Daha sonra' }, { id: 'drop', label: 'At', kind: 'danger' }, { id: 'restore', label: 'Geri yükle', kind: 'primary' }]
+  });
+  if (S.cur !== c) return; // pencere açıkken başka dosya açıldı
+  if (a === 'drop') { S.lostEdit = null; return; }
+  if (a !== 'restore') return;
+  const p = FM.parse(l.raw);
+  c.parsed = p; c.eol = p.eol; c.bom = p.bom; c.lead = leadOf(p); c.commitMsg = l.commitMsg || '';
+  S.lostEdit = null;
+  renderMain(); updateDirty(); // dirty, diskteki sürümle karşılaştırılarak yeniden hesaplanır
+  toast('Kaydedilmemiş metin geri yüklendi');
 }
 
 // Açık dosya başka bir marketplace'e aitse (başka sekmede geçiş) yazma engellenir.
@@ -1040,7 +1148,10 @@ function editPaneHtml() {
   const usage = c.publish ? (c.publish.tur === 'ajan'
     ? `Ajan adı: <code>${esc(c.publish.ad)}</code>`
     : `Claude Code'da çağır: <code>/${esc(c.publish.paket)}:${esc(c.publish.ad)}</code>`) : '';
-  return `
+  // Aynı anahtar birden fazla yazılmışsa sonuncusu geçerlidir; yayını engellemez, yalnızca uyarır.
+  const dup = FM.duplicateKeys(c.parsed);
+  const dupWarn = dup.length ? `<div id="fmWarn" class="issue warn" role="status">${esc(Rules.MSG.anahtarTekrar(dup))}</div>` : '';
+  return `${dupWarn}
   <div class="meta">
     <label>Etiketler</label>${chipsHtml('etiketler', toList(m.etiketler), 'Etiket ekle, Enter')}
     <label for="fDurum2">Durum</label>
@@ -1273,6 +1384,10 @@ function refreshChips(key) {
   const ph = key === 'etiketler' ? 'Etiket ekle, Enter' : 'Hangi projelerde kullanılıyor?';
   const wrap = document.createElement('div');
   wrap.innerHTML = chipsHtml(key, toList(FM.meta(c.parsed)[key]), ph);
+  // Odaktaki eski giriş kaldırılırken tarayıcı senkron focusout tetikler; giriş hâlâ doluysa işleyici addChips'i
+  // iç içe çağırıp aynı kabı ikinci kez değiştirir ve dıştaki replaceWith NotFoundError ile patlar. Önce boşalt.
+  const old = el.querySelector('.chip-in'); if (old) old.value = '';
+  if (!el.parentNode) return;
   el.replaceWith(wrap.firstElementChild);
 }
 function addChips(key, raw, keepFocus) {
@@ -1429,8 +1544,8 @@ async function openBump() {
             if (a === 'reload') { c.dirty = false; closeModal(); await openFile(c.path, { reload: true, tab: c.tab }); }
             return;
           }
-          if (d.rollbackFailed) showErr(e.message, { act: 'git', label: 'Git panelini aç' });
-          else showErr(e.message);
+          if (d.rollbackFailed) showErr(errText(e), { act: 'git', label: 'Git panelini aç' });
+          else showErr(errText(e));
           const ok = $('#bumpOk'); if (ok) ok.disabled = false;
         }
       };
@@ -1468,7 +1583,7 @@ async function save(force) {
       c.commitMsg = ''; const i = $('#commitMsg'); if (i) i.value = '';
     } else if (r.commitSkipped) toast('Kaydedildi. Commit edilecek değişiklik yoktu.');
     else if (r.commitError && r.commitError.needIdentity) { toast('Kaydedildi'); needId = true; }
-    else if (r.commitError) toast('Kaydedildi ama commit atılamadı: ' + r.commitError.error, 'error');
+    else if (r.commitError) toast('Kaydedildi ama commit atılamadı: ' + errText(r.commitError), 'error');
     else toast(S.git && S.git.isRepo ? 'Kaydedildi (commit edilmedi)' : 'Kaydedildi');
     if (c.isPrompt && !before) {
       const chk = Rules.publishCheck({ meta: FM.meta(c.parsed), hasFm: c.parsed.hasFm, fmBroken: Rules.isFmBroken(raw, c.parsed.hasFm) });
@@ -2051,7 +2166,7 @@ async function openMove(path) {
           if (toMp !== from) {
             await api('POST', '/api/prompts/transfer', { path, toMp, toPlugin: tv.slice(2) });
             closeModal();
-            if (S.cur && S.cur.path === path) { S.cur = null; ls.set(lsKey('last'), null); }
+            if (S.cur && S.cur.path === path) clearCur();
             S.mpOpen.add(toMp); saveMpOpen();
             await afterWrite(); renderMain();
             toast(`Taşındı: ${toMp}. Sürüm tag'leri ve geçmiş "${from}" deposunda kaldı; iki depoda da commit bekleyen değişiklik var.`, 'ok', 7000);
@@ -2134,7 +2249,7 @@ async function deleteItem(p, text) {
   if (a !== 'yes') return;
   try {
     await api('DELETE', '/api/file?' + qs({ path: p }));
-    if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) { S.cur = null; ls.set(lsKey('last'), null); }
+    if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) clearCur();
     await afterWrite(); renderMain(); toast('Çöp kutusuna taşındı');
   } catch (e) { fail(e); }
 }
@@ -2219,6 +2334,20 @@ function gitTabs(on) {
   return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">Değişiklikler${S.git && S.git.isRepo ? ' (' + S.git.files.length + ')' : ''}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">Geçmiş</button><button class="tab ${on === 'remote' ? 'on' : ''}" data-act="git-tab" data-tab="remote">Uzak depo</button></div><div style="height:14px"></div>`;
 }
 
+// Git panelindeki dal etiketi (düz metin). Ayrık HEAD'de dal adı yoktur: 'main' yazılmaz, kısa commit gösterilir.
+function branchLabel(g) {
+  if (g.detached) return 'Ayrık HEAD (' + (g.head || '?') + ')';
+  return g.branch || '?';
+}
+
+// Dal satırı (HTML). Ayrıkken ek bir satır, commit'lerin bir dala bağlı olmadığını söyler.
+function branchLine(g) {
+  if (g.detached) {
+    return `<div class="hint"><b>${esc(branchLabel(g))}</b></div><div class="hint" id="detachedHint">Commit'ler bir dala bağlı değil. Bir dala geçmeden atılan commit'ler sonradan bulunamayabilir.</div>`;
+  }
+  return `<div class="hint">Dal: <b>${esc(branchLabel(g))}</b>${g.hasCommits ? '' : ' (henüz commit yok)'}</div>`;
+}
+
 function paintGit() {
   const g = S.git; const body = $('#mBody');
   if (!g.isRepo) {
@@ -2236,7 +2365,7 @@ function paintGit() {
   const suggestion = g.files.length === 1 ? (stem(g.files[0].path) + ': güncelle') : (g.files.length ? g.files.length + ' dosya güncellendi' : '');
   body.innerHTML = gitTabs('changes') + `<div class="gitgrid"><div class="gitleft">
     ${gitTarget()}
-    <div class="hint">Dal: <b>${esc(g.branch)}</b>${g.hasCommits ? '' : ' (henüz commit yok)'}</div>
+    ${branchLine(g)}
     ${g.files.length ? `<div class="ftable">${g.files.map((f) => `<div class="gf" data-gpath="${esc(f.path)}"><input type="checkbox" data-gsel="${esc(f.path)}" ${S.gitSel.has(f.path) ? 'checked' : ''} aria-label="${esc(f.path)} commit'e dahil"><button class="link" data-act="git-diff" data-path="${esc(f.path)}" title="${esc(f.path)}">${esc(f.path)}</button><span class="pill ${f.code === 'D' ? 'bad' : f.code === '?' ? 'ok' : 'warn'}">${GLABEL[f.code] || f.code}</span></div>`).join('')}</div>
       <button class="btn sm" data-act="git-selall" style="justify-self:start">Tümünü seç / bırak</button>`
       : '<p>Commit bekleyen değişiklik yok. Her şey kayıtlı.</p>'}
@@ -2601,7 +2730,7 @@ async function pkPublish() {
     afterWrite(); if (S.cur && S.cur.tab === 'hist') loadHistory();
   } catch (e) {
     clearInterval(tick);
-    if (S.pk) S.pk.msg = { kind: 'error', text: e.message + (e.data && e.data.needIdentity ? ' (Git panelinden kimliği gir)' : '') };
+    if (S.pk) S.pk.msg = { kind: 'error', text: errText(e) + (e.data && e.data.needIdentity ? ' (Git panelinden kimliği gir)' : '') };
   }
   if (S.pk) { S.pk.pending = null; S.pk.noFocus = false; await pkLoad(); }
 }
@@ -2804,7 +2933,7 @@ function renderSetup() {
     <p>Promptlar, araç klasörünün dışındaki bir library kökünde, her marketplace ayrı bir git deposu olarak tutulur. Aşağıdaki sorunları gider.</p>
     <ul class="setup-list">${st.issues.map((i) => `<li><span class="pill ${i.level === 'error' ? 'bad' : 'warn'}">${i.level === 'error' ? 'Hata' : 'Uyarı'}</span><span class="msg">${esc(i.message)}</span>${issueButton(i)}</li>`).join('')}</ul>
     <p class="hint">Kurulum tamamlanana kadar Yeni prompt, İçe aktar, Git ve Marketplace düğmeleri kapalıdır. Ayarlar her zaman açıktır.</p>
-    <p class="hint">Ayar dosyası: <code>${esc(S.info.configPath)}</code></p></div>`;
+    <p class="hint">Ayar dosyası: <code>${esc(S.info.configPath)}</code></p>${lostEditHtml()}</div>`;
   const h = $('#setupTitle'); if (h) h.focus();
 }
 
@@ -2815,7 +2944,7 @@ function renderPick() {
   const none = codes.includes('marketplaceYok');
   $('#main').innerHTML = `<div class="start"><h1 id="pickTitle" tabindex="-1">Bir marketplace seç</h1>
     <p>${none ? 'Henüz marketplace yok. Yeni bir tane oluştur.' : 'Soldaki ağaçtan bir marketplace\'e tıkla ya da yeni bir tane oluştur.'}</p>
-    <div class="btns"><button class="btn primary" data-act="new-mp">Yeni marketplace</button></div></div>`;
+    <div class="btns"><button class="btn primary" data-act="new-mp">Yeni marketplace</button></div>${lostEditHtml()}</div>`;
 }
 
 function paintWarnBand() {
@@ -2858,12 +2987,51 @@ function applySetupUi() {
   paintToolbar();
 }
 
+// Kurulum bozulurken açık dosyadaki kaydedilmemiş metin ve commit mesajı bellekte saklanır (S.lostEdit); kurulum ekranındaki kart gösterir.
+function keepLostEdit() {
+  const c = S.cur; if (!c) return false;
+  syncFromDom(); // Ham metin sekmesindeki yazılanlar da alınır
+  if (!c.dirty && !String(c.commitMsg || '').trim()) return false;
+  S.lostEdit = { mp: c.mp, path: c.path, raw: FM.stringify(c.parsed), commitMsg: c.commitMsg || '' };
+  return true;
+}
+
 function onSetupLost(setup) {
+  const kept = keepLostEdit();
   S.info.setup = setup; S.info.root = null; S.info.isRepo = false;
   S.cur = null; S.git = null; S.gen++;
   if (!setup.rootOk) { S.lib = null; S.results = null; }
   document.title = 'Prompt havuzu';
   applySetupUi(); renderList(); renderMain();
+  if (kept) toast('Kurulum bozuldu. Kaydedilmemiş metnin korundu; kurulum ekranından panoya kopyalayabilirsin.', 'error', 9000);
+}
+
+// Kurulum ekranındaki "kaydedilmemiş metin" kartı (HTML); korunan metin yoksa boş.
+function lostEditHtml() {
+  const l = S.lostEdit; if (!l) return '';
+  return `<section class="lostedit" id="lostEdit" aria-labelledby="lostTitle">
+    <h2 id="lostTitle">Kaydedilmemiş metnin korundu</h2>
+    <p><b>${esc(base(l.path))}</b> (${esc(l.mp)}) dosyasındaki kaydedilmemiş değişiklikler bellekte tutuluyor; disk eski haliyle duruyor. Sayfayı yenilersen kaybolur, önce panoya kopyala.</p>
+    ${l.commitMsg ? `<p>Commit mesajın: <code>${esc(l.commitMsg)}</code></p>` : ''}
+    <textarea id="lostRaw" readonly spellcheck="false" aria-label="Korunan metin">${esc(l.raw)}</textarea>
+    <div class="lostbtns"><button type="button" class="btn primary" data-act="lost-copy">Metni panoya kopyala</button><button type="button" class="btn" data-act="lost-drop">At</button></div>
+    <p class="hint">Kurulum düzelince dosyayı yeniden açtığında metni geri yüklemeyi önereceğim.</p>
+  </section>`;
+}
+
+async function lostCopy() {
+  const l = S.lostEdit; if (!l) return;
+  const ok = await copyText(l.raw);
+  toast(ok ? 'Metin panoya kopyalandı' : 'Kopyalanamadı, metni kutudan elle seç', ok ? 'ok' : 'error');
+}
+
+async function lostDrop() {
+  if (!S.lostEdit) return;
+  const a = await askChoice({ title: 'Korunan metin atılsın mı?', text: 'Kaydedilmemiş metin ve commit mesajı bellekten silinir; geri alınamaz.', choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'At', kind: 'danger' }] });
+  if (a !== 'yes') return;
+  S.lostEdit = null;
+  renderMain();
+  toast('Korunan metin atıldı');
 }
 
 // Sunucudan gelen yeni /api/info ile etkin marketplace'e geçiş durumunu uygular.
@@ -3241,6 +3409,8 @@ document.addEventListener('click', async (ev) => {
     case 'mk-git-init': await mkGitInit(el.dataset.name, el.dataset.confirm !== undefined); break;
     case 'mk-activate': if (await activateMarketplace(el.dataset.name)) closeModal(); break;
     case 'settings': openSettings(el.dataset.section); break;
+    case 'lost-copy': await lostCopy(); break;
+    case 'lost-drop': await lostDrop(); break;
     case 'warn-close': S.warnHidden = true; paintWarnBand(); break;
     case 'git-diff': await gitDiffFor(p); break;
     case 'git-selall': { S.gitSelTouched = true; const all = S.git.files.every((f) => S.gitSel.has(f.path)); S.gitSel = new Set(all ? [] : S.git.files.map((f) => f.path)); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); break; }
@@ -3315,6 +3485,7 @@ document.addEventListener('toggle', (ev) => { if (ev.target.id === 'pubBox') ls.
 
 document.addEventListener('keydown', (ev) => {
   const t = ev.target;
+  if (trapTab(ev)) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') { ev.preventDefault(); save(); return; }
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); document.body.classList.add('side-open'); $('#q').focus(); $('#q').select(); return; }
   if (ev.key === 'Enter' && t.id === 'commitMsg' && S.cur) { ev.preventDefault(); save(); return; }

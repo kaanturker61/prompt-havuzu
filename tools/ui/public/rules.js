@@ -9,7 +9,10 @@
 
   const PUBLISH_FIELDS = ['paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model'];
   const DEFAULT_VERSION = '1.0.0';
-  const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+  // Her bileşen en çok 9 basamak (999999999): Number ile kayıpsız karşılaştırılır, BigInt gerekmez.
+  const VERSION_PART_MAX = 999999999;
+  const SEMVER_RE = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
+  const SEMVER_ANY_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
   const MSG = {
     turYok: function (fields) { return 'Yayın alanları dolu (' + fields.join(', ') + ') ama "tur" yok. Bu prompt yayınlanmayacak.'; },
@@ -27,7 +30,14 @@
       const l = liste.map(function (x) { return x === '' ? '(boş)' : x; }).join(', ');
       return (durum ? 'Durumu "' + durum + '".' : 'Durumu boş.') + ' Yalnızca şu durumlar dışa aktarılır: ' + l + '.';
     },
-    surumArtirilmamis: function (v) { return 'İçerik değişmiş ama "versiyon" artırılmamış (' + v + '). Yama sayılacak.'; }
+    surumArtirilmamis: function (v) { return 'İçerik değişmiş ama "versiyon" artırılmamış (' + v + '). Yama sayılacak.'; },
+    // list: FM.duplicateKeys sonucu [{ key, count }] (düz anahtar adı da kabul edilir)
+    anahtarTekrar: function (list) {
+      const d = (list || []).map(function (x) { return typeof x === 'string' ? { key: x, count: 2 } : x; });
+      if (d.length === 1) return d[0].key + ' ' + d[0].count + ' kez yazılmış; sonuncusu geçerli.';
+      return d.map(function (x) { return x.key + ' (' + x.count + ' kez)'; }).join(', ') + ' birden fazla kez yazılmış; hepsinde sonuncusu geçerli.';
+    },
+    aygitAdi: function (ad) { return '"' + ad + '" bir Windows aygıt adı; dosya, klasör veya plugin adı olarak kullanılamaz. Başka bir ad seç.'; }
   };
 
   function str(v) { return Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v); }
@@ -48,7 +58,10 @@
   function checkVersion(v) {
     const s = String(v == null ? '' : v).trim();
     if (!s) return 'Sürüm boş olamaz (örnek: 1.0.0)';
-    if (!SEMVER_RE.test(s)) return 'Sürüm X.Y.Z biçiminde olmalı (örnek: 1.0.0): "' + s + '"';
+    if (!SEMVER_RE.test(s)) {
+      if (SEMVER_ANY_RE.test(s)) return 'Sürüm bileşenleri en çok 9 basamak olabilir: "' + s + '"';
+      return 'Sürüm X.Y.Z biçiminde olmalı (örnek: 1.0.0): "' + s + '"';
+    }
     return null;
   }
 
@@ -73,19 +86,25 @@
     if (SEMVER_RE.test(s)) return { version: s, legacy: false };
     const m = LEGACY_VER_RE.exec(s);
     if (!m) return null;
-    return { version: [m[1], m[2] || '0', m[3] || '0'].map(function (x) { return String(parseInt(x, 10)); }).join('.'), legacy: true };
+    // Baştaki sıfırlar atılır; 9 basamağı aşan bileşen yorumlanamaz (parseInt/Number kayıplı olurdu).
+    const parts = [m[1], m[2] || '0', m[3] || '0'].map(function (x) { return x.replace(/^0+(?=\d)/, ''); });
+    if (parts.some(function (x) { return x.length > 9; })) return null;
+    return { version: parts.join('.'), legacy: true };
   }
 
-  // v boşsa DEFAULT_VERSION döner. Yorumlanamazsa veya seviye geçersizse null.
+  // v boşsa DEFAULT_VERSION döner. Yorumlanamazsa, seviye geçersizse veya bir bileşen 999999999'u aşacaksa null.
   function bumpVersion(v, level) {
     if (VERSION_LEVELS.indexOf(level) < 0) return null;
     const c = coerceVersion(v);
     if (!c) return null;
     if (!c.version) return DEFAULT_VERSION;
     const n = c.version.split('.').map(Number);
-    if (level === 'buyuk') return (n[0] + 1) + '.0.0';
-    if (level === 'kucuk') return n[0] + '.' + (n[1] + 1) + '.0';
-    return n[0] + '.' + n[1] + '.' + (n[2] + 1);
+    let out;
+    if (level === 'buyuk') out = [n[0] + 1, 0, 0];
+    else if (level === 'kucuk') out = [n[0], n[1] + 1, 0];
+    else out = [n[0], n[1], n[2] + 1];
+    if (out.some(function (x) { return x > VERSION_PART_MAX; })) return null;
+    return out.join('.');
   }
 
   function compareVersions(a, b) {
@@ -141,6 +160,7 @@
   function checkPluginName(slug) {
     const n = String(slug == null ? '' : slug).trim().toLowerCase();
     if (!n) return 'Plugin adı gerekli';
+    if (isDeviceName(n)) return MSG.aygitAdi(n);
     if (n === INBOX_DIR) return '"' + INBOX_DIR + '" içe aktarma klasörüne ayrılmış. Başka bir ad seç.';
     if (RESERVED_DIRS.indexOf(n) >= 0) return '"' + n + '" adı sistemde ayrılmış. Başka bir ad seç.';
     const official = /(^|-)(claude|anthropic)-official(-|$)|(^|-)official-(claude|anthropic)(-|$)/.test(n);
@@ -157,6 +177,77 @@
     if (m) return '"' + n + '" içinde "' + m[1] + '" kelimesi geçiyor; Claude Code bunu uyarıyla kabul eder.';
     if (n.length > 128) return 'Plugin adı 128 karakterden uzun; Claude Desktop kabul etmeyebilir.';
     return null;
+  }
+
+  /* ---- dosya/klasör adı kuralları (yeni oluşturulan adlar için) ---- */
+
+  const MAX_NAME_BYTES = 200;
+  const DEVICE_RE = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]|CONIN\$|CONOUT\$)$/;
+
+  // Windows aygıt adı mı? `.` öncesi gövdeye bakılır (CON, nul.txt, Com1.md); işletim sisteminden bağımsız uygulanır.
+  function isDeviceName(ad) {
+    const body = String(ad == null ? '' : ad).split('.')[0].replace(/[ ]+$/, '').toUpperCase();
+    return DEVICE_RE.test(body);
+  }
+
+  // Yeni bir dosya ya da klasörün son yol bileşeni için. Geçerliyse null, değilse Türkçe hata iletisi.
+  function checkEntryName(ad) {
+    const s = String(ad == null ? '' : ad);
+    if (!s) return 'Ad boş olamaz';
+    if (s === '.' || s === '..') return 'Ad "." ya da ".." olamaz';
+    if (new TextEncoder().encode(s).length > MAX_NAME_BYTES) return 'Ad en çok ' + MAX_NAME_BYTES + ' bayt olabilir';
+    if (/[\x00-\x1f\x7f<>:"|?*]/.test(s)) return 'Ad şu karakterleri içeremez: < > : " | ? * ve kontrol karakterleri';
+    if (/[. ]$/.test(s)) return 'Ad nokta ya da boşlukla bitemez';
+    if (isDeviceName(s)) return MSG.aygitAdi(s);
+    return null;
+  }
+
+  // Marketplace yapısının parçası olan, silinemez ve taşınamaz yollar (marketplace köküne göreli, büyük-küçük harf duyarsız).
+  const PROTECTED_ROOT = ['pp.config.json', 'plugins', '.claude-plugin', '.gitignore', '.gitattributes'];
+
+  /* rel silinemez/taşınamaz mı? Kök düzeyinde tam eşleşme: libraryDir (iç içeyse üst klasörleri de), pp.config.json, plugins,
+   * .claude-plugin, .gitignore, .gitattributes; .pp altındaki her yol. İçerikleri (plugins/<paket>, prompts/x.md) korunmaz.
+   * Windows'ta sondaki nokta/boşluk yok sayıldığı için bileşenlerden atılır. */
+  function isProtectedPath(rel, libraryDir) {
+    const parts = String(rel == null ? '' : rel).replace(/\\/g, '/').split('/').filter(Boolean)
+      .map(function (p) { return p.replace(/[. ]+$/, '').toLowerCase(); });
+    if (!parts.length) return false;
+    if (parts[0] === '.pp') return true;
+    if (parts.length === 1 && PROTECTED_ROOT.indexOf(parts[0]) >= 0) return true;
+    const lib = parseLibraryDir(libraryDir).value;
+    if (lib) {
+      const lp = lib.toLowerCase().split('/');
+      if (parts.length <= lp.length && parts.every(function (p, i) { return p === lp[i]; })) return true;
+    }
+    return false;
+  }
+
+  /* ---- libraryDir (pp.config.json) kuralları ---- */
+
+  // libraryDir olarak kullanılamayan ad parçaları (RESERVED_DIRS'ten ayrı: o küme ağaç/arama yürüyüşünün yok saydıklarıdır).
+  const LIBRARY_DIR_RESERVED = ['.git', '.pp', '.claude-plugin', 'plugins'];
+
+  /* Ham `libraryDir` değerini marketplace köküne göreli kanonik yola çevirir.
+   * Dönüş: { value, error }. Geçerliyse error null; değilse value null ve error kısa bir Türkçe neden.
+   * Yalnızca sözdizimi denetlenir; gerçek yol (bağlantı) denetimi lib/pp-config.js'te yapılır. */
+  function parseLibraryDir(v) {
+    const bad = function (why) { return { value: null, error: why }; };
+    if (typeof v !== 'string') return bad('metin olmalı');
+    let s = v.trim().replace(/\\/g, '/');
+    while (s.indexOf('./') === 0) s = s.slice(2);
+    s = s.replace(/\/+$/, '');
+    if (!s) return bad('boş olamaz');
+    if (s.charAt(0) === '/' || /^[A-Za-z]:/.test(s)) return bad('mutlak yol olamaz (marketplace klasörüne göreli olmalı)');
+    if (/[\x00-\x1f\x7f]/.test(s) || /[<>:"|?*]/.test(s)) return bad('geçersiz karakter içeriyor');
+    const parts = s.split('/');
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p === '..') return bad('".." içeremez');
+      if (p === '' || p === '.') return bad('boş ya da "." bileşeni içeremez');
+      if (/[. ]$/.test(p)) return bad('bir bileşen nokta ya da boşlukla bitemez: "' + p + '"');
+      if (LIBRARY_DIR_RESERVED.indexOf(p.toLowerCase()) >= 0) return bad('"' + p + '" adı ayrılmış');
+    }
+    return { value: parts.join('/'), error: null };
   }
 
   // Prompt yolunun marketplace içindeki yeri. Kural tek yerde burada.
@@ -252,6 +343,9 @@
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(raw) || raw.indexOf('..') >= 0) {
       return 'Marketplace adı harf ya da rakamla başlamalı; yalnızca harf, rakam, ".", "_" ve "-" içerebilir: ' + raw;
     }
+    // Klasör adı olacağı için: Windows sondaki noktayı sessizce atar (yazılan ad ile klasör adı ayrışır) ve aygıt adlarını kabul etmez.
+    if (/\.$/.test(raw)) return 'Marketplace adı nokta ile bitemez: ' + raw;
+    if (isDeviceName(raw)) return MSG.aygitAdi(raw);
     const k = mpKey(raw);
     if (MP_OFFICIAL.indexOf(k) >= 0 || /^claudeai-/.test(k)) return "Bu ad resmi Anthropic marketplace'lerine ayrılmış: " + raw;
     if (MP_COMMUNITY.indexOf(k) >= 0) return 'Bu ad Claude dizinlerine ayrılmış: ' + raw;
@@ -270,9 +364,13 @@
 
   function isAbsLocal(u) { return /^\//.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^\\\\[^\\]/.test(u); }
 
+  const MAX_URL_LENGTH = 2048;
+  const URL_TOO_LONG = 'URL en çok ' + MAX_URL_LENGTH + ' karakter olabilir';
+
   function checkRemoteUrl(u) {
     const s = String(u == null ? '' : u).trim();
     if (!s) return 'URL gerekli';
+    if (s.length > MAX_URL_LENGTH) return URL_TOO_LONG; // regex'lerden önce: çok uzun girdi hızlıca reddedilir
     if (s.charAt(0) === '-') return 'URL "-" ile başlayamaz';
     if (/^[A-Za-z0-9+.-]+::/.test(s)) return 'Bu bağlantı türü güvenlik nedeniyle kapalı';
     if (/[\x00-\x1f\x7f]/.test(s)) return 'URL boşluk veya kontrol karakteri içeremez';
@@ -306,7 +404,9 @@
 
   // Form girdisini (kısaltma, tarayıcı linki, URL) git URL'sine çevirir. { url, provider, slugName } | { error }
   function normalizeRepoUrl(input) {
-    let s = String(input == null ? '' : input).trim().replace(/\/+$/, '');
+    let s = String(input == null ? '' : input).trim();
+    if (s.length > MAX_URL_LENGTH) return { error: URL_TOO_LONG }; // regex'lerden önce
+    s = s.replace(/\/+$/, '');
     if (!s) return { error: 'URL gerekli' };
     if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s) && s.charAt(0) !== '.') {
       s = 'https://github.com/' + s + '.git';
@@ -341,9 +441,11 @@
     checkMarketplaceName: checkMarketplaceName, checkRemoteName: checkRemoteName, checkRemoteUrl: checkRemoteUrl,
     normalizeRepoUrl: normalizeRepoUrl, repoProvider: repoProvider, marketplaceAddCommand: marketplaceAddCommand,
     INBOX_DIR: INBOX_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
+    LIBRARY_DIR_RESERVED: LIBRARY_DIR_RESERVED, parseLibraryDir: parseLibraryDir,
+    MAX_NAME_BYTES: MAX_NAME_BYTES, isDeviceName: isDeviceName, checkEntryName: checkEntryName, isProtectedPath: isProtectedPath,
     pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
-    DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, checkVersion: checkVersion,
+    DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, VERSION_PART_MAX: VERSION_PART_MAX, MAX_URL_LENGTH: MAX_URL_LENGTH, checkVersion: checkVersion,
     normalizeVersion: normalizeVersion, MSG: MSG,
     VERSION_LEVELS: VERSION_LEVELS, LEVEL_LABEL: LEVEL_LABEL, PROMPT_TAG_PREFIX: PROMPT_TAG_PREFIX,
     coerceVersion: coerceVersion, bumpVersion: bumpVersion, compareVersions: compareVersions,

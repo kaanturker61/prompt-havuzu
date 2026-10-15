@@ -5,7 +5,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const FM = require('../public/fm.js');
-const { GitService } = require('../lib/git-service');
+const { GitService, GitError } = require('../lib/git-service');
 const { VersionService, VersionError } = require('../lib/version-service');
 const { gitAvailable, tmpDir, rmrf, gitEnv } = require('./helpers');
 
@@ -291,4 +291,125 @@ test('statusMap: aynı rel iki depoda karışmaz (önbellek anahtarı kökü iç
     assert.equal((await svc.statusMap(s2.root, LIB)).has(s2.rel), false, 's2 değişmedi');
     assert.equal((await svc.statusMap(s1.root, LIB)).get(s1.rel), 'surumGuncelDegil');
   } finally { rmrf(s1.d); rmrf(s2.d); }
+});
+
+test('bump taşması 400 ve dosya/etiket/commit aynı; 9 basamak üstü sürüm yorumlanamaz (B-13)', real, async () => {
+  const s = await setup();
+  try {
+    const body = () => fs.readFileSync(s.a, 'utf8');
+    const attempt = async (versiyon, level, check) => {
+      fs.writeFileSync(s.a, '---\nbaslik: A\nversiyon: ' + versiyon + '\n---\n\ngovde bir\n');
+      const before = await snap(s);
+      await assert.rejects(s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level, note: 'n' }), (e) => {
+        assert.ok(e instanceof VersionError, versiyon); assert.equal(e.status, 400, versiyon); assert.equal(e.data.field, 'versiyon', versiyon);
+        check(e); return true;
+      }, versiyon);
+      const after = await snap(s);
+      assert.deepEqual(after.bytes, before.bytes, versiyon); assert.equal(after.mtime, before.mtime, versiyon);
+      assert.equal(after.head, before.head, versiyon); assert.deepEqual(after.tags, before.tags, versiyon);
+      assert.deepEqual(after.status, before.status, versiyon);
+    };
+    for (const v of ['9007199254740993.0.0', '99999999999.1.1', '1000000000.0.0', '1000000000000000000000.0.0', '1e+21.0.0', '1.2.99999999999']) {
+      await attempt(v, 'yama', (e) => assert.match(e.message, /yorumlanamadı/));
+    }
+    await attempt('999999999.0.0', 'buyuk', (e) => assert.match(e.message, /üst sınıra ulaştı/));
+    await attempt('1.999999999.0', 'kucuk', (e) => assert.match(e.message, /üst sınıra ulaştı/));
+    await attempt('1.1.999999999', 'yama', (e) => assert.match(e.message, /üst sınıra ulaştı/));
+    assert.ok(!/e\+21/.test(body()), '1e+21 hiçbir yere yazılmadı');
+    // sınırın altındaki en büyük sürüm hâlâ artırılır
+    fs.writeFileSync(s.a, '---\nbaslik: A\nversiyon: 999999998.0.0\n---\n\ngovde bir\n');
+    const r = await s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'buyuk', note: 'n' });
+    assert.equal(r.version, '999999999.0.0');
+  } finally { rmrf(s.d); }
+});
+
+/* ---------- B-16: ham git hataları Türkçe özet + gitDetail ---------- */
+
+const rawHookError = (root, rel) => new GitError('HOOK-RED: yasak sözcük\n' + root + '/' + rel, {
+  stderr: 'HOOK-RED: yasak sözcük\n' + root + '/' + rel + '\n', exitCode: 1, args: ['-C', root, '-c', 'core.quotepath=false', 'commit', '-m', 'x', '--', rel]
+});
+
+test('bump: commit hook reddi Türkçe özet + gitCode + arındırılmış gitDetail; her şey geri gelir (B-16)', real, async () => {
+  const s = await setup();
+  try {
+    const before = await snap(s);
+    const proxy = Object.create(s.g);
+    proxy.commitPaths = async () => { throw rawHookError(s.root, s.rel); };
+    await assert.rejects(s.mk(proxy).bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' }), (e) => {
+      assert.ok(e instanceof VersionError); assert.equal(e.status, 500);
+      assert.equal(e.message, 'Sürüm oluşturulamadı: Git commit\'i reddetti. Bir commit hook\'u ya da git ayarı engelliyor olabilir. Yapılan değişiklikler geri alındı.');
+      assert.equal(e.data.gitCode, 'commitReddedildi');
+      assert.match(e.data.gitDetail, /^HOOK-RED: yasak sözcük\n<yol>\/prompts\/ornek\/a\.md$/, 'hook çıktısı korunur, kök arındırılır');
+      assert.ok(!e.message.includes(s.root) && !e.data.gitDetail.includes(s.root));
+      return true;
+    });
+    assert.deepEqual(await snap(s), before);
+  } finally { rmrf(s.d); }
+});
+
+test('bump: kimlik hatası needIdentity yolunda kalır, gitDetail eklenmez (B-16)', real, async () => {
+  const s = await setup({ identity: false, commit: false });
+  try {
+    await assert.rejects(s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' }), (e) => {
+      assert.equal(e.data.needIdentity, true); assert.equal(e.data.gitDetail, undefined); assert.equal(e.data.gitCode, undefined); return true;
+    });
+  } finally { rmrf(s.d); }
+});
+
+test('bump: gerçek .git/index.lock; geri alma da kilitlenirse rollbackFailed iletisi Türkçe, gitDetail arındırılmış (B-16)', real, async () => {
+  const s = await setup();
+  try {
+    const orig = fs.readFileSync(s.a);
+    const lock = path.join(s.root, '.git', 'index.lock');
+    fs.writeFileSync(lock, '');
+    await assert.rejects(s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' }), (e) => {
+      assert.equal(e.status, 500); assert.equal(e.data.rollbackFailed, true);
+      assert.match(e.message, /^Sürüm oluşturulamadı ve geri alma tamamlanamadı: Git şu an başka bir işlemle meşgul/);
+      assert.doesNotMatch(e.message, /fatal|Unable to create/);
+      assert.ok(!e.message.includes(s.root), 'iletide mutlak yol yok');
+      assert.match(e.data.gitDetail, /index\.lock/); assert.ok(!e.data.gitDetail.includes(s.root));
+      assert.ok(e.data.gitDetail.length <= 600);
+      return true;
+    });
+    assert.deepEqual(fs.readFileSync(s.a), orig, 'dosya yine geri geldi');
+    fs.rmSync(lock);
+    assert.equal((await s.g.status(s.root)).files.length, 0, 'kilit kalkınca çalışma ağacı temiz');
+    const r = await s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' });
+    assert.equal(r.version, '1.0.0');
+  } finally { rmrf(s.d); }
+});
+
+/* ---------- B-19: BOM korunur ---------- */
+
+test('bump: UTF-8 BOM\'lu dosyada BOM durur, yalnızca versiyon satırı eklenir; BOM\'suz dosyaya BOM eklenmez (B-19)', real, async () => {
+  const s = await setup({ aRaw: '﻿---\nbaslik: A\netiketler: [x, y]\n---\n\ngovde bir\n' });
+  try {
+    const head3 = () => Array.from(fs.readFileSync(s.a).subarray(0, 3));
+    assert.deepEqual(head3(), [0xEF, 0xBB, 0xBF]);
+    const r1 = await s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' });
+    assert.deepEqual(head3(), [0xEF, 0xBB, 0xBF], 'ilk +1 sonrası');
+    assert.equal(r1.raw.charCodeAt(0), 0xFEFF);
+    assert.equal(fs.readFileSync(s.a, 'utf8'), '﻿---\nbaslik: A\netiketler: [x, y]\nversiyon: 1.0.0\n---\n\ngovde bir\n');
+    // git'e giden içerik de BOM'lu (HEAD'deki blob ile çalışma dosyası aynı)
+    assert.equal((await s.g.showFile(s.root, r1.commit, s.rel)).charCodeAt(0), 0xFEFF);
+    // arayüzden gelen raw (BOM'lu) ile ikinci artış
+    const raw = r1.raw.replace('govde bir', 'govde iki');
+    await s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'kucuk', note: 'n', raw });
+    assert.deepEqual(head3(), [0xEF, 0xBB, 0xBF], 'raw ile +1 sonrası');
+    assert.match(fs.readFileSync(s.a, 'utf8'), /versiyon: 1\.1\.0\n/);
+  } finally { rmrf(s.d); }
+  const t = await setup();
+  try {
+    await t.svc.bump(t.root, LIB, { rel: t.rel, abs: t.a, level: 'yama', note: 'n' });
+    assert.notDeepEqual(Array.from(fs.readFileSync(t.a).subarray(0, 3)), [0xEF, 0xBB, 0xBF], 'BOM\'suz dosyaya BOM eklenmez');
+    assert.equal(fs.readFileSync(t.a, 'utf8').charCodeAt(0), '-'.charCodeAt(0));
+  } finally { rmrf(t.d); }
+});
+
+test('bump: CRLF + BOM birlikte korunur (B-19)', real, async () => {
+  const s = await setup({ aRaw: '﻿---\r\nbaslik: A\r\n---\r\n\r\ngovde bir\r\n' });
+  try {
+    await s.svc.bump(s.root, LIB, { rel: s.rel, abs: s.a, level: 'yama', note: 'n' });
+    assert.equal(fs.readFileSync(s.a, 'utf8'), '﻿---\r\nbaslik: A\r\nversiyon: 1.0.0\r\n---\r\n\r\ngovde bir\r\n');
+  } finally { rmrf(s.d); }
 });

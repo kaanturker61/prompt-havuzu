@@ -75,6 +75,29 @@ test('checkMarketplaceName', () => {
   assert.match(Rules.checkMarketplaceName('healthcare'), /ayrılmış/);
 });
 
+test('aygıt adları: marketplace ve plugin (CON, nul.txt, Com1, lpt9)', () => {
+  for (const ad of ['CON', 'con', 'nul', 'NUL.txt', 'Com1', 'lpt9', 'aux', 'prn', 'COM9.md']) {
+    assert.match(Rules.checkMarketplaceName(ad), /Windows aygıt adı/, 'marketplace ' + ad);
+    assert.match(Rules.checkPluginName(ad), /Windows aygıt adı/, 'plugin ' + ad);
+    assert.equal(Rules.checkPluginName(ad), Rules.MSG.aygitAdi(ad.toLowerCase()), 'plugin iletisi küçük harfli ad: ' + ad);
+  }
+  for (const ad of ['console', 'concat', 'com0', 'lpt10', 'konsol', 'nulo', 'a-con', 'con-1']) {
+    assert.equal(Rules.checkMarketplaceName(ad), null, 'marketplace ' + ad);
+    assert.equal(Rules.checkPluginName(ad), null, 'plugin ' + ad);
+  }
+  // mevcut ayrılmış adlar eskisi gibi
+  assert.match(Rules.checkPluginName('tools'), /sistemde ayrılmış/);
+  assert.match(Rules.checkMarketplaceName('inline'), /Claude Code tarafından ayrılmış/);
+});
+
+test('ok. reddi: marketplace adı nokta ile bitemez', () => {
+  assert.equal(Rules.checkMarketplaceName('ok.'), 'Marketplace adı nokta ile bitemez: ok.');
+  assert.equal(Rules.checkMarketplaceName('x.'), 'Marketplace adı nokta ile bitemez: x.');
+  assert.equal(Rules.checkMarketplaceName('  ok.  '), 'Marketplace adı nokta ile bitemez: ok.');
+  assert.equal(Rules.checkMarketplaceName('a.b'), null);
+  assert.equal(Rules.checkMarketplaceName('ok'), null);
+});
+
 test('checkRemoteName ve checkRemoteUrl', () => {
   assert.equal(Rules.checkRemoteName('origin'), null);
   assert.match(Rules.checkRemoteName('Origin'), /küçük harf/);
@@ -110,4 +133,31 @@ test('normalizeRepoUrl ve repoProvider', () => {
 test('marketplaceAddCommand: GitHub kısaltma + tam URL, GitLab yalnızca tam URL', () => {
   assert.deepEqual(Rules.marketplaceAddCommand('https://github.com/o/r.git'), { primary: 'o/r', alternatives: ['https://github.com/o/r.git'] });
   assert.deepEqual(Rules.marketplaceAddCommand('https://gitlab.com/g/p.git'), { primary: 'https://gitlab.com/g/p.git', alternatives: [] });
+});
+
+test('checkRemoteUrl/normalizeRepoUrl 2048 sınırı, 100025 karakter hızlı döner (B-18)', () => {
+  const msg = 'URL en çok 2048 karakter olabilir';
+  assert.equal(Rules.MAX_URL_LENGTH, 2048);
+  const okUrl = (n) => 'https://github.com/o/' + 'r'.repeat(n - 'https://github.com/o/'.length);
+  assert.equal(okUrl(2048).length, 2048);
+  assert.equal(Rules.checkRemoteUrl(okUrl(2048)), null, '2048 karakter geçerli');
+  assert.equal(Rules.checkRemoteUrl(okUrl(2049)), msg);
+  assert.equal(Rules.normalizeRepoUrl(okUrl(2049)).error, msg);
+  // sınır hem girdiye hem normalize edilmiş (".git" eklenmiş) adrese uygulanır: git'e giden adres 2048'i aşamaz
+  assert.equal(Rules.normalizeRepoUrl(okUrl(2044)).error, undefined, 'normalize sonrası 2048 karakter');
+  assert.equal(Rules.normalizeRepoUrl(okUrl(2044)).url.length, 2048);
+  assert.equal(Rules.normalizeRepoUrl(okUrl(2045)).error, msg, 'normalize sonrası 2049 karakter');
+  assert.equal(Rules.normalizeRepoUrl(okUrl(2048) + '/').error, msg, 'sınır, sondaki / kırpılmadan önce uygulanır');
+  for (const n of [3025, 100025]) {
+    const u = 'https://github.com/o/' + 'x'.repeat(n);
+    let t = process.hrtime.bigint();
+    assert.equal(Rules.checkRemoteUrl(u), msg);
+    assert.deepEqual(Rules.normalizeRepoUrl(u), { error: msg });
+    assert.deepEqual(Rules.normalizeRepoUrl('a/' + 'b'.repeat(n)), { error: msg });
+    assert.deepEqual(Rules.normalizeRepoUrl('/'.repeat(n) + 'x'), { error: msg }, 'regex yığılması yok');
+    assert.ok(Number(process.hrtime.bigint() - t) / 1e6 < 100, n + ' karakter hızlı reddedilmeli');
+  }
+  // sınırın altındaki davranış değişmedi
+  assert.equal(Rules.checkRemoteUrl(''), 'URL gerekli');
+  assert.deepEqual(Rules.normalizeRepoUrl('o/r'), { url: 'https://github.com/o/r.git', provider: 'github', slugName: 'r' });
 });

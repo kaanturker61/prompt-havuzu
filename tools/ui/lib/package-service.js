@@ -4,6 +4,7 @@
 
 const path = require('path');
 const { UndoStack } = require('./undo');
+const { PpConfigError } = require('./pp-config');
 
 class PackageError extends Error {
   constructor(status, message, data) {
@@ -15,11 +16,13 @@ class PackageError extends Error {
 }
 
 class PackageService {
-  constructor({ fsp, atomicWrite, loadConfigAt, saveConfigAt, Rules, FM }) {
+  // assertHealthy(dir): isteğe bağlı ön koşul; bozuk pp.config.json ya da geçersiz libraryDir'de PpConfigError fırlatır.
+  constructor({ fsp, atomicWrite, loadConfigAt, saveConfigAt, assertHealthy, Rules, FM }) {
     this.fsp = fsp;
     this.atomicWrite = atomicWrite;
     this.loadConfigAt = loadConfigAt;
     this.saveConfigAt = saveConfigAt;
+    this.assertHealthy = assertHealthy || (async () => {});
     this.Rules = Rules;
     this.FM = FM;
   }
@@ -69,14 +72,16 @@ class PackageService {
     });
   }
 
+  // Geri alır. PpConfigError (bozuk ayar) 500'e çevrilmez, aynen döner (409 ppConfigBozuk / libraryDirGecersiz).
   _fail(e, undo) {
     return undo.rollback().then(
-      () => new PackageError(500, 'Plugin oluşturulamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.'),
+      () => (e instanceof PpConfigError ? e : new PackageError(500, 'Plugin oluşturulamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.')),
       (agg) => new PackageError(500, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: ' + (agg.errors || [agg]).map((x) => x.message).join('; ') + '. Klasörü elle kontrol et.', { rollbackFailed: true })
     );
   }
 
   async create(dir, libraryDir, { name, description }) {
+    await this.assertHealthy(dir);
     const slug = this._slugOf(name);
     const libAbs = path.join(dir, libraryDir);
     const abs = path.join(libAbs, slug);
@@ -118,6 +123,7 @@ class PackageService {
   }
 
   async rename(dir, libraryDir, { from, to }) {
+    await this.assertHealthy(dir);
     const libAbs = path.join(dir, libraryDir);
     if (!this._safeFolder(from) || !(await this._isDir(path.join(libAbs, from)))) {
       throw new PackageError(404, 'Plugin bulunamadı: ' + from);
@@ -156,11 +162,13 @@ class PackageService {
       return { name: slug, slug, path: libraryDir + '/' + slug, moved };
     } catch (e) {
       const pe = await this._fail(e, undo);
+      if (pe instanceof PpConfigError) throw pe;
       throw new PackageError(500, pe.message.replace('Plugin oluşturulamadı', 'Plugin yeniden adlandırılamadı'), pe.data);
     }
   }
 
   async setDescription(dir, libraryDir, { name, description }) {
+    await this.assertHealthy(dir);
     if (!this._safeFolder(name) || !(await this._isDir(path.join(dir, libraryDir, name)))) {
       throw new PackageError(404, 'Plugin bulunamadı: ' + name);
     }

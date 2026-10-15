@@ -12,11 +12,13 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { spawn } = require('child_process');
 const FM = require('./public/fm.js');
 const Rules = require('./public/rules.js');
 const { ConfigStore } = require('./lib/config-store');
 const { GitService, GitError, HASH_RE } = require('./lib/git-service');
+const { explainGitError } = require('./lib/git-errors');
 const { VersionService, VersionError } = require('./lib/version-service');
 const { MarketplaceRegistry } = require('./lib/marketplace-registry');
 const { MarketplaceFactory } = require('./lib/marketplace-factory');
@@ -24,6 +26,7 @@ const { SetupService, ROOT_BLOCKERS } = require('./lib/setup-service');
 const templates = require('./lib/templates');
 const paths = require('./lib/paths');
 const ppConfig = require('./lib/pp-config');
+const { resolveSafe, checkNewPath } = require('./lib/safe-path');
 const { PromptIndex } = require('./lib/prompt-index');
 const { LibraryCatalog } = require('./lib/library-catalog');
 const { PackageService, PackageError } = require('./lib/package-service');
@@ -80,7 +83,8 @@ const catalog = new LibraryCatalog({
   registry, index, loadConfigAt: ppConfig.loadConfigAt, versions, Rules, FM, ignore: IGNORE, editable: EDITABLE
 });
 const packages = new PackageService({
-  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt, Rules, FM
+  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt,
+  assertHealthy: ppConfig.assertHealthy, Rules, FM
 });
 const history = new PromptHistory({ git: gitService, FM, Rules });
 const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM });
@@ -97,8 +101,10 @@ const afterGitChange = (dir) => { index.clear(dir); catalog.invalidate(); };
 const remoteSync = new RemoteSync({ git: gitService, state: stateStore, lock: opLock, Rules, onChanged: afterGitChange });
 const publisher = new PackagePublisher({
   git: gitService, catalog: packageCatalog, exporter, manifests, advisor, state: stateStore, lock: opLock, remoteSync, Rules, FM,
+  guard: (rels) => guardOutputDirs(rels),
   config: {
-    load: () => loadConfig(),
+    // Yayın yazan bir işlemdir: bozuk pp.config.json ya da geçersiz libraryDir hiçbir şey yazılmadan 409 verir.
+    load: () => loadConfigStrict(),
     // pp.config.json'u yazar; özgün baytlarını geri yazacak adımı ekler.
     save: async (cfg, undo) => {
       const file = ppConfig.configFileAt(root());
@@ -126,20 +132,44 @@ function httpErr(status, message, data) {
 
 // Etkin marketplace klasörü (çalışma kökü). Kurulum eksikse null.
 function root() { return setup.current.root; }
+// Okuma: bozuk ayar uyarıya düşer, varsayılanla sürer (setup.issues / configIssues). Yazan ve üreten rotalar loadConfigStrict kullanır.
 const loadConfig = () => ppConfig.loadConfigAt(root());
+// Bozuk pp.config.json ya da geçersiz libraryDir varsa PpConfigError (409 ppConfigBozuk / libraryDirGecersiz) fırlatır.
+const loadConfigStrict = async () => (await ppConfig.assertHealthy(root())).cfg;
 const saveConfig = (c) => ppConfig.saveConfigAt(root(), c, atomicWrite);
 
 /* --------------------------------------------------------------- dosya araçları */
 
-function safePath(rel) {
-  if (typeof rel !== 'string' || rel === '') throw httpErr(400, 'Yol gerekli');
-  const norm = rel.replace(/\\/g, '/').replace(/^\/+/, '');
-  const abs = path.resolve(root(), norm);
-  const back = path.relative(root(), abs);
-  if (back === '' || back.startsWith('..') || path.isAbsolute(back)) throw httpErr(400, 'Geçersiz yol');
-  const parts = back.split(path.sep);
-  if (parts.includes('.git')) throw httpErr(403, '.git klasörüne erişim yok');
-  return { abs, rel: parts.join('/') };
+// Etkin marketplace içinde güvenli yol (lib/safe-path.js): .git, kök dışı, bağlantı ve kırık bağlantı denetimi.
+function safePath(rel) { return resolveSafe(root(), rel); }
+
+// Üretilen çıktı klasörleri (plugins/, .claude-plugin/) ve yazılacak çıktı yolları (rels) bağlantı yoluyla kök dışına yazamasın.
+function guardOutputDirs(rels) {
+  safePath('plugins'); safePath('.claude-plugin');
+  for (const r of rels || []) safePath(r);
+}
+
+// Ham fs/spawn hatasını (errno) Türkçe, yolsuz bir iletiye çevirir. HTTP durumu taşıyan hatalara dokunmaz (null döner).
+const FS_ERR = {
+  ENAMETOOLONG: [400, 'Ad ya da yol çok uzun'], ENOENT: [500, 'Dosya ya da klasör bulunamadı'], EACCES: [500, 'Erişim izni yok'],
+  EPERM: [500, 'İşlem için izin yok'], EBUSY: [500, 'Dosya başka bir işlem tarafından kullanılıyor'], ENOSPC: [500, 'Diskte yer kalmadı'],
+  EEXIST: [500, 'Dosya ya da klasör zaten var'], ENOTDIR: [500, 'Yolun bir bölümü klasör değil'], EISDIR: [500, 'Bu yol bir klasör'],
+  ENOTEMPTY: [500, 'Klasör boş değil'], EROFS: [500, 'Dosya sistemi salt okunur'], EMFILE: [500, 'Çok fazla açık dosya']
+};
+function mapRawError(e) {
+  if (!e || e.status || !e.syscall || !e.code) return null;
+  const [status, text] = FS_ERR[e.code] || [500, String(e.syscall).startsWith('spawn') ? 'Komut çalıştırılamadı' : 'Dosya sistemi hatası'];
+  return { status, message: `${text} (${e.code})` };
+}
+
+// Git hatasını arayüze Türkçe özet + arındırılmış ayrıntıyla verir: { error, data: { gitCode, gitDetail } }.
+// Ham İngilizce başlık ve mutlak yol sızmaz; hook çıktısı gitDetail'de kalır. Kimlik hatası (needIdentity) çağıranda ayrıca ele alınır.
+function gitFail(e) {
+  const x = explainGitError(e, [root()]);
+  const data = {};
+  if (x.code) data.gitCode = x.code;
+  if (x.gitDetail) data.gitDetail = x.gitDetail;
+  return { error: x.error, data };
 }
 
 function isEditable(rel) { return EDITABLE.has(path.extname(rel).toLowerCase()); }
@@ -151,6 +181,8 @@ async function readIfExists(abs) {
 }
 
 // UTF-8, UTF-16 (BOM'lu) ve eski Türkçe ANSI (windows-1254) dosyaları okur.
+// UTF-8 BOM'u atılmaz (ignoreBOM): fm.js onu bom alanında taşıyıp geri yazar, BOM'lu dosya kaydedilince BOM düşmez; BOM'suz dosyaya BOM eklenmez.
+// UTF-16 dosyalar BOM'suz UTF-8 olarak kaydedilir.
 function decode(buf) {
   if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) return new TextDecoder('utf-16le').decode(buf.subarray(2));
   if (buf.length >= 2 && buf[0] === 0xFE && buf[1] === 0xFF) {
@@ -159,14 +191,20 @@ function decode(buf) {
     sw.swap16();
     return new TextDecoder('utf-16le').decode(sw);
   }
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { return new TextDecoder('windows-1254').decode(buf); }
+  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buf); } catch (e) { return new TextDecoder('windows-1254').decode(buf); }
 }
 
+// Geçici ad hedef addan bağımsız ve kısadır (uzun hedef adı 255 bileşen sınırını aşmasın); sonek .pp-tmp (.gitignore) kalır.
 async function atomicWrite(abs, data, opts) {
   if (opts && opts.mkdir) await fsp.mkdir(path.dirname(abs), { recursive: true });
-  const tmp = path.join(path.dirname(abs), '.' + path.basename(abs) + '.pp-tmp');
-  await fsp.writeFile(tmp, data, 'utf8');
-  await fsp.rename(tmp, abs);
+  const tmp = path.join(path.dirname(abs), '.' + crypto.randomBytes(4).toString('hex') + '.pp-tmp');
+  try {
+    await fsp.writeFile(tmp, data, 'utf8');
+    await fsp.rename(tmp, abs);
+  } catch (e) {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+    throw e;
+  }
 }
 
 async function toTrash(rel, abs) {
@@ -220,14 +258,15 @@ async function primaryRemote() {
 }
 
 async function marketplaceStatus() {
-  const cfg = await loadConfig();
+  const insp = await ppConfig.inspectConfigAt(root());
+  const cfg = insp.cfg;
   const plan = await publishPlan(cfg);
   const mkFile = path.join(root(), '.claude-plugin', 'marketplace.json');
   const mkJson = await exists(mkFile) ? await manifests.readJson(mkFile) : null;
   const mkName = FM.slug(cfg.marketplace.name);
   const packages = Array.from(new Set(plan.plans.map((p) => p.paket)));
   const listed = (await manifests.listed()).map((l) => l.name);
-  const configIssues = [];
+  const configIssues = insp.issues.slice(); // ppConfigBozuk / libraryDirGecersiz / exportAlanGecersiz
   const verErr = Rules.checkVersion(cfg.marketplace.version);
   if (verErr) configIssues.push({ code: 'surumGecersiz', level: 'warn', message: verErr });
   const skipped = plan.skipped.filter((x) => x.level === 'warn');
@@ -335,7 +374,10 @@ async function importFiles(dirAbs, files, targetRel) {
     FM.set(p, 'durum', 'taslak');
     FM.set(p, 'olusturma', st.mtime.toISOString().slice(0, 10));
     p.body = '\n' + text + '\n';
-    const rel = await uniquePath(target.rel + '/' + FM.slug(base.replace(/\.[^.]+$/, '')) + '.md');
+    const stem = FM.slug(base.replace(/\.[^.]+$/, ''));
+    if (Rules.isDeviceName(stem + '.md')) { skipped.push({ file: f, reason: 'Windows aygıt adı: ' + stem }); continue; }
+    const rel = await uniquePath(target.rel + '/' + stem + '.md');
+    try { checkNewPath(root(), rel); } catch (e) { skipped.push({ file: f, reason: e.message }); continue; }
     await atomicWrite(path.join(root(), rel), FM.stringify(p), { mkdir: true });
     created.push({ from: abs, to: rel });
   }
@@ -526,9 +568,12 @@ route('POST', '/api/marketplaces/git-init', async ({ body }) => {
 route('GET', '/api/tree', async () => {
   const st = await requireRootOk();
   // Prompt klasörü yalnızca etkin marketplace için oluşturulur; diğer depolara hiçbir şey yazılmaz.
+  // Ayar bozuksa ya da libraryDir geçersizse (varsayılana düşüldü) diske hiçbir şey açılmaz.
   if (st.ok) {
-    const cfg = await loadConfig();
-    await fsp.mkdir(path.join(root(), cfg.libraryDir), { recursive: true });
+    const insp = await ppConfig.inspectConfigAt(root());
+    let usable = insp.issues.length === 0;
+    if (usable) { try { safePath(insp.cfg.libraryDir); } catch (e) { usable = false; } } // kırık bağlantı vb.
+    if (usable) await fsp.mkdir(path.join(root(), insp.cfg.libraryDir), { recursive: true });
   }
   return catalog.tree(st.libraryRoot, st.activeMarketplace);
 }, { open: true });
@@ -538,13 +583,12 @@ route('GET', '/api/facets', async () => {
   return catalog.facets(st.libraryRoot, st.activeMarketplace);
 }, { open: true });
 
+// Yanıt: { results, total, limit, truncated }. Sonuçlar limit'te (300) kesilir; truncated true ise total tüm eşleşme sayısıdır.
 route('GET', '/api/search', async ({ q }) => {
   const st = await requireRootOk();
-  return {
-    results: await catalog.search(st.libraryRoot, st.activeMarketplace, q.get('q') || '', {
-      tags: q.get('tags') || '', durum: q.get('durum') || '', tur: q.get('tur') || '', scope: q.get('scope') || 'library'
-    })
-  };
+  return catalog.searchEx(st.libraryRoot, st.activeMarketplace, q.get('q') || '', {
+    tags: q.get('tags') || '', durum: q.get('durum') || '', tur: q.get('tur') || '', scope: q.get('scope') || 'library'
+  });
 }, { open: true });
 
 route('GET', '/api/file', async ({ q }) => {
@@ -599,12 +643,10 @@ route('PUT', '/api/file', async ({ body }) => {
       else commitInfo = { commit: await gitService.commitPaths(root(), msg, [rel]) };
     } catch (e) {
       await gitService.unstage(root(), [rel]).catch(() => {});
-      commitInfo = {
-        commit: null,
-        commitError: e instanceof GitError && e.isIdentityError
-          ? { error: 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', needIdentity: true }
-          : { error: e.message }
-      };
+      let commitError;
+      if (e instanceof GitError && e.isIdentityError) commitError = { error: 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', needIdentity: true };
+      else { const f = gitFail(e); commitError = { error: f.error, ...f.data }; }
+      commitInfo = { commit: null, commitError };
     }
   }
   return { ok: true, path: rel, mtime: Math.round(ns.mtimeMs), ...commitInfo };
@@ -615,13 +657,17 @@ route('POST', '/api/file', async ({ body }) => {
   if (!isEditable(rel)) throw httpErr(400, 'Bu dosya türü oluşturulamaz');
   if (body.unique) rel = await uniquePath(rel);
   else if (await exists(path.join(root(), rel))) throw httpErr(409, 'Bu adda bir dosya zaten var');
+  checkNewPath(root(), rel); // aygıt adı, 200 bayt sınırı, yasak karakter (yalnızca yeni oluşan bileşenler)
   await atomicWrite(path.join(root(), rel), String(body.raw || ''), { mkdir: true });
   const st = await fsp.stat(path.join(root(), rel));
   return { ok: true, path: rel, mtime: Math.round(st.mtimeMs) };
 });
 
+const PROTECTED_MSG = 'Bu yol marketplace yapısının parçası; silinemez veya taşınamaz';
+
 route('DELETE', '/api/file', async ({ q }) => {
   const { abs, rel } = safePath(q.get('path'));
+  if (Rules.isProtectedPath(rel, (await loadConfig()).libraryDir)) throw httpErr(403, PROTECTED_MSG, { code: 'korunanYol' });
   if (!(await exists(abs))) throw httpErr(404, 'Bulunamadı');
   return { ok: true, trash: await toTrash(rel, abs) };
 });
@@ -630,6 +676,7 @@ route('DELETE', '/api/file', async ({ q }) => {
 route('POST', '/api/mkdir', async ({ body }) => {
   const { abs, rel } = safePath(body.path);
   if (await exists(abs)) throw httpErr(409, 'Bu klasör zaten var');
+  checkNewPath(root(), rel);
   await fsp.mkdir(abs, { recursive: true });
   await atomicWrite(path.join(abs, '.gitkeep'), '');
   return { ok: true, path: rel };
@@ -637,9 +684,11 @@ route('POST', '/api/mkdir', async ({ body }) => {
 
 route('POST', '/api/rename', async ({ body }) => {
   const from = safePath(body.from); const to = safePath(body.to);
+  if (Rules.isProtectedPath(from.rel, (await loadConfig()).libraryDir)) throw httpErr(403, PROTECTED_MSG, { code: 'korunanYol' });
   if (!(await exists(from.abs))) throw httpErr(404, 'Kaynak bulunamadı');
   if (await exists(to.abs)) throw httpErr(409, 'Hedef zaten var');
   if (to.rel.startsWith(from.rel + '/')) throw httpErr(400, 'Klasör kendi içine taşınamaz');
+  checkNewPath(root(), to.rel);
   await fsp.mkdir(path.dirname(to.abs), { recursive: true });
   await fsp.rename(from.abs, to.abs);
   return { ok: true, path: to.rel };
@@ -648,19 +697,19 @@ route('POST', '/api/rename', async ({ body }) => {
 /* ---- plugin ---- */
 
 route('POST', '/api/package', async ({ body }) => {
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
   try {
     return { ok: true, plugin: await packages.create(root(), cfg.libraryDir, { name: body.name, description: body.description }) };
   } catch (e) { throw pkgErr(e); }
 });
 
 route('PUT', '/api/package', async ({ body }) => {
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
   try { return await packages.setDescription(root(), cfg.libraryDir, { name: body.name, description: body.description }); } catch (e) { throw pkgErr(e); }
 });
 
 route('POST', '/api/package/rename', async ({ body }) => {
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
   try {
     const r = await packages.rename(root(), cfg.libraryDir, { from: body.from, to: body.to });
     return { ok: true, plugin: { name: r.name, slug: r.slug, path: r.path }, moved: r.moved };
@@ -734,7 +783,7 @@ route('POST', '/api/package/publish', async ({ body }) => publisher.publish(root
 // K2'nin tek, belgelenmiş istisnası: kaynak etkin marketplace'tir, hedef başka bir marketplace'tir. Commit atılmaz.
 route('POST', '/api/prompts/transfer', async ({ body }) => {
   const st = setup.current;
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
   const { abs, rel } = safePath(body.path);
   const cl = Rules.classifyPromptPath(rel, cfg.libraryDir);
   if (!/\.(md|markdown)$/i.test(rel) || cl.kind === 'disarida') throw httpErr(400, 'Yalnızca prompt dosyaları taşınabilir');
@@ -751,8 +800,11 @@ route('POST', '/api/prompts/transfer', async ({ body }) => {
   const toPlugin = String(body.toPlugin || '');
   if (!toPlugin) throw httpErr(400, 'Hedef plugin gerekli');
   if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, 'Geçersiz plugin adı');
+  await ppConfig.assertHealthy(target.path); // hedefin ayarı da bozuksa yanlış (varsayılan) klasöre yazılmaz
   const tLib = target.cfg.libraryDir;
   const tDir = path.join(target.path, tLib, toPlugin);
+  // Hedef plugin klasörü (bağlantı çözülerek) hedef marketplace'in dışına çıkıyorsa yazılmaz.
+  if (!paths.isInside(tDir, target.path)) throw httpErr(400, 'Hedef plugin klasörü hedef marketplace dışına çıkıyor');
   const dst = await fsp.stat(tDir).catch(() => null);
   if (!dst || !dst.isDirectory()) throw httpErr(404, 'Hedefte plugin bulunamadı: ' + toPlugin);
 
@@ -811,7 +863,8 @@ route('POST', '/api/git/commit', async ({ body }) => {
     if (e instanceof GitError && e.isIdentityError) {
       throw httpErr(400, 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', { needIdentity: true });
     }
-    throw httpErr(400, e.message);
+    const f = gitFail(e);
+    throw httpErr(400, f.error, f.data);
   }
   return { ok: true, commit: head };
 });
@@ -911,10 +964,10 @@ route('GET', '/api/history/changes', async ({ q }) => {
 
 /* ---- sürüm ---- */
 
-// Yalnızca libraryDir altındaki .md/.markdown dosyaları için.
-async function promptPath(p) {
+// Yalnızca libraryDir altındaki .md/.markdown dosyaları için. strict: yazan rota (bozuk ayarda 409), okuyan rota varsayılana düşer.
+async function promptPath(p, { strict = false } = {}) {
   const { abs, rel } = safePath(p);
-  const cfg = await loadConfig();
+  const cfg = strict ? await loadConfigStrict() : await loadConfig();
   if (!/.(md|markdown)$/i.test(rel) || !rel.startsWith(cfg.libraryDir + '/')) {
     throw httpErr(400, 'Sürüm yalnızca prompt dosyaları için oluşturulur');
   }
@@ -929,7 +982,7 @@ route('GET', '/api/version', async ({ q }) => {
 });
 
 route('POST', '/api/version/bump', async ({ body }) => {
-  const { abs, rel, cfg } = await promptPath(body.path);
+  const { abs, rel, cfg } = await promptPath(body.path, { strict: true });
   try {
     return await versions.bump(root(), cfg.libraryDir, {
       rel, abs, level: body.level, note: String(body.note || ''),
@@ -948,7 +1001,8 @@ route('POST', '/api/import/scan', async ({ body }) => {
 route('POST', '/api/import/run', async ({ body }) => {
   const dir = expandDir(body.dir);
   if (!Array.isArray(body.files) || !body.files.length) throw httpErr(400, 'Dosya seçilmedi');
-  return importFiles(dir, body.files, body.target || (await loadConfig()).libraryDir + '/gelen-kutusu');
+  const cfg = await loadConfigStrict();
+  return importFiles(dir, body.files, body.target || cfg.libraryDir + '/' + Rules.INBOX_DIR);
 });
 
 /* ---- marketplace ---- */
@@ -956,7 +1010,7 @@ route('POST', '/api/import/run', async ({ body }) => {
 route('GET', '/api/marketplace/status', async () => marketplaceStatus());
 
 route('POST', '/api/marketplace/init', async ({ body }) => {
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
   const m = body.config || {};
   cfg.marketplace = {
     ...cfg.marketplace,
@@ -970,6 +1024,7 @@ route('POST', '/api/marketplace/init', async ({ body }) => {
   if (verErr) throw httpErr(400, verErr, { field: 'version' });
   const nameErr = Rules.checkMarketplaceName(cfg.marketplace.name);
   if (nameErr) throw httpErr(400, nameErr, { field: 'name' });
+  guardOutputDirs(); // .claude-plugin/ bağlantı yoluyla kök dışına yazamasın
   if (m.export !== undefined) {
     const ex = m.export || {};
     if (!Array.isArray(ex.durumlar) || !ex.durumlar.length) throw httpErr(400, 'En az bir durum seçilmeli', { field: 'export' });
@@ -992,7 +1047,8 @@ route('POST', '/api/marketplace/update', async () => publisher.updateAll(root())
 
 // Kullanımdan kalktı: arayüz paket yayını için /api/package/publish kullanır. Geriye uyum için korunur.
 route('POST', '/api/marketplace/publish', async ({ body }) => {
-  const cfg = await loadConfig();
+  const cfg = await loadConfigStrict();
+  guardOutputDirs();
   const plan = await publishPlan(cfg);
   const paths = (Array.isArray(body.paths) ? body.paths : []).map(String);
   const want = body.all ? plan.plans : plan.plans.filter((p) => paths.includes(p.source));
@@ -1024,12 +1080,13 @@ route('POST', '/api/marketplace/unpublish', async ({ body }) => {
   const { abs, rel } = safePath(body.target);
   if (!/^plugins\//.test(rel)) throw httpErr(400, 'Yalnızca plugins/ altı kaldırılabilir');
   if (!(await exists(abs))) throw httpErr(404, 'Dosya yok');
+  const cfg = await loadConfigStrict(); // bozuk ayarda hiçbir şey taşınmadan 409
+  guardOutputDirs();
   const trash = await toTrash(rel, abs);
   if (path.basename(rel) === 'SKILL.md') {
     // boş skill klasörünü temizle
     try { await fsp.rmdir(path.dirname(abs)); } catch (e) { /* dolu */ }
   }
-  const cfg = await loadConfig();
   await marketplaceSync(cfg, await publishPlan(cfg));
   return { ok: true, trash };
 });
@@ -1055,7 +1112,11 @@ async function readBody(req) {
     chunks.push(c);
   }
   if (!n) return {};
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { throw httpErr(400, 'Geçersiz JSON'); }
+  let parsed;
+  try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { throw httpErr(400, 'Geçersiz JSON'); }
+  // Rotalar body.x okur; null, dizi, metin ve sayı gövdeleri TypeError (500) yerine 400 olur.
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw httpErr(400, 'İstek gövdesi bir JSON nesnesi olmalı');
+  return parsed;
 }
 
 const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
@@ -1102,6 +1163,9 @@ const server = http.createServer(async (req, res) => {
     try { data = await fsp.readFile(path.join(PUBLIC, name)); } catch (e) { return send(res, 404, 'Bulunamadı: ' + name); }
     return send(res, 200, data, { 'Content-Type': MIME[path.extname(name)] || 'text/plain', 'Content-Security-Policy': CSP });
   } catch (e) {
+    // Ham fs hataları (ENOENT vb.) mutlak sunucu yolu taşır: Türkçe, yolsuz iletiye çevrilir; tam hata günlüğe yazılır.
+    const raw = mapRawError(e);
+    if (raw) { console.error(e); return send(res, raw.status, { error: raw.message }); }
     const status = e.status || 500;
     if (status === 500) console.error(e);
     send(res, status, { error: e.message || 'Hata', ...(e.data || {}) });

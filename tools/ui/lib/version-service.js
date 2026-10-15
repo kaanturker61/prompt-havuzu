@@ -7,6 +7,7 @@ const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
 const { GitError } = require('./git-service');
 const { UndoStack } = require('./undo');
+const { explainGitError, sanitizeDetail } = require('./git-errors');
 
 const RELEASE_SUBJECT_RE = /^\S+ v\d+\.\d+\.\d+$/;
 const BATCH = 40;
@@ -192,6 +193,10 @@ class VersionService {
     const last = entry ? entry.last : null;
     const base = c.version || (last ? last.version : '');
     const yeni = Rules.bumpVersion(base, level);
+    if (!yeni) {
+      // base yorumlanabilir ve seviye geçerli olduğu için tek neden: bir bileşen 999999999'u aşacaktı. Hiçbir şey yazılmadı.
+      throw new VersionError(400, 'Sürüm üst sınıra ulaştı (bileşen en çok ' + Rules.VERSION_PART_MAX + ' olabilir). versiyon alanını düzelt.', { field: 'versiyon' });
+    }
     const tag = Rules.promptTag(ad, yeni);
     if (entry && entry.tags.some((t) => t.version === yeni)) {
       throw new VersionError(409, "Bu sürümün tag'i zaten var: " + tag + '. versiyon alanını kontrol et.', { code: 'tagVar', tag });
@@ -225,14 +230,23 @@ class VersionService {
       return { ok: true, path: rel, version: yeni, tag, commit, mtime: Math.round(ns.mtimeMs), raw: out };
     } catch (e) {
       try { await undo.rollback(); } catch (agg) {
-        const detay = (agg.errors || [agg]).map((x) => x.message).join('; ');
-        throw new VersionError(500, 'Sürüm oluşturulamadı ve geri alma tamamlanamadı: ' + detay + '. Git panelinden durumu kontrol et.', { rollbackFailed: true });
+        const xs = (agg.errors || [agg]).map((x) => explainGitError(x, [root]));
+        const detay = xs.map((x) => (x.code ? x.error.replace(/\.$/, '') : x.error)).join('; ');
+        const gitDetail = sanitizeDetail(xs.map((x) => x.gitDetail).filter(Boolean).join('\n'), [root]);
+        throw new VersionError(500, 'Sürüm oluşturulamadı ve geri alma tamamlanamadı: ' + detay + '. Git panelinden durumu kontrol et.',
+          { rollbackFailed: true, ...(gitDetail ? { gitDetail } : {}) });
       }
       if (e instanceof GitError && e.isIdentityError) {
         throw new VersionError(400, 'Git, commit yazarını bilmiyor. Ad ve e-posta gir. Sürüm oluşturulmadı, değişiklikler geri alındı.', { needIdentity: true });
       }
       if (/already exists/i.test(e.message)) {
         throw new VersionError(409, "Bu sürümün tag'i zaten var: " + tag + '. versiyon alanını kontrol et.', { code: 'tagVar', tag });
+      }
+      // Ham git hatası Türkçe özete çevrilir; git stderr'i (hook çıktısı dahil) arındırılmış olarak gitDetail'de kalır.
+      const x = explainGitError(e, [root]);
+      if (x.code) {
+        throw new VersionError(500, 'Sürüm oluşturulamadı: ' + x.error + ' Yapılan değişiklikler geri alındı.',
+          { gitCode: x.code, ...(x.gitDetail ? { gitDetail: x.gitDetail } : {}) });
       }
       throw new VersionError(500, 'Sürüm oluşturulamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.');
     }

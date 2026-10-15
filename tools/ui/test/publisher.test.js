@@ -206,3 +206,143 @@ test('commit yokken yayın 409 commitYok; paket sayfası verisi', real, async ()
     await assert.rejects(s.publisher.updateAll(mk), (e) => e.status === 409 && e.data.code === 'commitYok');
   } finally { rmrf(tmp); }
 });
+
+test('komut_adi CON: publish 400 dogrulama, ağaç temiz, etiket yok; updateAll paketi atlar (B-06)', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    write(mk, 'prompts/ornek/konsol.md', cmd('Con', 'komut_adi: CON\n'));
+    commitAll(mk, tmp);
+    const s = buildStack(mk, tmp);
+    const before = snapshot(mk); const head = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    await assert.rejects(s.publisher.publish(mk, { name: 'ornek' }), (e) => {
+      assert.equal(e.status, 400); assert.equal(e.data.code, 'dogrulama');
+      assert.deepEqual(e.data.issues.map((i) => i.code), ['aygitAdi']);
+      return true;
+    });
+    assert.deepEqual(snapshot(mk), before, 'ağaç temiz');
+    assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head);
+    assert.equal(sh(mk, ['tag', '-l'], gitEnv(tmp)).trim(), '', 'etiket yok');
+    const r = await s.publisher.updateAll(mk);
+    assert.deepEqual(r.skippedPackages.map((p) => p.name), ['ornek']);
+    assert.ok(!fs.existsSync(path.join(mk, 'plugins', 'ornek', 'commands', 'con.md')));
+  } finally { rmrf(tmp); }
+});
+
+test('guard: yazmadan önce çağrılır, hata verirse hiçbir şey yazılmaz; bozuk ayar yayında 409', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    const s = buildStack(mk, tmp);
+    const before = snapshot(mk); const head = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    const { PackagePublisher } = require('../lib/publisher');
+    let calls = 0;
+    const guarded = new PackagePublisher({
+      git: s.git, catalog: s.catalog, exporter: s.exporter, manifests: s.manifests, advisor: s.advisor, state: s.state, lock: s.lock,
+      remoteSync: s.remoteSync, config: s.config, Rules: require('../public/rules.js'), FM: require('../public/fm.js'),
+      guard: async () => { calls++; const e = new Error('Geçersiz yol: kök dışına çıkan bağlantı'); e.status = 400; throw e; }
+    });
+    await assert.rejects(guarded.publish(mk, { name: 'ornek' }), (e) => e.status === 400 && /Geçersiz yol/.test(e.message));
+    await assert.rejects(guarded.updateAll(mk), (e) => e.status === 400);
+    assert.equal(calls, 2);
+    assert.deepEqual(snapshot(mk), before); assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head);
+    // guard yoksa davranış değişmez (varsayılan)
+    assert.equal((await s.publisher.publish(mk, { name: 'ornek' })).ok, true);
+    // bozuk pp.config.json: strict yükleyici ile publish/updateAll hiçbir şey yazmadan 409
+    const ppConfig = require('../lib/pp-config');
+    const strict = new PackagePublisher({
+      git: s.git, catalog: s.catalog, exporter: s.exporter, manifests: s.manifests, advisor: s.advisor, state: s.state, lock: s.lock,
+      remoteSync: s.remoteSync, Rules: require('../public/rules.js'), FM: require('../public/fm.js'),
+      config: { load: async () => (await ppConfig.assertHealthy(mk)).cfg, save: s.config.save }
+    });
+    fs.writeFileSync(path.join(mk, 'pp.config.json'), 'garip{');
+    const bytes = fs.readFileSync(path.join(mk, 'pp.config.json')); const head2 = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    await assert.rejects(strict.publish(mk, { name: 'ornek' }), (e) => e.status === 409 && e.data.code === 'ppConfigBozuk');
+    await assert.rejects(strict.updateAll(mk), (e) => e.status === 409 && e.data.code === 'ppConfigBozuk');
+    assert.deepEqual(fs.readFileSync(path.join(mk, 'pp.config.json')), bytes);
+    assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head2);
+  } finally { rmrf(tmp); }
+});
+
+test('guard yazılacak çıktı yollarını da alır (plugins/<paket>/... bağlantı denetimi); reddederse hiçbir şey yazılmaz', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    const s = buildStack(mk, tmp);
+    const { PackagePublisher } = require('../lib/publisher');
+    const seen = [];
+    const mkPub = (guard) => new PackagePublisher({
+      git: s.git, catalog: s.catalog, exporter: s.exporter, manifests: s.manifests, advisor: s.advisor, state: s.state, lock: s.lock,
+      remoteSync: s.remoteSync, config: s.config, Rules: require('../public/rules.js'), FM: require('../public/fm.js'), guard
+    });
+    const rec = async (rels) => { seen.push(rels || null); };
+    await mkPub(rec).updateAll(mk);
+    assert.equal(seen[0], null, 'ilk çağrı: yalnızca çıktı klasörleri');
+    assert.deepEqual(seen[1].sort(), ['plugins/ornek/commands/aa.md', 'plugins/ornek/commands/bb.md']);
+    // publish: yazılacak dosyalar + plugin.json
+    write(mk, 'prompts/ornek/c.md', cmd('C', 'komut_adi: cc\n'));
+    commitAll(mk, tmp);
+    seen.length = 0;
+    const before = snapshot(mk); const head = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    const refuse = async (rels) => { seen.push(rels || null); if (rels && rels.some((r) => r === 'plugins/ornek/commands/cc.md')) { const e = new Error('Geçersiz yol: kök dışına çıkan bağlantı'); e.status = 400; throw e; } };
+    await assert.rejects(mkPub(refuse).publish(mk, { name: 'ornek' }), (e) => e.status === 400 && /Geçersiz yol/.test(e.message));
+    assert.deepEqual(seen[1].sort(), ['plugins/ornek/.claude-plugin/plugin.json', 'plugins/ornek/commands/cc.md']);
+    assert.deepEqual(snapshot(mk), before, 'hiçbir şey yazılmadı');
+    assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head);
+    assert.equal(sh(mk, ['tag', '-l'], gitEnv(tmp)).trim(), '', 'etiket yok');
+  } finally { rmrf(tmp); }
+});
+
+/* ---------- B-16: ham git hataları Türkçe özet + gitDetail ---------- */
+
+test('commit adımında hook reddi: Türkçe özet, gitCode, arındırılmış gitDetail; tam geri alma (B-16)', real, async () => {
+  const { GitError } = require('../lib/git-service');
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    class Hook extends GitService {
+      async commitPaths() {
+        throw new GitError('HOOK-RED', { stderr: 'HOOK-RED: yasak sözcük\n' + mk + '/plugins/ornek\n', exitCode: 1, args: ['-C', mk, '-c', 'core.quotepath=false', 'commit', '-m', 'x'] });
+      }
+    }
+    const s = buildStack(mk, tmp, { git: new Hook({ env: gitEnv(tmp) }) });
+    const before = snapshot(mk); const head = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    await assert.rejects(s.publisher.publish(mk, { name: 'ornek' }), (e) => {
+      assert.equal(e.status, 500); assert.equal(e.data.code, 'geriAlindi'); assert.equal(e.data.gitCode, 'commitReddedildi');
+      assert.equal(e.message, 'Yayın başarısız: Git commit\'i reddetti. Bir commit hook\'u ya da git ayarı engelliyor olabilir. Yapılan değişiklikler geri alındı.');
+      assert.equal(e.data.gitDetail, 'HOOK-RED: yasak sözcük\n<yol>/plugins/ornek');
+      assert.ok(!e.message.includes(mk) && !e.data.gitDetail.includes(mk));
+      return true;
+    });
+    assert.deepEqual(snapshot(mk), before);
+    assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head);
+    assert.equal(sh(mk, ['tag', '-l'], gitEnv(tmp)).trim(), '');
+    // aynı eşleme Marketplace'i güncelle yolunda da
+    write(mk, 'prompts/ornek/c.md', cmd('C', 'komut_adi: cc\n'));
+    commitAll(mk, tmp);
+    await assert.rejects(s.publisher.updateAll(mk), (e) => e.status === 500 && e.data.gitCode === 'commitReddedildi' && /^Güncelleme başarısız: Git commit'i reddetti\./.test(e.message));
+  } finally { rmrf(tmp); }
+});
+
+test('gerçek .git/index.lock ile yayın: ileti Türkçe, yol ve "fatal:" yok, gitDetail var; kilit kalkınca yayın çalışır (B-16)', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    const s = buildStack(mk, tmp);
+    const before = snapshot(mk);
+    const lock = path.join(mk, '.git', 'index.lock');
+    fs.writeFileSync(lock, '');
+    await assert.rejects(s.publisher.publish(mk, { name: 'ornek' }), (e) => {
+      assert.equal(e.status, 500);
+      assert.match(e.message, /^Yayın başarısız( ve geri alma tamamlanamadı)?: Git şu an başka bir işlemle meşgul/);
+      assert.doesNotMatch(e.message, /fatal|Unable to create/);
+      assert.ok(!e.message.includes(mk), 'iletide mutlak yol yok');
+      assert.match(e.data.gitDetail, /index\.lock/); assert.ok(!e.data.gitDetail.includes(mk));
+      return true;
+    });
+    assert.deepEqual(snapshot(mk), before, 'çıktı dosyaları geri alındı');
+    fs.rmSync(lock);
+    const r = await s.publisher.publish(mk, { name: 'ornek' });
+    assert.equal(r.ok, true);
+  } finally { rmrf(tmp); }
+});

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { samePath, isInside } = require('./paths');
 const { GitNotFoundError } = require('./git-service');
+const { inspectConfigAt } = require('./pp-config');
 
 // Bu kodlardan biri varsa library kökü kullanılamaz veya git yoktur.
 const ROOT_BLOCKERS = ['kokAyarlanmadi', 'kokYok', 'kokAracReposunda', 'gitBulunamadi'];
@@ -117,8 +118,12 @@ class SetupService {
       add('marketplaceGitYok', 'error', `Seçili marketplace'te git başlatılmamış: ${active}${why}`, folder, 'gitBaslat');
       return done();
     }
-    if (!fs.existsSync(path.join(folder, 'pp.config.json'))) {
+    const cfgFile = path.join(folder, 'pp.config.json');
+    if (!fs.existsSync(cfgFile)) {
       add('ppConfigYok', 'warn', "Bu marketplace'te pp.config.json yok. Prompt Havuzu ayarlarını oluştur.", folder, 'ppConfigOlustur');
+    } else {
+      // Bozuk dosya ya da geçersiz libraryDir kurulumu durdurmaz; okuma varsayılanla sürer, yazma rotaları reddeder.
+      for (const i of (await inspectConfigAt(folder)).issues) add(i.code, 'warn', i.message, cfgFile, null);
     }
     return done(folder);
   }

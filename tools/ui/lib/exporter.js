@@ -48,23 +48,33 @@ class PackageExporter {
 
   async _exists(p) { try { await this.fsp.access(p); return true; } catch (e) { return false; } }
 
+  // Var olan ve bağlantı olmayan normal dosya mı?
+  async _isPlainFile(p) { try { return (await this.fsp.lstat(p)).isFile(); } catch (e) { return false; } }
+
+  // Var olan ve bağlantı olmayan gerçek klasör mü? (lstat bağlantıyı izlemez)
+  async _isPlainDir(p) { try { return (await this.fsp.lstat(p)).isDirectory(); } catch (e) { return false; } }
+
   // plugins/ altındaki bileşen dosyaları: [{ target, paket }]
   async scanPluginFiles() {
     const root = this.root();
     const out = [];
     let pk;
+    if (!(await this._isPlainDir(path.join(root, 'plugins')))) return out; // yok ya da bağlantı
     try { pk = await this.fsp.readdir(path.join(root, 'plugins'), { withFileTypes: true }); } catch (e) { return out; }
     for (const d of pk) {
       if (!d.isDirectory()) continue;
       for (const kind of ['commands', 'agents']) {
         let fl = [];
-        try { fl = await this.fsp.readdir(path.join(root, 'plugins', d.name, kind)); } catch (e) { /* yok */ }
-        for (const f of fl) if (/\.md$/i.test(f)) out.push({ target: `plugins/${d.name}/${kind}/${f}`, paket: d.name });
+        if (!(await this._isPlainDir(path.join(root, 'plugins', d.name, kind)))) continue;
+        try { fl = await this.fsp.readdir(path.join(root, 'plugins', d.name, kind), { withFileTypes: true }); } catch (e) { /* yok */ }
+        // Bağlantılar (isFile false) bileşen sayılmaz: yayın bunların üzerinden kök dışına yazmaz ya da çöpe taşımaz.
+        for (const f of fl) if (f.isFile() && /\.md$/i.test(f.name)) out.push({ target: `plugins/${d.name}/${kind}/${f.name}`, paket: d.name });
       }
       let sk = [];
+      if (!(await this._isPlainDir(path.join(root, 'plugins', d.name, 'skills')))) continue;
       try { sk = await this.fsp.readdir(path.join(root, 'plugins', d.name, 'skills'), { withFileTypes: true }); } catch (e) { /* yok */ }
       for (const s of sk) {
-        if (s.isDirectory() && await this._exists(path.join(root, 'plugins', d.name, 'skills', s.name, 'SKILL.md'))) {
+        if (s.isDirectory() && !s.isSymbolicLink() && await this._isPlainFile(path.join(root, 'plugins', d.name, 'skills', s.name, 'SKILL.md'))) {
           out.push({ target: `plugins/${d.name}/skills/${s.name}/SKILL.md`, paket: d.name });
         }
       }
@@ -74,6 +84,7 @@ class PackageExporter {
 
   // plugins/ altındaki paket klasörleri (bileşeni olmayanlar dahil).
   async listPluginDirs() {
+    if (!(await this._isPlainDir(path.join(this.root(), 'plugins')))) return [];
     try {
       return (await this.fsp.readdir(path.join(this.root(), 'plugins'), { withFileTypes: true }))
         .filter((d) => d.isDirectory() && d.name.charAt(0) !== '.').map((d) => d.name);

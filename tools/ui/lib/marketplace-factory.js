@@ -36,8 +36,11 @@ class MarketplaceFactory {
 
   static validateName(raw) {
     // FM.slug boş girdide 'adsiz' döndürür; harf/rakam içermeyen adları burada reddet.
-    if (!/[\p{L}\p{N}]/u.test(String(raw || ''))) throw fail(400, 'Geçersiz marketplace adı');
-    const name = FM.slug(String(raw));
+    const text = String(raw == null ? '' : raw).trim();
+    if (!/[\p{L}\p{N}]/u.test(text)) throw fail(400, 'Geçersiz marketplace adı');
+    // slug sondaki noktayı ("ok." -> "ok") sessizce attığı için ham girişte reddedilir: yazılan ad ile klasör adı ayrışmasın.
+    if (/[. ]$/.test(text)) throw fail(400, 'Marketplace adı nokta ile bitemez: ' + text);
+    const name = FM.slug(text);
     if (!name) throw fail(400, 'Geçersiz marketplace adı');
     const bad = Rules.checkMarketplaceName(name);
     if (bad) throw fail(400, bad);

@@ -158,6 +158,82 @@ test('uyarılar: kokAracReposunuIceriyor ve kokBaskaDepoda; ok kalır', real, as
   } finally { rmrf(d); }
 });
 
+test('ppConfigBozuk ve libraryDirGecersiz uyarı olarak eklenir, ok kalır', real, async () => {
+  const d = tmpDir();
+  try {
+    const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
+    const { svc, git, store } = await build(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' } });
+    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
+    const file = path.join(a, 'pp.config.json');
+    for (const bad of ['garip{', 'null', '[]', '"x"', '5']) {
+      fs.writeFileSync(file, bad);
+      svc.invalidate();
+      const st = await svc.evaluate();
+      assert.equal(st.ok, true, bad); assert.equal(st.rootOk, true, bad);
+      assert.deepEqual(codes(st), ['ppConfigBozuk'], bad);
+      assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].action, null);
+      assert.equal(st.issues[0].path, file);
+      assert.match(st.issues[0].message, /^pp\.config\.json okunamadı/);
+      assert.equal(st.root.toLowerCase(), a.toLowerCase());
+    }
+    for (const v of ['../../disari', 'C:\\Windows', '', 'plugins']) {
+      fs.writeFileSync(file, JSON.stringify({ libraryDir: v }));
+      svc.invalidate();
+      const st = await svc.evaluate();
+      assert.equal(st.ok, true, v);
+      assert.deepEqual(codes(st), ['libraryDirGecersiz'], v);
+      assert.equal(st.issues[0].level, 'warn');
+    }
+    // sağlam dosya: uyarı yok
+    fs.writeFileSync(file, JSON.stringify({ libraryDir: './prompts/' }));
+    svc.invalidate();
+    assert.deepEqual((await svc.evaluate()).issues, []);
+    assert.ok(store);
+  } finally { rmrf(d); }
+});
+
+test('exportAlanGecersiz uyarı olarak eklenir, ok ve rootOk değişmez; geçerli export uyarısız', real, async () => {
+  const d = tmpDir();
+  try {
+    const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
+    const { svc, git } = await build(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' } });
+    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
+    const file = path.join(a, 'pp.config.json');
+    const cases = [
+      '{"export":{"durumlar":"kararlı"}}',
+      JSON.stringify({ export: { haricKlasorler: 5 } }),
+      JSON.stringify({ export: null }),
+      JSON.stringify({ export: 'kararlı' }),
+      JSON.stringify({ export: [] })
+    ];
+    for (const raw of cases) {
+      fs.writeFileSync(file, raw);
+      svc.invalidate();
+      const st = await svc.evaluate();
+      assert.equal(st.ok, true, raw); assert.equal(st.rootOk, true, raw);
+      assert.deepEqual(codes(st), ['exportAlanGecersiz'], raw);
+      assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].action, null);
+      assert.equal(st.issues[0].path, file);
+      assert.match(st.issues[0].message, /^pp\.config\.json içindeki "export/);
+      assert.equal(st.root.toLowerCase(), a.toLowerCase(), 'etkin kök değişmez');
+    }
+    // iki alan birden bozuksa ve libraryDir da geçersizse sırayla hepsi uyarı, ok yine true
+    fs.writeFileSync(file, JSON.stringify({ libraryDir: '../disari', export: { durumlar: 'a', haricKlasorler: 'b' } }));
+    svc.invalidate();
+    let st = await svc.evaluate();
+    assert.equal(st.ok, true);
+    assert.deepEqual(codes(st), ['libraryDirGecersiz', 'exportAlanGecersiz', 'exportAlanGecersiz']);
+    // geçerli export (dizi), boş nesne ve anahtarın yokluğu: uyarı yok
+    for (const ok of [{ export: { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu'] } }, { export: {} }, { libraryDir: 'prompts' }]) {
+      fs.writeFileSync(file, JSON.stringify(ok));
+      svc.invalidate();
+      st = await svc.evaluate();
+      assert.deepEqual(st.issues, [], JSON.stringify(ok));
+      assert.equal(st.ok, true);
+    }
+  } finally { rmrf(d); }
+});
+
 test('refreshIfStale: .git dışarıdan silinince yeniden değerlendirir', real, async () => {
   const d = tmpDir();
   try {

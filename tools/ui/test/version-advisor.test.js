@@ -156,3 +156,22 @@ test('prompt tag durumu: VersionService.bump ile etiketli tagged:true, eksik fal
     assert.equal((await analyze(s)).prompts.find((p) => p.ad === 'aa').tagged, false);
   } finally { rmrf(tmp); }
 });
+
+test('sürüm bileşeni üst sınırdayken öneri üretilmez: version boş, reasons notu (B-13)', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    const s = buildStack(mk, tmp);
+    await s.publisher.publish(mk, { name: 'ornek', version: '1.1.999999999' });
+    write(mk, 'prompts/ornek/a.md', '---\nbaslik: A\ntur: komut\nkomut_adi: aa\n---\nDEGISTI\n');
+    commitAll(mk, tmp);
+    const a = await analyze(s);
+    assert.equal(a.level, 'yama');
+    assert.ok(!a.version, 'öneri yok: ' + a.version);
+    assert.ok(a.reasons.some((r) => /üst sınıra ulaştı/.test(r)), JSON.stringify(a.reasons));
+    assert.ok(!JSON.stringify(a).includes('e+'), 'bilimsel gösterim hiçbir yerde yok');
+    // yayın sürümü boş bırakılırsa geçersiz sürüm olarak reddedilir (null etiket üretilmez)
+    await assert.rejects(s.publisher.publish(mk, { name: 'ornek' }), (e) => e.status === 400 && e.data.code === 'surumGecersiz');
+    assert.equal(sh(mk, ['tag', '-l', 'paket/ornek/*'], gitEnv(tmp)).trim(), 'paket/ornek/v1.1.999999999');
+  } finally { rmrf(tmp); }
+});

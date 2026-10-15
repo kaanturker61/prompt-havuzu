@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { GitService, GitError, GitNotFoundError, parseStatus } = require('../lib/git-service');
+const { GitService, GitError, GitNotFoundError, parseStatus, classifyGitError } = require('../lib/git-service');
 const { gitAvailable, tmpDir, rmrf, gitEnv } = require('./helpers');
 
 /* ---------- sahte runner ---------- */
@@ -151,5 +151,112 @@ test('setConfig/getConfig; kimlik eksikken isIdentityError', real, async () => {
     const g2 = new GitService({ env: { ...gitEnv(d, { identity: false }), GIT_AUTHOR_NAME: undefined, GIT_AUTHOR_EMAIL: undefined, GIT_COMMITTER_NAME: undefined, GIT_COMMITTER_EMAIL: undefined } });
     await g2.commitPaths(repo, 'm', ['a.md']);
     assert.equal(await g2.hasCommits(repo), true);
+  } finally { rmrf(d); }
+});
+
+/* ---------- B-15: ayrık HEAD ---------- */
+
+test('status: ayrık HEAD branch null, detached true, head kısa hash; doğmamış dal main kalır (B-15)', real, async () => {
+  const d = tmpDir();
+  try {
+    const env = gitEnv(d);
+    const g = new GitService({ env });
+    const repo = path.join(d, 'repo'); fs.mkdirSync(repo);
+    await g.init(repo);
+    // doğmamış dal: symbolic-ref çalışır, ayrık sayılmaz
+    let st = await g.status(repo);
+    assert.equal(st.branch, 'main'); assert.equal(st.detached, false); assert.equal(st.head, null); assert.equal(st.hasCommits, false);
+    fs.writeFileSync(path.join(repo, 'a.md'), 'bir\n');
+    await g.commitPaths(repo, 'ilk', ['a.md']);
+    st = await g.status(repo);
+    assert.equal(st.branch, 'main'); assert.equal(st.detached, false); assert.equal(st.head, null);
+    // ayrık HEAD
+    await g.run(repo, ['checkout', '-q', '--detach']);
+    const short = (await g.run(repo, ['rev-parse', '--short', 'HEAD'])).trim();
+    st = await g.status(repo);
+    assert.equal(st.branch, null); assert.equal(st.detached, true); assert.equal(st.head, short);
+    assert.match(st.head, /^[0-9a-f]{7,}$/);
+    assert.equal(st.hasCommits, true); assert.equal(st.isRepo, true);
+    // ayrıkken de commit atılır ve durum güncellenir
+    fs.writeFileSync(path.join(repo, 'a.md'), 'iki\n');
+    assert.deepEqual((await g.status(repo)).files.map((f) => f.path), ['a.md']);
+    const c2 = await g.commitPaths(repo, 'ayrik', ['a.md']);
+    st = await g.status(repo);
+    assert.equal(st.detached, true); assert.equal(st.head, c2);
+    // dala dönünce yeniden dal adı
+    await g.run(repo, ['checkout', '-q', 'main']);
+    st = await g.status(repo);
+    assert.equal(st.branch, 'main'); assert.equal(st.detached, false); assert.equal(st.head, null);
+  } finally { rmrf(d); }
+});
+
+/* ---------- B-16: hata sınıflandırma ---------- */
+
+const CMD = (sub) => ['-C', path.resolve('x'), '-c', 'core.quotepath=false', sub, '-m', 'mesaj'];
+
+test('classifyGitError: kilit, eklenemedi, commitReddedildi, bilinmiyor örnekleri (B-16)', () => {
+  const lockWin = "fatal: Unable to create 'C:/Users/k/PromptLibrary/mk/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository, e.g.\nan editor opened by 'git commit'.";
+  const lockPosix = "fatal: Unable to create '/home/k/mk/.git/index.lock': File exists.";
+  assert.equal(classifyGitError(lockWin, { args: CMD('add') }), 'kilit');
+  assert.equal(classifyGitError(lockPosix, { args: CMD('commit') }), 'kilit', 'kalıp, alt komuttan önce gelir');
+  assert.equal(classifyGitError("fatal: Unable to create '/x/.git/refs/heads/main.lock': File exists.", {}), 'kilit');
+  assert.equal(classifyGitError('', { stderr: lockWin }), 'kilit', 'stderr yoksa err.stderr okunur');
+  assert.equal(classifyGitError('', { message: lockWin }), 'kilit', 'o da yoksa err.message');
+
+  const adding = 'error: open("plugins/norm/commands/con.md"): No such file or directory\nerror: unable to index file \'plugins/norm/commands/con.md\'\nfatal: adding files failed';
+  assert.equal(classifyGitError(adding, { args: CMD('add') }), 'eklenemedi');
+  assert.equal(classifyGitError('fatal: adding files failed', {}), 'eklenemedi');
+  assert.equal(classifyGitError('error: unable to index file \'a.md\'', {}), 'eklenemedi');
+
+  assert.equal(classifyGitError('HOOK-RED: yasak sözcük var', { args: CMD('commit') }), 'commitReddedildi', 'hook çıktısı');
+  assert.equal(classifyGitError('', { args: CMD('commit') }), 'commitReddedildi', 'stderr boş, alt komut commit');
+  assert.equal(classifyGitError('error: gpg failed to sign the data', { args: CMD('commit') }), 'commitReddedildi');
+  assert.equal(classifyGitError('', { args: ['-C', 'd', '-c', 'a=b', '-c', 'c=d', 'commit', '--', 'x'] }), 'commitReddedildi', '-C/-c çiftleri atlanır');
+
+  assert.equal(classifyGitError("fatal: pathspec 'x' did not match any files", { args: CMD('add') }), 'bilinmiyor');
+  assert.equal(classifyGitError('fatal: bad object', { args: CMD('tag') }), 'bilinmiyor');
+  assert.equal(classifyGitError('', undefined), 'bilinmiyor');
+  assert.equal(classifyGitError(undefined, null), 'bilinmiyor');
+  assert.equal(classifyGitError('HOOK-RED', { args: ['commit'] }), 'commitReddedildi');
+  assert.equal(classifyGitError('HOOK-RED', { args: ['-c', 'commit.gpgsign=false', 'status'] }), 'bilinmiyor', '-c değeri alt komut sayılmaz');
+});
+
+test('gerçek .git/index.lock: commitPaths kilit olarak sınıflanır, stderr dosya yolunu taşır (B-16)', real, async () => {
+  const d = tmpDir();
+  try {
+    const g = new GitService({ env: gitEnv(d) });
+    const repo = path.join(d, 'repo'); fs.mkdirSync(repo);
+    await g.init(repo);
+    fs.writeFileSync(path.join(repo, 'a.md'), 'bir\n');
+    await g.commitPaths(repo, 'ilk', ['a.md']);
+    fs.writeFileSync(path.join(repo, 'a.md'), 'iki\n');
+    fs.writeFileSync(path.join(repo, '.git', 'index.lock'), '');
+    await assert.rejects(g.commitPaths(repo, 'kilitli', ['a.md']), (e) => {
+      assert.ok(e instanceof GitError);
+      assert.equal(classifyGitError(e.stderr, e), 'kilit');
+      assert.match(e.stderr, /index\.lock/);
+      return true;
+    });
+    fs.rmSync(path.join(repo, '.git', 'index.lock'));
+    await g.commitPaths(repo, 'kilitsiz', ['a.md']); // kilit kalkınca aynı işlem çalışır
+  } finally { rmrf(d); }
+});
+
+test('gerçek pre-commit hook reddi: commitReddedildi, hook çıktısı stderr\'de (B-16)', real, async (t) => {
+  const d = tmpDir();
+  try {
+    const g = new GitService({ env: gitEnv(d) });
+    const repo = path.join(d, 'repo'); fs.mkdirSync(repo);
+    await g.init(repo);
+    fs.writeFileSync(path.join(repo, 'a.md'), 'bir\n');
+    const hook = path.join(repo, '.git', 'hooks', 'pre-commit');
+    fs.mkdirSync(path.dirname(hook), { recursive: true });
+    fs.writeFileSync(hook, '#!/bin/sh\necho "HOOK-RED: yasak" >&2\nexit 1\n', { mode: 0o755 });
+    let err = null;
+    try { await g.commitPaths(repo, 'x', ['a.md']); } catch (e) { err = e; }
+    if (!err) return t.skip('bu ortamda git hook çalıştırılmıyor');
+    assert.ok(err instanceof GitError);
+    assert.match(err.stderr, /HOOK-RED/);
+    assert.equal(classifyGitError(err.stderr, err), 'commitReddedildi');
   } finally { rmrf(d); }
 });

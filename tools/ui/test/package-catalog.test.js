@@ -153,3 +153,57 @@ test('ManifestWriter: yalnızca sürümü olan paketler listelenir, harici girdi
     assert.equal(fs.existsSync(path.join(mk, 'plugins')), false, 'oluşturulan klasörler geri alındı');
   } finally { rmrf(tmp); }
 });
+
+test('scanPluginFiles: sembolik bağlantı dosya ve klasörleri bileşen sayılmaz', real, async (t) => {
+  const { makeLink, removeLink } = require('./links');
+  const tmp = tmpDir();
+  const out = path.join(tmp, 'dis'); fs.mkdirSync(path.join(out, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(out, 'gizli.md'), 'DIS'); fs.writeFileSync(path.join(out, 'agents', 'a.md'), 'DIS');
+  fs.mkdirSync(path.join(out, 'skill-x')); fs.writeFileSync(path.join(out, 'skill-x', 'SKILL.md'), 'DIS');
+  const links = [];
+  try {
+    const mk = seed(tmp);
+    write(mk, 'plugins/ornek/commands/gercek.md', 'g');
+    write(mk, 'plugins/ornek/skills/ok/SKILL.md', 's');
+    fs.mkdirSync(path.join(mk, 'plugins', 'ornek', 'skills'), { recursive: true });
+    const fileLink = path.join(mk, 'plugins', 'ornek', 'commands', 'bag.md');
+    const agentsLink = path.join(mk, 'plugins', 'ornek', 'agents');
+    const skillLink = path.join(mk, 'plugins', 'ornek', 'skills', 'bag');
+    const pkgLink = path.join(mk, 'plugins', 'bagpkg');
+    if (!makeLink(path.join(out, 'agents'), agentsLink)) return t.skip('bağlantı kurulamadı (EPERM)');
+    links.push(agentsLink);
+    makeLink(path.join(out, 'gizli.md'), fileLink, 'file'); links.push(fileLink);
+    makeLink(path.join(out, 'skill-x'), skillLink); links.push(skillLink);
+    makeLink(out, pkgLink); links.push(pkgLink);
+    const s = buildStack(mk, tmp);
+    const scanned = await s.exporter.scanPluginFiles();
+    assert.deepEqual(scanned.map((x) => x.target).sort(), ['plugins/ornek/commands/gercek.md', 'plugins/ornek/skills/ok/SKILL.md']);
+    // yayın dışı çıktılar: bağlantılar orphan ya da kaldırma listesine girmez
+    const built = await s.catalog.build(await s.config.load());
+    assert.ok(!built.orphans.some((o) => /bag|agents|gizli/.test(o.target)), JSON.stringify(built.orphans));
+  } finally { links.forEach(removeLink); rmrf(tmp); }
+});
+
+test('komut_adi CON -> aygitAdi (error), paket engellenir; diğer paketler etkilenmez', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    write(mk, 'prompts/ornek/konsol.md', cmd('Con', 'komut_adi: CON\n'));
+    write(mk, 'prompts/ornek/bos.md', cmd('N', 'komut_adi: nul\n'));
+    write(mk, 'prompts/temiz/t.md', cmd('T', 'komut_adi: tt\n'));
+    const s = buildStack(mk, tmp);
+    const built = await s.catalog.build(await s.config.load());
+    const ornek = built.packages.get('ornek');
+    const block = s.catalog.blocking(ornek);
+    assert.deepEqual(block.map((b) => [b.code, b.source]).sort(), [['aygitAdi', 'prompts/ornek/bos.md'], ['aygitAdi', 'prompts/ornek/konsol.md']]);
+    assert.equal(block[0].level, 'error');
+    assert.match(block[0].msg, /Windows aygıt adı/);
+    const row = ornek.prompts.find((p) => p.source === 'prompts/ornek/konsol.md');
+    const iss = row.issues.find((i) => i.code === 'aygitAdi');
+    assert.equal(iss.level, 'error'); assert.equal(iss.msg, '"con" bir Windows aygıt adı; dosya, klasör veya plugin adı olarak kullanılamaz. Başka bir ad seç.');
+    assert.equal(s.catalog.blocking(built.packages.get('temiz')).length, 0);
+    const b2 = await s.catalog.build(await s.config.load());
+    // bilinçli tasarım: BLOCKING_SKIP ve publishPlan biçimi değişmedi
+    assert.ok(Array.isArray(b2.plans) && Array.isArray(b2.skipped) && Array.isArray(b2.orphans) && b2.packages instanceof Map);
+  } finally { rmrf(tmp); }
+});
