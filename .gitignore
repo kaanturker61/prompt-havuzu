@@ -22,6 +22,3 @@ desktop.ini
 
 # Uygulama planları yerelde kalır; yayına girmez.
 /docs/plans/
-
-# Claude Code proje yönergeleri yerelde kalır; yayına girmez.
-/CLAUDE.md
