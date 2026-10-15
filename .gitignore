@@ -13,6 +13,8 @@ desktop.ini
 # Dahili çalışma notları ve geliştirme ajanı; yayına girmez.
 /docs/reports/
 /docs/ui_ux_test_sureci.md
+/docs/test-results/
+/docs/test-scenarios/
 
 # Kullanıcı kılavuzu ve ekran görüntüleri yerelde kalır; yayına girmez.
 /docs/user-guide/
