@@ -304,6 +304,119 @@ test('index.html: betik sırası lang/tr.js, lang/en.js, i18n.js, fm.js, rules.j
   assert.deepEqual(srcs, ['/lang/tr.js', '/lang/en.js', '/i18n.js', '/fm.js', '/rules.js']);
 });
 
+/** Summary: Yerel saatle sabit bir an (gün/saat dilimi kaymasından bağımsız) ISO dizesi. */
+const WHEN = new Date(2026, 2, 5, 14, 5).toISOString();
+
+test('date/time: tr-TR ve en-US biçimi geçerli dili izler; tarih+saat ve yalnızca saat', () => {
+  const fmt = (locale, opts) => new Intl.DateTimeFormat(locale, opts).format(new Date(WHEN));
+  const both = { dateStyle: 'medium', timeStyle: 'short' };
+  assert.equal(I18n.date(WHEN), fmt('tr-TR', both));
+  assert.equal(I18n.time(WHEN), fmt('tr-TR', { timeStyle: 'short' }));
+  assert.equal(I18n.run('en', () => I18n.date(WHEN)), fmt('en-US', both));
+  assert.equal(I18n.run('en', () => I18n.time(WHEN)), fmt('en-US', { timeStyle: 'short' }));
+  assert.match(I18n.date(WHEN), /^5 Mar 2026,? 14:05$/);
+  assert.equal(I18n.time(WHEN), '14:05');
+  assert.match(I18n.run('en', () => I18n.date(WHEN)), /^Mar 5, 2026, 2:05\sPM$/);
+  assert.match(I18n.run('en', () => I18n.time(WHEN)), /^2:05\sPM$/);
+  assert.equal(I18n.date(new Date(WHEN)), I18n.date(WHEN), 'Date nesnesi de kabul edilir');
+});
+
+test('date/time: geçersiz girdi bozulmadan döner, null/undefined boş; dil değişince önbellek karışmaz', () => {
+  assert.equal(I18n.date('bozuk tarih'), 'bozuk tarih');
+  assert.equal(I18n.time('bozuk tarih'), 'bozuk tarih');
+  assert.equal(I18n.date(undefined), '');
+  assert.equal(I18n.time(null), '');
+  const i = fresh();
+  const tr1 = i.date(WHEN);
+  const en1 = i.run('en', () => i.date(WHEN));
+  assert.notEqual(tr1, en1);
+  assert.equal(i.date(WHEN), tr1);
+  assert.equal(i.run('en', () => i.date(WHEN)), en1);
+});
+
+test('date/time: tarayıcı kipinde setLanguage ile dil değişir', () => {
+  const B = loadBrowser().I18n;
+  const tr = B.date(WHEN);
+  B.setLanguage('en');
+  const en = B.date(WHEN);
+  assert.match(tr, /^5 Mar 2026,? 14:05$/);
+  assert.match(en, /^Mar 5, 2026, 2:05\sPM$/);
+  assert.match(B.time(WHEN), /^2:05\sPM$/);
+});
+
+/** Summary: querySelectorAll('[öznitelik]') destekleyen sahte öğe ağacı. */
+function fakeDom(specs) {
+  const nodes = specs.map((attrs) => {
+    const map = { ...attrs };
+    return {
+      map,
+      textContent: 'eski',
+      getAttribute: (k) => (k in map ? map[k] : null),
+      setAttribute: (k, v) => { map[k] = String(v); }
+    };
+  });
+  return {
+    nodes,
+    querySelectorAll(selector) {
+      const m = /^\[([\w-]+)\]$/.exec(selector);
+      assert.ok(m, 'beklenmeyen seçici: ' + selector);
+      return nodes.filter((n) => m[1] in n.map);
+    }
+  };
+}
+
+test('applyDom: data-i18n -> textContent; title, placeholder, aria-label öznitelikleri; dile göre', () => {
+  const i = fresh();
+  const dom = fakeDom([
+    { 'data-i18n': 'greet' },
+    { 'data-i18n-title': 'who', title: 'eski başlık' },
+    { 'data-i18n-placeholder': 'pair' },
+    { 'data-i18n-aria-label': 'only.tr' },
+    { 'data-i18n': 'greet', 'data-i18n-title': 'who' },
+    { id: 'baglantisiz' }
+  ]);
+  const [a, b, c, d, e, f] = dom.nodes;
+  assert.equal(i.applyDom(dom), 6);
+  assert.equal(a.textContent, 'Merhaba {ad}', 'params verilmez: yer tutucu kalır');
+  assert.equal(b.map.title, 'Ben {ad}');
+  assert.equal(b.textContent, 'eski', 'yalnızca ilgili öznitelik doldurulur');
+  assert.equal(c.map.placeholder, '{x} ve {ad}');
+  assert.equal(d.map['aria-label'], 'Yalnızca Türkçe');
+  assert.equal(e.textContent, 'Merhaba {ad}');
+  assert.equal(e.map.title, 'Ben {ad}');
+  assert.equal(f.textContent, 'eski');
+  assert.equal(f.map.title, undefined);
+
+  assert.equal(i.run('en', () => i.applyDom(dom)), 6);
+  assert.equal(a.textContent, 'Hello {ad}');
+  assert.equal(b.map.title, 'I am {ad}');
+  assert.equal(d.map['aria-label'], 'Yalnızca Türkçe', 'eksik en anahtarı tr yedeğine düşer');
+  assert.equal(c.map.placeholder, '{x} and {ad}');
+});
+
+test('applyDom: eksik anahtar metni anahtar olur; kök yoksa ve Node\'da document yoksa 0', () => {
+  const i = fresh();
+  const dom = fakeDom([{ 'data-i18n': 'yok.anahtar' }]);
+  assert.equal(i.applyDom(dom), 1);
+  assert.equal(dom.nodes[0].textContent, 'yok.anahtar');
+  assert.equal(i.applyDom(), 0);
+  assert.equal(i.applyDom(fakeDom([])), 0);
+});
+
+test('applyDom: tarayıcı kipinde varsayılan kök global document; gerçek sözlükle', () => {
+  const ctx = loadBrowser();
+  const dom = fakeDom([{ 'data-i18n': 'ui.static.settings' }, { 'data-i18n-aria-label': 'ui.static.library' }]);
+  ctx.document = dom;
+  vm.runInContext('I18n.setLanguage("en")', ctx);
+  assert.equal(vm.runInContext('I18n.applyDom()', ctx), 2);
+  assert.equal(dom.nodes[0].textContent, 'Settings');
+  assert.equal(dom.nodes[1].map['aria-label'], 'Library');
+  vm.runInContext('I18n.setLanguage("tr")', ctx);
+  vm.runInContext('I18n.applyDom(document)', ctx);
+  assert.equal(dom.nodes[0].textContent, 'Ayarlar');
+  assert.equal(dom.nodes[1].map['aria-label'], 'Kütüphane');
+});
+
 test('yeni kaynak dosyalarda CR yok (LF)', () => {
   for (const f of ['i18n.js', 'lang/tr.js', 'lang/en.js']) {
     assert.ok(!fs.readFileSync(path.join(PUBLIC, f), 'utf8').includes('\r'), f);

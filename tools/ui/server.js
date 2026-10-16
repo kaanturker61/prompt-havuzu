@@ -41,7 +41,7 @@ const { PackagePublisher } = require('./lib/publisher');
 const { RemoteSync } = require('./lib/remote-sync');
 const { OpLock } = require('./lib/op-lock');
 const { StateStore } = require('./lib/state-store');
-const { REMOTE_CHECKS } = require('./lib/config-store');
+const { REMOTE_CHECKS, LANGUAGES } = require('./lib/config-store');
 
 /* ------------------------------------------------------------------ ayarlar */
 
@@ -409,11 +409,12 @@ async function requireRootOk() {
 async function infoView() {
   const st = await setup.evaluate();
   const cfg = await loadConfig();
+  const { config: user } = await configStore.load();
   let gitOk = true;
   try { await gitService.version(); } catch (e) { gitOk = false; }
   return {
     root: st.root, platform: process.platform, node: process.version, config: cfg, isRepo: st.ok, gitAvailable: gitOk,
-    configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace, setup: st
+    configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace, language: user.language, setup: st
   };
 }
 
@@ -427,7 +428,7 @@ async function settingsView() {
   const { config } = await configStore.load();
   return {
     configPath: configStore.file, libraryRoot: st.libraryRoot, activeMarketplace: st.activeMarketplace, remoteCheck: config.remoteCheck,
-    suggestedRoot: sug, suggestedRootNote: sug ? null : paths.suggestedRootNote(), toolRoot: TOOL_DIR, setup: st
+    language: config.language, suggestedRoot: sug, suggestedRootNote: sug ? null : paths.suggestedRootNote(), toolRoot: TOOL_DIR, setup: st
   };
 }
 
@@ -435,10 +436,15 @@ route('GET', '/api/settings', async () => settingsView(), { open: true });
 
 route('PUT', '/api/settings', async ({ body }) => {
   if (body.remoteCheck !== undefined && !REMOTE_CHECKS.includes(body.remoteCheck)) throw httpErr(400, 'Geçersiz değer', { field: 'remoteCheck' });
+  if (body.language !== undefined && !LANGUAGES.includes(body.language)) throw httpErr(400, I18n.tx('err.settings.invalidValue'), { field: 'language' });
+  const prefs = {
+    ...(body.remoteCheck !== undefined ? { remoteCheck: body.remoteCheck } : {}),
+    ...(body.language !== undefined ? { language: body.language } : {})
+  };
   // Yalnızca uzak depo kontrol ayarı gelirse library kökü doğrulaması atlanır.
-  if (body.remoteCheck !== undefined && (body.libraryRoot === undefined || body.libraryRoot === null || body.libraryRoot === '')) {
+  if (Object.keys(prefs).length && (body.libraryRoot === undefined || body.libraryRoot === null || body.libraryRoot === '')) {
     const { config } = await configStore.load();
-    try { await configStore.save({ ...config, remoteCheck: body.remoteCheck }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    try { await configStore.save({ ...config, ...prefs }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
     return settingsView();
   }
   let d = String(body.libraryRoot == null ? '' : body.libraryRoot).trim().replace(/^["']|["']$/g, '');
@@ -457,7 +463,7 @@ route('PUT', '/api/settings', async ({ body }) => {
     throw httpErr(400, 'Bu yol bir klasör değil: ' + d);
   }
   const { config } = await configStore.load();
-  const next = { ...config, libraryRoot: d, ...(body.remoteCheck !== undefined ? { remoteCheck: body.remoteCheck } : {}) };
+  const next = { ...config, libraryRoot: d, ...prefs };
   // Kayıtlı marketplace yeni kökte yoksa boşalt.
   if (next.activeMarketplace && !(await registry.folderOf(d, next.activeMarketplace))) next.activeMarketplace = '';
   const saveCfg = async (c) => {

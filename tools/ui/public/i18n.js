@@ -21,6 +21,18 @@
   const PLACEHOLDER_RE = /\{([A-Za-z_]\w*)\}/g;
   /** Summary: HTML kaçış tablosu. */
   const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  /** Summary: Tarih ve saat biçimlendirme seçenekleri (date: tarih ve saat birlikte, time: yalnızca saat). */
+  const DATE_FORMATS = Object.freeze({
+    date: Object.freeze({ dateStyle: 'medium', timeStyle: 'short' }),
+    time: Object.freeze({ timeStyle: 'short' })
+  });
+  /** Summary: Öznitelik adı ve doldurduğu hedef (null = textContent). */
+  const DOM_BINDINGS = Object.freeze([
+    Object.freeze(['data-i18n', null]),
+    Object.freeze(['data-i18n-title', 'title']),
+    Object.freeze(['data-i18n-placeholder', 'placeholder']),
+    Object.freeze(['data-i18n-aria-label', 'aria-label'])
+  ]);
 
   /** Summary: Nesnenin kendi özelliği mi (prototip anahtarlarını dışlar). */
   function hasOwn(obj, key) {
@@ -54,6 +66,7 @@
   function build(dictionaryOf) {
     const store = AsyncLocalStorage ? new AsyncLocalStorage() : null;
     const pluralRules = {};
+    const formatters = {};
     const missing = [];
     let browserLanguage = DEFAULT_LANGUAGE;
 
@@ -149,9 +162,44 @@
     /** Summary: Güvenilir HTML parametresi işaretler. */
     function raw(html) { return new Raw(html); }
 
+    /** Summary: Dil ve tür için tarih biçimlendiricisini önbellekten verir. */
+    function formatterFor(code, kind) {
+      const key = code + ':' + kind;
+      return formatters[key] || (formatters[key] = new Intl.DateTimeFormat(code, DATE_FORMATS[kind]));
+    }
+
+    /** Summary: ISO tarihini geçerli dilde biçimler; geçersiz girdi olduğu gibi (null/undefined boş) döner. */
+    function formatDate(iso, kind) {
+      if (iso === undefined || iso === null) return '';
+      const value = new Date(iso);
+      if (Number.isNaN(value.getTime())) return String(iso);
+      return formatterFor(locale(), kind).format(value);
+    }
+
+    /** Summary: Tarih ve saat, geçerli dilde (orta tarih, kısa saat). */
+    function date(iso) { return formatDate(iso, 'date'); }
+
+    /** Summary: Yalnızca saat, geçerli dilde (kısa saat). */
+    function time(iso) { return formatDate(iso, 'time'); }
+
+    /** Summary: root altındaki data-i18n* öznitelikli öğeleri geçerli dille doldurur; doldurulan sayıyı döner. */
+    function applyDom(root) {
+      const scope = root || (typeof document !== 'undefined' ? document : null);
+      if (!scope) return 0;
+      let count = 0;
+      for (const [attribute, target] of DOM_BINDINGS) {
+        for (const node of Array.from(scope.querySelectorAll('[' + attribute + ']'))) {
+          const text = tx(node.getAttribute(attribute));
+          if (target) node.setAttribute(target, text); else node.textContent = text;
+          count++;
+        }
+      }
+      return count;
+    }
+
     return {
       LANGUAGES, DEFAULT_LANGUAGE, LOCALE, missing,
-      tx, th, raw, resolve, run, current, setLanguage, locale
+      tx, th, raw, resolve, run, current, setLanguage, locale, date, time, applyDom
     };
   }
 

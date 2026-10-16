@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Prompt havuzu</title>
+<title data-i18n="ui.static.title"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B7C84'/%3E%3Cpath d='M5 13c3-3 6-3 9 0s6 3 9 0M5 20c3-3 6-3 9 0s6 3 9 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -322,53 +322,53 @@ details summary { cursor: pointer; }
 <header class="top">
   <div class="brand">
     <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 12c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0M3 20c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
-    Prompt havuzu
+    <span data-i18n="ui.static.brand"></span>
   </div>
-  <button class="btn" id="mkCur" type="button" data-act="goto-active" aria-live="polite" title="Ağaçta etkin marketplace'e git"></button>
-  <div class="searchbox"><input id="q" type="search" placeholder="Prompt ara (Ctrl+K)" autocomplete="off" aria-label="Prompt ara"></div>
-  <nav class="actions" aria-label="İşlemler">
-    <button class="btn primary" data-act="new-prompt" data-needs-setup>Yeni prompt</button>
-    <button class="btn" data-act="import" data-needs-setup>İçe aktar</button>
-    <button class="btn" data-act="git" data-needs-setup>Git<span id="gitBadge" class="badge" hidden></span><span id="gitDown" class="badge" hidden></span></button>
-    <button class="btn" data-act="market" data-needs-setup>Marketplace<span id="mkBadge" class="badge warn" hidden></span></button>
-    <button class="btn" data-act="settings">Ayarlar</button>
+  <button class="btn" id="mkCur" type="button" data-act="goto-active" aria-live="polite" data-i18n-title="ui.static.goActive"></button>
+  <div class="searchbox"><input id="q" type="search" data-i18n-placeholder="ui.static.searchPlaceholder" autocomplete="off" data-i18n-aria-label="ui.static.searchLabel"></div>
+  <nav class="actions" data-i18n-aria-label="ui.static.actionsLabel">
+    <button class="btn primary" data-act="new-prompt" data-needs-setup data-i18n="ui.static.newPrompt"></button>
+    <button class="btn" data-act="import" data-needs-setup data-i18n="ui.static.import"></button>
+    <button class="btn" data-act="git" data-needs-setup><span data-i18n="ui.static.git"></span><span id="gitBadge" class="badge" hidden></span><span id="gitDown" class="badge" hidden></span></button>
+    <button class="btn" data-act="market" data-needs-setup><span data-i18n="ui.static.marketplace"></span><span id="mkBadge" class="badge warn" hidden></span></button>
+    <button class="btn" data-act="settings" data-i18n="ui.static.settings"></button>
   </nav>
 </header>
-<button class="btn only-narrow fab" data-act="side" aria-label="Prompt listesini aç">Liste</button>
+<button class="btn only-narrow fab" data-act="side" data-i18n-aria-label="ui.static.openList" data-i18n="ui.static.list"></button>
 
 <div class="shell">
   <aside id="side">
     <div class="filters">
-      <button class="btn sm only-narrow" data-act="side" style="margin-bottom:8px">Listeyi kapat</button>
+      <button class="btn sm only-narrow" data-act="side" style="margin-bottom:8px" data-i18n="ui.static.closeList"></button>
       <div class="frow">
-        <select id="fDurum" aria-label="Duruma göre filtrele">
-          <option value="">Tüm durumlar</option><option value="taslak">Taslak</option><option value="kararlı">Kararlı</option><option value="arşiv">Arşiv</option>
+        <select id="fDurum" data-i18n-aria-label="ui.static.filterStatusLabel">
+          <option value="" data-i18n="ui.static.allStatuses"></option><option value="taslak" data-i18n="ui.static.statusDraft"></option><option value="kararlı" data-i18n="ui.static.statusStable"></option><option value="arşiv" data-i18n="ui.static.statusArchived"></option>
         </select>
-        <select id="fTur" aria-label="Türe göre filtrele">
-          <option value="">Tüm türler</option><option value="komut">Komut</option><option value="ajan">Ajan</option><option value="skill">Skill</option><option value="yok">Yayın dışı</option>
+        <select id="fTur" data-i18n-aria-label="ui.static.filterTypeLabel">
+          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.notPublished"></option>
         </select>
       </div>
-      <label class="chk"><input type="checkbox" id="fScope"> Marketplace dosyalarında da ara (plugins/)</label>
+      <label class="chk"><input type="checkbox" id="fScope"><span data-i18n="ui.static.searchInFiles"></span></label>
       <div id="tagbar" class="tagbar"></div>
     </div>
     <div class="listhead">
-      <span id="listTitle">Kütüphane</span><span class="grow"></span>
-      <button class="btn ghost sm" id="btnClear" data-act="clear-filters" hidden>Filtreyi temizle</button>
+      <span id="listTitle" data-i18n="ui.static.library"></span><span class="grow"></span>
+      <button class="btn ghost sm" id="btnClear" data-act="clear-filters" hidden data-i18n="ui.static.clearFilters"></button>
     </div>
-    <div class="listhead tools" role="toolbar" aria-label="Kütüphane işlemleri" style="padding-top:0">
-      <button class="btn sm" id="tbMp" data-act="new-mp" data-needs-root aria-describedby="why-mp">+ Marketplace</button>
-      <button class="btn sm" id="tbPlugin" data-act="new-plugin" aria-describedby="why-plugin">+ Plugin</button>
-      <button class="btn sm" id="tbPrompt" data-act="new-prompt" aria-describedby="why-prompt">+ Prompt</button>
+    <div class="listhead tools" role="toolbar" data-i18n-aria-label="ui.static.libraryActions" style="padding-top:0">
+      <button class="btn sm" id="tbMp" data-act="new-mp" data-needs-root aria-describedby="why-mp" data-i18n="ui.static.addMarketplace"></button>
+      <button class="btn sm" id="tbPlugin" data-act="new-plugin" aria-describedby="why-plugin" data-i18n="ui.static.addPlugin"></button>
+      <button class="btn sm" id="tbPrompt" data-act="new-prompt" aria-describedby="why-prompt" data-i18n="ui.static.addPrompt"></button>
       <span id="why-mp" class="sr"></span><span id="why-plugin" class="sr"></span><span id="why-prompt" class="sr"></span>
     </div>
-    <div id="list" class="list" role="tree" aria-label="Kütüphane"></div>
+    <div id="list" class="list" role="tree" data-i18n-aria-label="ui.static.library"></div>
   </aside>
   <main id="main"></main>
 </div>
 
 <div id="overlay" class="overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-    <div class="mhead"><h2 id="mTitle"></h2><button class="btn ghost sm" data-act="close">Kapat</button></div>
+    <div class="mhead"><h2 id="mTitle"></h2><button class="btn ghost sm" data-act="close" data-i18n="ui.static.close"></button></div>
     <div class="mbody" id="mBody"></div>
   </div>
 </div>
@@ -397,17 +397,59 @@ const ls = {
 };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const today = () => new Date().toLocaleDateString('sv-SE');
-const fmtDate = (iso) => { try { return new Date(iso).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return iso; } };
+const fmtDate = (iso) => I18n.date(iso);
 const base = (p) => p.split('/').pop();
 const stem = (p) => base(p).replace(/\.[^.]+$/, '');
 const normTur = Rules.normTur;
 const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'taslak' : f === 'kararli' ? 'kararli' : f === 'arsiv' ? 'arsiv' : ''; };
+
+/** Summary: Çeviri işlevi (düz metin); HTML için I18n.th kullanılır. */
+const tx = I18n.tx;
+/** Summary: Çözülen dilin açılış önbelleği anahtarı (kaynak sunucudaki ayardır, bu yalnızca titremeyi önler). */
+const LANG_KEY = 'pp.lang';
+/** Summary: Dil koduna karşılık gelen <html lang> değeri. */
+const HTML_LANG = { tr: 'tr', en: 'en-US' };
+/** Summary: Tarayıcının birinci dili (yoksa boş). */
+const navLang = () => (navigator.languages && navigator.languages[0]) || navigator.language || '';
+/** Summary: Dil ayarını (auto|tr|en) arayüz diline çözer; tarayıcı dili yoksa tr. */
+const resolveLang = (setting) => I18n.resolve(setting, navLang() || 'tr');
+/** Summary: Önbellekteki dili okur (erişilemezse null). */
+const readLangCache = () => { try { return localStorage.getItem(LANG_KEY); } catch (e) { return null; } };
+/** Summary: Çözülen dili önbelleğe yazar (erişilemezse sessizce atlanır). */
+const writeLangCache = (lang) => { try { localStorage.setItem(LANG_KEY, lang); } catch (e) { return false; } return true; };
+
+/** Summary: Açılış dili: pp.lang önbelleği, yoksa tarayıcı dili, o da yoksa tr. */
+function startLanguage() {
+  const cached = readLangCache();
+  return I18n.LANGUAGES.includes(cached) ? cached : resolveLang('auto');
+}
+
+/** Summary: Dili uygular: I18n dili, <html lang> ve statik işaretleme (data-i18n*). */
+function applyLanguage(lang) {
+  const applied = I18n.setLanguage(lang);
+  document.documentElement.lang = HTML_LANG[applied];
+  I18n.applyDom(document);
+  return applied;
+}
+
+/** Summary: Sunucudaki dil ayarıyla yeniden çözer; dil ilk isteğinkinden farklıysa /api/info'yu bir kez yeniden çeker. */
+async function syncLanguage(info) {
+  const used = I18n.current();
+  const lang = resolveLang(info.language);
+  writeLangCache(lang);
+  if (lang === used) return info;
+  applyLanguage(lang);
+  try { return await get('/api/info'); } catch (e) { return info; }
+}
+
+applyLanguage(startLanguage());
 
 // Etkin marketplace gerektiren rotalar: bu isteklere X-PP-MP başlığı eklenir (başka sekmede geçiş yapıldıysa sunucu reddeder).
 const MP_GUARDED = /^\/api\/(file|rename|mkdir|git\/|version|import\/|marketplace\/|package|prompts\/|history\/)/;
 async function api(method, url, body) {
   const headers = { 'Content-Type': 'application/json', 'X-PP': '1' };
   if (S.info && S.info.activeMarketplace && MP_GUARDED.test(url)) headers['X-PP-MP'] = encodeURIComponent(S.info.activeMarketplace);
+  headers['X-PP-Lang'] = I18n.current();
   const r = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   let j = {}; try { j = await r.json(); } catch (e) { /* gövde yok */ }
   if (!r.ok) {
@@ -2774,7 +2816,7 @@ async function paintGitRemote() {
   if (tok !== S.glTok || !$('#rmBody')) return;
   S.remote = r;
   const lc = r.lastCheck;
-  const time = lc && lc.at ? new Date(lc.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : null;
+  const time = lc && lc.at ? I18n.time(lc.at) : null;
   const canPull = r.behind > 0 && r.ahead === 0;
   const whyNo = !r.remotes.length ? 'Uzak depo tanımlı değil.' : r.behind === 0 ? 'Uzak depoda yeni commit yok.' : r.ahead > 0 ? 'Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş; bu araç birleştirme yapmaz.' : '';
   const hasR = r.remotes.length > 0;
@@ -3147,6 +3189,9 @@ function settingsHtml(s, m) {
   const rootVal = s.libraryRoot || s.suggestedRoot || '';
   const hint = s.suggestedRootNote || (s.suggestedRoot && !s.libraryRoot ? 'Önerilen klasör: ' + s.suggestedRoot : 'Marketplace depoları bu klasörün altında tutulur. Araç klasörünün dışında olmalı.');
   const rows = m.items.map((i) => mkRowHtml(i, 'item')).concat(m.ignored.map((i) => mkRowHtml(i, 'ignored'))).join('');
+  const curLang = I18n.LANGUAGES.includes(s.language) ? s.language : 'auto';
+  const langOpts = [['auto', 'ui.settings.languageAuto'], ['tr', 'ui.settings.languageTr'], ['en', 'ui.settings.languageEn']]
+    .map(([v, k]) => `<option value="${v}" ${v === curLang ? 'selected' : ''}>${esc(tx(k))}</option>`).join('');
   return `<div class="stack">
     <form class="stack" id="setRootForm" novalidate>
       <h3>Library kökü</h3>
@@ -3155,6 +3200,8 @@ function settingsHtml(s, m) {
       <p class="issue error" id="setRootErr" role="alert" style="margin:0" hidden></p>
       <div class="foot-left"><button class="btn primary">Kaydet</button><span class="hint">Ayar dosyası: <code>${esc(s.configPath)}</code></span></div>
     </form>
+    <h3>${esc(tx('ui.settings.language'))}</h3>
+    <label>${esc(tx('ui.settings.language'))}<select id="setLanguage">${langOpts}</select></label>
     <h3>Uzak depo</h3>
     <label>Uzak depoyu kontrol et<select id="setRemoteCheck"><option value="acilista" ${s.remoteCheck !== 'elle' ? 'selected' : ''}>Açılışta (saatte en fazla bir kez)</option><option value="elle" ${s.remoteCheck === 'elle' ? 'selected' : ''}>Yalnızca elle</option></select></label>
     <h3 id="setMkTitle" tabindex="-1">Marketplace'ler</h3>
@@ -3171,6 +3218,16 @@ function showFieldErr(id, msg) {
 function reloadWith(msg) {
   try { if (msg) sessionStorage.setItem('pp.flash', msg); } catch (e) { /* özel pencere */ }
   location.reload();
+}
+
+/** Summary: Dil ayarını kaydedip sayfayı yeni dille yeniden yükler; kaydedilmemiş değişiklik varsa önce sorulur. */
+async function setLanguage(setting) {
+  if (!(await confirmDiscard())) { openSettings(); return false; }
+  try { await api('PUT', '/api/settings', { language: setting }); } catch (e) { fail(e); openSettings(); return false; }
+  const lang = resolveLang(setting);
+  writeLangCache(lang);
+  reloadWith(tx('ui.settings.languageChanged', {}, { lang }));
+  return true;
 }
 
 // Library kökü değişince (bilinçli ve nadir) sayfa yeniden yüklenir.
@@ -3477,6 +3534,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
   else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
   else if (t.id === 'setRemoteCheck') { api('PUT', '/api/settings', { remoteCheck: t.value }).then(() => toast('Ayar kaydedildi')).catch(fail); }
+  else if (t.id === 'setLanguage') { setLanguage(t.value); }
   else if (S.pk && t.closest && t.closest('.pkrel')) pkValidate();
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
@@ -3544,6 +3602,7 @@ function renderMainKeepEdits() { syncFromDom(); renderMain(); updateDirty(); }
 /* ------------------------------------------------------------------ başlangıç */
 async function init() {
   try { S.info = await get('/api/info'); } catch (e) { $('#main').innerHTML = '<div class="start"><h1>Sunucuya ulaşılamadı</h1><p>Terminalde <code>node tools/ui/server.js</code> komutunun çalıştığından emin ol, sonra sayfayı yenile.</p></div>'; return; }
+  S.info = await syncLanguage(S.info);
   // Eski (marketplace'siz) anahtarlar bir kez silinir.
   try { localStorage.removeItem('pp.last'); localStorage.removeItem('pp.expanded'); } catch (e) { /* özel pencere */ }
   try { const f = sessionStorage.getItem('pp.flash'); if (f) { sessionStorage.removeItem('pp.flash'); toast(f, 'ok', 5000); } } catch (e) { /* özel pencere */ }

@@ -6,14 +6,18 @@ const fsp = fs.promises;
 const path = require('path');
 const { userConfigFile } = require('./paths');
 
-const DEFAULTS = Object.freeze({ version: 1, libraryRoot: '', activeMarketplace: '', remoteCheck: 'acilista' });
+/** Summary: Ayar dosyasının varsayılan değerleri. */
+const DEFAULTS = Object.freeze({ version: 1, libraryRoot: '', activeMarketplace: '', remoteCheck: 'acilista', language: 'auto' });
 const REMOTE_CHECKS = ['acilista', 'elle'];
+/** Summary: Geçerli dil ayarı değerleri (auto = tarayıcı dili). */
+const LANGUAGES = Object.freeze(['auto', 'tr', 'en']);
 
 function normalize(raw) {
   const s = (v) => (typeof v === 'string' ? v : '');
   return {
     version: 1, libraryRoot: s(raw.libraryRoot), activeMarketplace: s(raw.activeMarketplace),
-    remoteCheck: REMOTE_CHECKS.includes(raw.remoteCheck) ? raw.remoteCheck : 'acilista'
+    remoteCheck: REMOTE_CHECKS.includes(raw.remoteCheck) ? raw.remoteCheck : 'acilista',
+    language: LANGUAGES.includes(raw.language) ? raw.language : 'auto'
   };
 }
 
@@ -59,4 +63,4 @@ class ConfigStore {
 
 async function missing(p) { try { await fsp.access(p); return false; } catch (e) { return true; } }
 
-module.exports = { ConfigStore, DEFAULTS, REMOTE_CHECKS };
+module.exports = { ConfigStore, DEFAULTS, REMOTE_CHECKS, LANGUAGES };
