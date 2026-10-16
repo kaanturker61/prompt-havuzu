@@ -5,10 +5,21 @@
 
 const path = require('path');
 const { str } = require('./prompt-index');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 // Durumu izinli bir promptta paketin yayınını engelleyen uyarı kodları.
 const BLOCKING_SKIP = new Set(['turYok', 'turGecersiz', 'onYuzKapanmamis', 'dosyaBuyuk']);
 const PACKAGE_WARN = new Set(['paketUyusmuyor', 'paketCokDegerli']);
+
+/** Summary: Açıklaması boş prompt için tür başına (komut, ajan, skill) tam cümle sözlük anahtarı. */
+const EMPTY_DESCRIPTION_KEYS = Object.freeze({
+  komut: 'pkg.issue.aciklamaBosKomut',
+  ajan: 'pkg.issue.aciklamaBosAjan',
+  skill: 'pkg.issue.aciklamaBosSkill'
+});
 
 class PackageCatalog {
   // listPrompts: (cfg) => index.listMd(root, cfg.libraryDir, { includeBig: true })
@@ -54,7 +65,7 @@ class PackageCatalog {
         return s;
       };
 
-      if (!res.paket) { exclude(res.code || 'paketDisiKlasor', 'info', 'Bu klasör bir pakete dahil değil (gelen kutusu ya da hariç tutulan klasör).'); continue; }
+      if (!res.paket) { exclude(res.code || 'paketDisiKlasor', 'info', tx('pkg.skip.paketDisiKlasor')); continue; }
 
       const durum = str(meta.durum);
       if (!it.tooBig && !Rules.durumAllowed(durum, exp.durumlar)) {
@@ -81,7 +92,7 @@ class PackageCatalog {
       const cur = await this.readIfExists(path.join(this.root(), target));
       const issues = [];
       if (Rules.isDeviceName(ad)) issues.push({ code: 'aygitAdi', level: 'error', msg: Rules.MSG.aygitAdi(ad) });
-      if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: 'İçerik boş' });
+      if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: tx('pkg.issue.icerikBos') });
       if (str(meta.komut_adi) && FM.slug(str(meta.komut_adi)) === 'adsiz') {
         issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(str(meta.komut_adi)) });
       }
@@ -89,7 +100,7 @@ class PackageCatalog {
         issues.push({
           code: 'aciklamaBos',
           level: tur === 'komut' ? 'info' : 'warn',
-          msg: tur === 'komut' ? 'Açıklama boş, başlık kullanılacak' : 'Açıklama boş. Claude, bu ' + (tur === 'ajan' ? 'ajanı' : 'skill\'i') + ' ne zaman kullanacağını açıklamadan seçer'
+          msg: tx(EMPTY_DESCRIPTION_KEYS[tur])
         });
       }
       if (res.code === 'paketUyusmuyor') issues.push({ code: 'paketUyusmuyor', level: 'warn', msg: Rules.MSG.paketUyusmuyor(res.klasor, res.alan) });
@@ -107,7 +118,7 @@ class PackageCatalog {
     }
     for (const list of byTarget.values()) {
       if (list.length > 1) {
-        for (const p of list) p.issues.push({ code: 'hedefCakisiyor', level: 'error', msg: 'Aynı hedef dosya birden fazla prompt tarafından kullanılıyor: ' + p.target });
+        for (const p of list) p.issues.push({ code: 'hedefCakisiyor', level: 'error', msg: tx('pkg.issue.hedefCakisiyor', { target: p.target }) });
       }
     }
     for (const p of plans) {

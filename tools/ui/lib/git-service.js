@@ -70,6 +70,11 @@ function classifyGitError(stderr, err) {
   return 'bilinmiyor';
 }
 
+/** Summary: Sonuca ileti metninden bağımsız hata kodunu numaralandırılamaz alan olarak ekler (deepEqual ve JSON etkilenmez). */
+function withErrorCode(info, errorCode) {
+  return Object.defineProperty(info, 'errorCode', { value: errorCode });
+}
+
 const ZERO_OID = '0'.repeat(40);
 const ANY_REF_RE = /^[A-Za-z0-9][A-Za-z0-9/._-]*$/;
 const REMOTE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -262,7 +267,7 @@ class GitService {
   async toplevelInfo(dir) {
     try {
       const out = (await this.run(dir, ['rev-parse', '--show-toplevel'])).trim();
-      return out ? { path: path.resolve(out), error: null } : { path: null, error: tx('git.emptyResponse') };
+      return out ? { path: path.resolve(out), error: null } : withErrorCode({ path: null, error: tx('git.emptyResponse') }, 'bosYanit');
     } catch (e) {
       if (e instanceof GitNotFoundError) throw e;
       if (e.code === 'aracReposu') throw e;

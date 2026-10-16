@@ -5,9 +5,13 @@
 const path = require('path');
 const { UndoStack } = require('./undo');
 const { PpConfigError } = require('./pp-config');
+const I18n = require('../public/i18n.js');
 
-/** Summary: Geri alınan işlemin hata iletisi başlığı (create | rename). */
-const FAIL_LABEL = { create: 'Plugin oluşturulamadı', rename: 'Plugin yeniden adlandırılamadı' };
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
+/** Summary: Geri alınan işlemin hata iletisi sözlük anahtarı (create | rename). */
+const FAIL_LABEL = { create: 'pkg.err.createFailed', rename: 'pkg.err.renameFailed' };
 
 class PackageError extends Error {
   constructor(status, message, data) {
@@ -34,7 +38,7 @@ class PackageService {
   _slugOf(raw) {
     const name = String(raw == null ? '' : raw).trim();
     const slug = this.FM.slug(name);
-    if (!name || (slug === 'adsiz' && !/adsiz/i.test(name))) throw new PackageError(400, 'Plugin adı gerekli');
+    if (!name || (slug === 'adsiz' && !/adsiz/i.test(name))) throw new PackageError(400, tx('rules.pluginAdGerekli'));
     const err = this.Rules.checkPluginName(slug);
     if (err) throw new PackageError(400, err);
     return slug;
@@ -78,8 +82,8 @@ class PackageService {
   // Geri alır. PpConfigError (bozuk ayar) 500'e çevrilmez, aynen döner (409 ppConfigBozuk / libraryDirGecersiz).
   _fail(e, undo, op = 'create') {
     return undo.rollback().then(
-      () => (e instanceof PpConfigError ? e : new PackageError(500, FAIL_LABEL[op] + ': ' + e.message + '. Yapılan değişiklikler geri alındı.')),
-      (agg) => new PackageError(500, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: ' + (agg.errors || [agg]).map((x) => x.message).join('; ') + '. Klasörü elle kontrol et.', { rollbackFailed: true })
+      () => (e instanceof PpConfigError ? e : new PackageError(500, tx(FAIL_LABEL[op], { reason: e.message }))),
+      (agg) => new PackageError(500, tx('pkg.err.rollbackFailed', { reason: (agg.errors || [agg]).map((x) => x.message).join('; ') }), { rollbackFailed: true })
     );
   }
 
@@ -88,13 +92,13 @@ class PackageService {
     const slug = this._slugOf(name);
     const libAbs = path.join(dir, libraryDir);
     const abs = path.join(libAbs, slug);
-    if (await this._clash(libAbs, slug)) throw new PackageError(409, 'Bu adda bir plugin zaten var: ' + slug);
+    if (await this._clash(libAbs, slug)) throw new PackageError(409, tx('pkg.err.exists', { name: slug }));
     const desc = String(description == null ? '' : description).trim();
     const undo = new UndoStack();
     try {
       await this.fsp.mkdir(libAbs, { recursive: true });
       try { await this.fsp.mkdir(abs); } catch (e) {
-        if (e.code === 'EEXIST') throw new PackageError(409, 'Bu adda bir plugin zaten var: ' + slug);
+        if (e.code === 'EEXIST') throw new PackageError(409, tx('pkg.err.exists', { name: slug }));
         throw e;
       }
       // Klasörü yalnızca biz oluşturduk; geri alırken silmek güvenlidir.
@@ -129,12 +133,12 @@ class PackageService {
     await this.assertHealthy(dir);
     const libAbs = path.join(dir, libraryDir);
     if (!this._safeFolder(from) || !(await this._isDir(path.join(libAbs, from)))) {
-      throw new PackageError(404, 'Plugin bulunamadı: ' + from);
+      throw new PackageError(404, tx('pkg.err.notFound', { name: from }));
     }
     const slug = this._slugOf(to);
-    if (slug === from) throw new PackageError(400, 'Yeni ad eskisiyle aynı');
+    if (slug === from) throw new PackageError(400, tx('pkg.err.sameName'));
     const caseOnly = slug.toLowerCase() === from.toLowerCase();
-    if (!caseOnly && await this._clash(libAbs, slug, from)) throw new PackageError(409, 'Bu adda bir plugin zaten var: ' + slug);
+    if (!caseOnly && await this._clash(libAbs, slug, from)) throw new PackageError(409, tx('pkg.err.exists', { name: slug }));
     const src = path.join(libAbs, from);
     const dst = path.join(libAbs, slug);
     const moved = await this._countMd(src);
@@ -171,10 +175,10 @@ class PackageService {
   async setDescription(dir, libraryDir, { name, description }) {
     await this.assertHealthy(dir);
     if (!this._safeFolder(name) || !(await this._isDir(path.join(dir, libraryDir, name)))) {
-      throw new PackageError(404, 'Plugin bulunamadı: ' + name);
+      throw new PackageError(404, tx('pkg.err.notFound', { name }));
     }
     const desc = String(description == null ? '' : description).trim();
-    if (!desc) throw new PackageError(400, 'Paket açıklaması boş olamaz');
+    if (!desc) throw new PackageError(400, tx('pkg.err.descriptionEmpty'));
     const cfg = await this.loadConfigAt(dir);
     const key = cfg.packages[name] !== undefined ? name : this.FM.slug(name);
     cfg.packages[key] = { ...(cfg.packages[key] || {}), description: desc };

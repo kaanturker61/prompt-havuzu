@@ -9,6 +9,10 @@ const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
 const { UndoStack } = require('./undo');
 const { describeNetError } = require('./net-errors');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 function fail(status, message, code) {
   const e = new Error(message);
@@ -37,11 +41,11 @@ class MarketplaceFactory {
   static validateName(raw) {
     // FM.slug boş girdide 'adsiz' döndürür; harf/rakam içermeyen adları burada reddet.
     const text = String(raw == null ? '' : raw).trim();
-    if (!/[\p{L}\p{N}]/u.test(text)) throw fail(400, 'Geçersiz marketplace adı');
+    if (!/[\p{L}\p{N}]/u.test(text)) throw fail(400, tx('mp.err.invalidName'));
     // slug sondaki noktayı ("ok." -> "ok") sessizce attığı için ham girişte reddedilir: yazılan ad ile klasör adı ayrışmasın.
-    if (/[. ]$/.test(text)) throw fail(400, 'Marketplace adı nokta ile bitemez: ' + text);
+    if (/[. ]$/.test(text)) throw fail(400, tx('rules.mpAdNokta', { name: text }));
     const name = FM.slug(text);
-    if (!name) throw fail(400, 'Geçersiz marketplace adı');
+    if (!name) throw fail(400, tx('mp.err.invalidName'));
     const bad = Rules.checkMarketplaceName(name);
     if (bad) throw fail(400, bad);
     return name;
@@ -74,7 +78,7 @@ class MarketplaceFactory {
     const undo = new UndoStack();
     try {
       try { await fsp.mkdir(dir); } catch (e) {
-        if (e.code === 'EEXIST') throw fail(409, 'Bu adda bir klasör zaten var: ' + slug);
+        if (e.code === 'EEXIST') throw fail(409, tx('mp.err.folderExists', { name: slug }));
         throw e;
       }
       // Klasörü yalnızca biz oluşturduğumuz için tamamen silebiliriz.
@@ -83,7 +87,7 @@ class MarketplaceFactory {
     } catch (e) {
       if (e.status === 409) throw e;
       await undo.rollback().catch(() => {});
-      throw fail(500, `Marketplace oluşturulamadı: ${e.message}. Yapılan değişiklikler geri alındı.`);
+      throw fail(500, tx('mp.err.createFailed', { reason: e.message }));
     }
     return { name: slug, dir };
   }
@@ -96,24 +100,24 @@ class MarketplaceFactory {
     let slug;
     try { slug = MarketplaceFactory.validateName(name || n.slugName); } catch (e) { e.code = 'adGecersiz'; throw e; }
     const dir = path.join(libraryRoot, slug);
-    if (await exists(dir)) throw fail(409, 'Bu adda bir klasör zaten var: ' + slug, 'klasorVar');
+    if (await exists(dir)) throw fail(409, tx('mp.err.folderExists', { name: slug }), 'klasorVar');
     const undo = new UndoStack();
     // Klasörü yalnızca clone oluşturur; başarısız olursa yarım kalanı sileriz.
     undo.push(() => fsp.rm(dir, { recursive: true, force: true, maxRetries: 3 }));
     try {
       await this.git.clone(libraryRoot, n.url, slug, { interactive: true });
-      if (!(await this.git.isRepoRoot(dir))) throw new Error('Klonlanan klasör bir git deposu kökü değil');
+      if (!(await this.git.isRepoRoot(dir))) throw new Error(tx('mp.err.cloneNotRoot'));
     } catch (e) {
       await undo.rollback().catch(() => {});
       const code = e.netCode || (e.timedOut ? 'zamanAsimi' : 'bilinmiyor');
-      const err = fail(502, 'Depo klonlanamadı: ' + describeNetError(code, { url: n.url, dir: libraryRoot }), code);
+      const err = fail(502, tx('mp.err.cloneFailed', { reason: describeNetError(code, { url: n.url, dir: libraryRoot }) }), code);
       err.detail = String(e.stderr || e.message || '').trim().slice(0, 600);
       throw err;
     }
     const warnings = [];
-    if (!(await exists(path.join(dir, 'pp.config.json')))) warnings.push({ code: 'ppConfigYok', message: 'Bu depoda pp.config.json yok. Prompt Havuzu ayarlarını oluştur.' });
-    if (!(await exists(path.join(dir, '.claude-plugin', 'marketplace.json')))) warnings.push({ code: 'manifestYok', message: '.claude-plugin/marketplace.json yok.' });
-    if (!(await this.git.hasCommits(dir))) warnings.push({ code: 'bosDepo', message: 'Depo boş (henüz commit yok).' });
+    if (!(await exists(path.join(dir, 'pp.config.json')))) warnings.push({ code: 'ppConfigYok', message: tx('mp.warn.ppConfigYok') });
+    if (!(await exists(path.join(dir, '.claude-plugin', 'marketplace.json')))) warnings.push({ code: 'manifestYok', message: tx('mp.warn.manifestYok') });
+    if (!(await this.git.hasCommits(dir))) warnings.push({ code: 'bosDepo', message: tx('mp.warn.bosDepo') });
     return { name: slug, dir, url: n.url, warnings };
   }
 
@@ -122,15 +126,15 @@ class MarketplaceFactory {
     const base = path.basename(dir);
     let st = null;
     try { st = await fsp.stat(dir); } catch (e) { /* yok */ }
-    if (!st || !st.isDirectory()) throw fail(404, 'Klasör bulunamadı: ' + base);
-    if (await exists(path.join(dir, '.git'))) throw fail(409, 'Bu klasör zaten bir git deposu: ' + base);
+    if (!st || !st.isDirectory()) throw fail(404, tx('mp.err.folderNotFound', { name: base }));
+    if (await exists(path.join(dir, '.git'))) throw fail(409, tx('mp.err.alreadyGit', { name: base }));
     const meta = this._meta(FM.slug(base) || 'marketplace', { description, owner });
     const undo = new UndoStack();
     try {
       return await this._scaffold(dir, meta, undo);
     } catch (e) {
       await undo.rollback().catch(() => {});
-      throw fail(500, `Git başlatılamadı: ${e.message}. Yapılan değişiklikler geri alındı.`);
+      throw fail(500, tx('mp.err.initFailed', { reason: e.message }));
     }
   }
 

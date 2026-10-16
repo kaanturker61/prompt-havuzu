@@ -6,9 +6,50 @@ const path = require('path');
 const { samePath, isInside } = require('./paths');
 const { GitNotFoundError } = require('./git-service');
 const { inspectConfigAt } = require('./pp-config');
+const { readFailure, failureDetail } = require('./marketplace-registry');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 // Bu kodlardan biri varsa library kökü kullanılamaz veya git yoktur.
 const ROOT_BLOCKERS = ['kokAyarlanmadi', 'kokYok', 'kokAracReposunda', 'gitBulunamadi'];
+
+/** Summary: Kurulum sorunu; message okunduğunda geçerli dilde üretilen tembel alıcıdır (önbellekte metin değil kod ve parametre kalır). */
+function issueOf(code, level, build, p, action) {
+  return { code, level, get message() { return build(); }, path: p || null, action: action || null };
+}
+
+/** Summary: Git deposu okunamama nedeninin geçerli dildeki kısa açıklaması. */
+function gitWhy(failure) {
+  if (failure.code === 'kokDepoDegil') return tx('mp.reason.kokDepoDegil');
+  const detail = failureDetail(failure);
+  return detail === null ? tx('mp.reason.gitOkunamadi') : detail;
+}
+
+/** Summary: Sorun kodundan sözlük anahtarına eşleme. */
+const ISSUE_KEYS = Object.freeze({
+  ayarDosyasiBozuk: 'setup.ayarDosyasiBozuk',
+  kokAyarlanmadi: 'setup.kokAyarlanmadi',
+  kokYok: 'setup.kokYok',
+  kokAracReposunda: 'setup.kokAracReposunda',
+  gitBulunamadi: 'setup.gitBulunamadi',
+  kokBaskaDepoda: 'setup.kokBaskaDepoda',
+  kokAracReposunuIceriyor: 'setup.kokAracReposunuIceriyor',
+  marketplaceYok: 'setup.marketplaceYok',
+  marketplaceSecilmedi: 'setup.marketplaceSecilmedi',
+  marketplaceBulunamadi: 'setup.marketplaceBulunamadi',
+  marketplaceGitYok: 'setup.marketplaceGitYok',
+  ppConfigYok: 'setup.ppConfigYok'
+});
+
+/** Summary: Sorun kodu ve parametrelerinden geçerli dilde ileti üretir. */
+function describeIssue(code, params) {
+  if (code === 'marketplaceGitYok' && params.failure) {
+    return tx('setup.marketplaceGitYokNeden', { name: params.name, reason: gitWhy(params.failure) });
+  }
+  return tx(ISSUE_KEYS[code], params);
+}
 
 class SetupService {
   constructor({ configStore, registry, git, toolRoot }) {
@@ -57,7 +98,7 @@ class SetupService {
     const libraryRoot = config.libraryRoot;
     const active = config.activeMarketplace;
     const issues = [];
-    const add = (code, level, message, p, action) => issues.push({ code, level, message, path: p || null, action: action || null });
+    const add = (code, level, params, p, action) => issues.push(issueOf(code, level, () => describeIssue(code, params), p, action));
     const done = (root = null) => ({
       ok: !issues.some((i) => i.level === 'error'),
       // Library kökü kullanılabilir mi (ağaç/arama için yeterli; etkin marketplace gerekmez).
@@ -66,64 +107,61 @@ class SetupService {
       root: issues.some((i) => i.level === 'error') ? null : root, issues
     });
 
-    if (warning) add('ayarDosyasiBozuk', 'warn', 'Ayar dosyası okunamadı, varsayılanlarla devam ediliyor: ' + warning.file, warning.file, 'ayarlar');
+    if (warning) add('ayarDosyasiBozuk', 'warn', { file: warning.file }, warning.file, 'ayarlar');
 
     if (!libraryRoot) {
-      add('kokAyarlanmadi', 'error', "Library kökü ayarlanmadı. Ayarlar'dan bir klasör seç.", null, 'ayarlar');
+      add('kokAyarlanmadi', 'error', {}, null, 'ayarlar');
       return done();
     }
     let st = null;
     try { st = fs.statSync(libraryRoot); } catch (e) { /* yok */ }
     if (!st || !st.isDirectory()) {
-      add('kokYok', 'error', 'Library kökü diskte bulunamadı: ' + libraryRoot, libraryRoot, 'ayarlar');
+      add('kokYok', 'error', { path: libraryRoot }, libraryRoot, 'ayarlar');
       return done();
     }
     if (samePath(libraryRoot, this.toolRoot) || isInside(libraryRoot, this.toolRoot)) {
-      add('kokAracReposunda', 'error', `Library kökü araç reposunun içinde: ${libraryRoot}. Araç reposunun dışında bir klasör seç.`, libraryRoot, 'ayarlar');
+      add('kokAracReposunda', 'error', { path: libraryRoot }, libraryRoot, 'ayarlar');
       return done();
     }
     try { await this.git.version(); } catch (e) {
-      add('gitBulunamadi', 'error', 'Git bulunamadı. Git kurulu ve PATH içinde olmalı.', null, null);
+      add('gitBulunamadi', 'error', {}, null, null);
       return done();
     }
 
     let top = null;
     try { top = await this.git.toplevel(libraryRoot); } catch (e) { if (e instanceof GitNotFoundError) top = null; }
     if (top && !samePath(top, libraryRoot)) {
-      add('kokBaskaDepoda', 'warn', `Library kökü başka bir git deposunun içinde (${top}). Marketplace depoları iç içe depo olarak görünebilir.`, libraryRoot, 'ayarlar');
+      add('kokBaskaDepoda', 'warn', { path: top }, libraryRoot, 'ayarlar');
     }
     if (isInside(this.toolRoot, libraryRoot)) {
-      add('kokAracReposunuIceriyor', 'warn', 'Library kökü araç reposunu içeriyor. Araç reposu marketplace olarak kullanılmaz.', libraryRoot, null);
+      add('kokAracReposunuIceriyor', 'warn', {}, libraryRoot, null);
     }
 
     if (!active) {
       if (!(await this.registry.hasAnyGitChild(libraryRoot))) {
-        add('marketplaceYok', 'error', 'Library kökünde hiç marketplace yok. Yeni bir marketplace oluştur.', libraryRoot, 'yeniMarketplace');
+        add('marketplaceYok', 'error', {}, libraryRoot, 'yeniMarketplace');
       } else {
-        add('marketplaceSecilmedi', 'error', 'Marketplace seçilmedi.', libraryRoot, 'marketplaceSec');
+        add('marketplaceSecilmedi', 'error', {}, libraryRoot, 'marketplaceSec');
       }
       return done();
     }
     const folder = await this.registry.folderOf(libraryRoot, active);
     if (!folder || samePath(folder, this.toolRoot)) {
-      add('marketplaceBulunamadi', 'error', 'Seçili marketplace bulunamadı: ' + active, path.join(libraryRoot, active), 'marketplaceSec');
+      add('marketplaceBulunamadi', 'error', { name: active }, path.join(libraryRoot, active), 'marketplaceSec');
       return done();
     }
     const info = await this.git.toplevelInfo(folder);
     if (!info.path || !samePath(info.path, folder)) {
-      let why = '';
-      if (fs.existsSync(path.join(folder, '.git'))) {
-        why = ' (' + (info.path ? 'Git deposu kökü bu klasör değil' : (info.error || 'Git deposu okunamadı').split('\n')[0]) + ')';
-      }
-      add('marketplaceGitYok', 'error', `Seçili marketplace'te git başlatılmamış: ${active}${why}`, folder, 'gitBaslat');
+      const failure = fs.existsSync(path.join(folder, '.git')) ? readFailure(info) : null;
+      add('marketplaceGitYok', 'error', { name: active, failure }, folder, 'gitBaslat');
       return done();
     }
     const cfgFile = path.join(folder, 'pp.config.json');
     if (!fs.existsSync(cfgFile)) {
-      add('ppConfigYok', 'warn', "Bu marketplace'te pp.config.json yok. Prompt Havuzu ayarlarını oluştur.", folder, 'ppConfigOlustur');
+      add('ppConfigYok', 'warn', {}, folder, 'ppConfigOlustur');
     } else {
       // Bozuk dosya ya da geçersiz libraryDir kurulumu durdurmaz; okuma varsayılanla sürer, yazma rotaları reddeder.
-      for (const i of (await inspectConfigAt(folder)).issues) add(i.code, 'warn', i.message, cfgFile, null);
+      for (const i of (await inspectConfigAt(folder)).issues) issues.push(issueOf(i.code, 'warn', () => i.message, cfgFile, null));
     }
     return done(folder);
   }
