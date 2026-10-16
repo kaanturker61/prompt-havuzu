@@ -11,12 +11,14 @@ const REF_RE = /^[a-z0-9][a-z0-9/._-]*$/;
 const IDENTITY_RE = /Author identity unknown|tell me who you are|empty ident/i;
 
 class GitError extends Error {
-  constructor(message, { stderr = '', exitCode = null, args = [] } = {}) {
+  /** Summary: code, ileti metninden bağımsız hata türüdür (örn. 'aracReposu'); yoksa null. */
+  constructor(message, { stderr = '', exitCode = null, args = [], code = null } = {}) {
     super(message);
     this.name = 'GitError';
     this.stderr = stderr;
     this.exitCode = exitCode;
     this.args = args;
+    this.code = code;
   }
 
   get isIdentityError() { return IDENTITY_RE.test(this.message) || IDENTITY_RE.test(this.stderr); }
@@ -220,7 +222,7 @@ class GitService {
     const abs = path.resolve(String(dir));
     for (const f of this.forbiddenRoots) {
       if (samePath(abs, f) || isInside(abs, f)) {
-        return Promise.reject(new GitError('Araç reposunda git işlemi yapılamaz', { args }));
+        return Promise.reject(new GitError('Araç reposunda git işlemi yapılamaz', { args, code: 'aracReposu' }));
       }
     }
     return this._exec(['-C', abs, '-c', 'core.quotepath=false', ...args], opts);
@@ -243,7 +245,7 @@ class GitService {
     try {
       return await this.run(dir, [...net, ...args], { timeout, env });
     } catch (e) {
-      if (e instanceof GitError && !(e instanceof GitNotFoundError) && e.message !== 'Araç reposunda git işlemi yapılamaz') {
+      if (e instanceof GitError && !(e instanceof GitNotFoundError) && e.code !== 'aracReposu') {
         e.netCode = classifyGitNetError(e.stderr || e.message, e);
       }
       throw e;
@@ -259,7 +261,7 @@ class GitService {
       return out ? { path: path.resolve(out), error: null } : { path: null, error: 'Boş yanıt' };
     } catch (e) {
       if (e instanceof GitNotFoundError) throw e;
-      if (e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e.code === 'aracReposu') throw e;
       return { path: null, error: e.message };
     }
   }
@@ -332,7 +334,7 @@ class GitService {
   // HEAD'in tam hash'i; doğmamış dalda null.
   async headCommit(dir) {
     try { return (await this.run(dir, ['rev-parse', '--verify', '-q', 'HEAD'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -403,7 +405,7 @@ class GitService {
   async blobAt(dir, rev, rel) {
     this._checkHash(rev);
     try { return (await this.run(dir, ['rev-parse', '--verify', '-q', rev + ':' + rel])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -449,7 +451,7 @@ class GitService {
 
   async currentBranch(dir) {
     try { return (await this.run(dir, ['symbolic-ref', '--short', 'HEAD'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -461,7 +463,7 @@ class GitService {
     try {
       return (await this.run(dir, ['ls-tree', '-r', '--name-only', commit, '--', rel])).split('\n').map((s) => s.replace(/\r$/, '')).filter(Boolean);
     } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return [];
     }
   }
@@ -470,7 +472,7 @@ class GitService {
   async showAt(dir, commit, rel) {
     this._checkHash(commit);
     try { return await this.showFile(dir, commit, rel); } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -486,7 +488,7 @@ class GitService {
   async isAncestor(dir, a, b) {
     this._checkHash(a); this._checkHash(b);
     try { await this.run(dir, ['merge-base', '--is-ancestor', a, b]); return true; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return false;
     }
   }
@@ -495,7 +497,7 @@ class GitService {
   async remotes(dir) {
     let out = '';
     try { out = await this.run(dir, ['config', '--local', '--get-regexp', '^remote\\..*\\.url$']); } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return [];
     }
     const list = [];
@@ -519,7 +521,7 @@ class GitService {
   // 'origin/main' ya da null.
   async upstream(dir) {
     try { return (await this.run(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -531,7 +533,7 @@ class GitService {
       const [a, b] = (await this.run(dir, ['rev-list', '--left-right', '--count', 'HEAD...' + ref])).trim().split(/\s+/).map(Number);
       return { ahead: a || 0, behind: b || 0 };
     } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return { ahead: 0, behind: 0 };
     }
   }
@@ -591,7 +593,7 @@ class GitService {
   async refExists(dir, ref) {
     this._checkAnyRef(ref);
     try { await this.run(dir, ['rev-parse', '--verify', '-q', ref + '^{commit}']); return true; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return false;
     }
   }

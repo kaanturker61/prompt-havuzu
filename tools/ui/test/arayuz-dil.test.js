@@ -324,7 +324,8 @@ test('setLanguage: ileti metnine bağlı karşılaştırma yok; seçici change o
   const src = fnSrc('setLanguage');
   assert.doesNotMatch(src, /textContent|innerText|innerHTML|\.title\b/);
   assert.match(html, /else if \(t\.id === 'setLanguage'\) \{ setLanguage\(t\.value\); \}/);
-  assert.match(html, /\$\('#mTitle'\)\.textContent === 'Ayarlar'/, 'Aşama 4a işi: dokunulmadı');
+  assert.doesNotMatch(html, /#mTitle'\)\.textContent === /);
+  assert.match(html, /modalState\.kind === 'settings'/);
 });
 
 /** Summary: settingsHtml çıktısını verilen ayarlarla, belirtilen arayüz dilinde üretir. */

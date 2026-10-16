@@ -27,14 +27,17 @@ class MarketplaceRegistry {
     const items = []; const ignored = [];
     for (const name of await this._children(libraryRoot)) {
       const dir = path.join(libraryRoot, name);
-      if (samePath(dir, this.toolRoot)) { ignored.push({ name, path: dir, reason: 'Araç reposu' }); continue; }
-      if (!(await exists(path.join(dir, '.git')))) { ignored.push({ name, path: dir, reason: 'Git deposu değil' }); continue; }
+      if (samePath(dir, this.toolRoot)) { ignored.push({ name, path: dir, reason: 'Araç reposu', reasonCode: 'aracReposu' }); continue; }
+      if (!(await exists(path.join(dir, '.git')))) { ignored.push({ name, path: dir, reason: 'Git deposu değil', reasonCode: 'gitDegil' }); continue; }
       const info = await this.git.toplevelInfo(dir);
       const valid = !!info.path && samePath(info.path, dir);
-      let reason = null;
-      if (!valid) reason = info.path ? 'Git deposu kökü bu klasör değil' : 'Git deposu okunamadı' + (info.error ? ': ' + info.error.split('\n')[0] : '');
+      let reason = null; let reasonCode = null;
+      if (!valid) {
+        reasonCode = info.path ? 'kokDepoDegil' : 'gitOkunamadi';
+        reason = info.path ? 'Git deposu kökü bu klasör değil' : 'Git deposu okunamadı' + (info.error ? ': ' + info.error.split('\n')[0] : '');
+      }
       items.push({
-        name, path: dir, valid, reason, active: name === active,
+        name, path: dir, valid, reason, reasonCode, active: name === active,
         hasManifest: await exists(path.join(dir, '.claude-plugin', 'marketplace.json')),
         hasPpConfig: await exists(path.join(dir, 'pp.config.json'))
       });

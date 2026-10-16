@@ -51,7 +51,7 @@ class LibraryCatalog {
       promise.catch(() => { if (this._disc === d) this._disc = null; });
     }
     const res = await d.promise;
-    const ignored = res.ignored.filter((i) => i.reason !== 'Araç reposu');
+    const ignored = res.ignored.filter((i) => i.reasonCode !== 'aracReposu');
     const items = [];
     for (const it of res.items) {
       items.push({ ...it, active: it.name === active, cfg: it.valid ? await this.loadConfigAt(it.path) : null });

@@ -550,7 +550,7 @@ route('POST', '/api/marketplaces/activate', async ({ body }) => {
   const view = await marketplacesView();
   const hit = view.items.find((i) => i.name === name) || view.ignored.find((i) => i.name === name);
   if (!hit) throw httpErr(404, 'Marketplace bulunamadı: ' + name);
-  if (hit.reason === 'Araç reposu') throw httpErr(400, 'Araç reposu marketplace olarak seçilemez');
+  if (hit.reasonCode === 'aracReposu') throw httpErr(400, 'Araç reposu marketplace olarak seçilemez');
   const { config } = await configStore.load();
   try { await configStore.save({ ...config, activeMarketplace: name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
   setup.invalidate();

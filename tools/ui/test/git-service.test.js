@@ -260,3 +260,81 @@ test('gerçek pre-commit hook reddi: commitReddedildi, hook çıktısı stderr\'
     assert.equal(classifyGitError(err.stderr, err), 'commitReddedildi');
   } finally { rmrf(d); }
 });
+
+const failingRunner = () => fakeRunner((cb) => cb(Object.assign(new Error('Command failed'), { code: 128 }), '', 'fatal: bad object\n'));
+
+test('GitError.code: araç reposu reddi aracReposu taşır, ileti metni aynı kalır; diğer hatalarda code null', async () => {
+  const { runner } = failingRunner();
+  const tool = tmpDir();
+  try {
+    const g = new GitService({ runner, forbiddenRoots: [tool] });
+    await assert.rejects(g.run(tool, ['status']), (e) => {
+      assert.ok(e instanceof GitError);
+      assert.equal(e.code, 'aracReposu');
+      assert.equal(e.message, 'Araç reposunda git işlemi yapılamaz');
+      return true;
+    });
+    await assert.rejects(g.run(path.join(tool, 'alt'), ['status']), (e) => e instanceof GitError && e.code === 'aracReposu');
+    await assert.rejects(g.run(tool + '-baska', ['status']), (e) => {
+      assert.equal(e.code, null); assert.equal(e.exitCode, 128); return true;
+    });
+  } finally { rmrf(tool); }
+  assert.equal(new GitError('x').code, null);
+  assert.equal(new GitNotFoundError([]).code, null);
+  assert.equal(new GitError('x', { code: 'baska' }).code, 'baska');
+});
+
+const SWALLOWING = [
+  ['headCommit', (g, d) => g.headCommit(d), null],
+  ['blobAt', (g, d) => g.blobAt(d, 'abcdef0', 'a.md'), null],
+  ['currentBranch', (g, d) => g.currentBranch(d), null],
+  ['lsTree', (g, d) => g.lsTree(d, 'abcdef0', 'a.md'), []],
+  ['showAt', (g, d) => g.showAt(d, 'abcdef0', 'a.md'), null],
+  ['isAncestor', (g, d) => g.isAncestor(d, 'abcdef0', 'abcdef1'), false],
+  ['remotes', (g, d) => g.remotes(d), []],
+  ['upstream', (g, d) => g.upstream(d), null],
+  ['aheadBehind', (g, d) => g.aheadBehind(d, 'origin/main'), { ahead: 0, behind: 0 }],
+  ['refExists', (g, d) => g.refExists(d, 'origin/main'), false]
+];
+
+test('hata yutan metotlar: araç reposu reddi fırlar, diğer git hataları yedek değere düşer', async () => {
+  const { runner } = failingRunner();
+  const tool = tmpDir();
+  try {
+    const g = new GitService({ runner, forbiddenRoots: [tool] });
+    for (const [name, call, fallback] of SWALLOWING) {
+      assert.deepEqual(await call(g, tool + '-baska'), fallback, name + ' yedek değer');
+      await assert.rejects(call(g, tool), (e) => e instanceof GitError && e.code === 'aracReposu', name + ' araç reposu');
+    }
+    await assert.rejects(g.toplevelInfo(tool), (e) => e.code === 'aracReposu');
+    const info = await g.toplevelInfo(tool + '-baska');
+    assert.equal(info.path, null); assert.equal(info.error, 'fatal: bad object');
+  } finally { rmrf(tool); }
+});
+
+test('karar kodla verilir: aracReposu kodlu hata başka iletiyle de fırlar, kodsuz hata aynı iletiyle yutulur', async () => {
+  class Fake extends GitService {
+    constructor(err) { super({}); this.err = err; }
+    run() { return Promise.reject(this.err); }
+  }
+  for (const [name, call, fallback] of SWALLOWING) {
+    const coded = new Fake(new GitError('Tool repository refused', { code: 'aracReposu' }));
+    await assert.rejects(call(coded, 'd'), (e) => e.code === 'aracReposu', name + ' kodlu');
+    const plain = new Fake(new GitError('Araç reposunda git işlemi yapılamaz'));
+    assert.deepEqual(await call(plain, 'd'), fallback, name + ' kodsuz');
+  }
+});
+
+test('ağ işlemleri: araç reposu reddine netCode eklenmez, diğer hatalar sınıflanır', async () => {
+  const { runner } = fakeRunner((cb) => cb(Object.assign(new Error('Command failed'), { code: 128 }), '', 'fatal: unable to access: Could not resolve host\n'));
+  const tool = tmpDir();
+  try {
+    const g = new GitService({ runner, forbiddenRoots: [tool] });
+    await assert.rejects(g.fetch(tool, 'origin'), (e) => {
+      assert.equal(e.code, 'aracReposu'); assert.equal(e.netCode, undefined); return true;
+    });
+    await assert.rejects(g.fetch(tool + '-baska', 'origin'), (e) => {
+      assert.equal(e.code, null); assert.equal(e.netCode, 'ag'); return true;
+    });
+  } finally { rmrf(tool); }
+});

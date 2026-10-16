@@ -725,7 +725,7 @@ function rowHtml(it, focusKey) {
     case 'plugin': {
       const p = it.node; label = esc(p.name);
       pills = cnt(p.count);
-      if (p.nameIssue) pills += p.nameIssue.level === 'error' ? `<span class="pill bad" title="${esc(p.nameIssue.message)}">!</span>` : `<span class="pill" title="${esc(p.nameIssue.message)}">${esc(p.nameIssue.message.toLowerCase())}</span>`;
+      if (p.nameIssue) pills += p.nameIssue.level === 'error' ? `<span class="pill bad" title="${esc(p.nameIssue.message)}">!</span>` : `<span class="pill" title="${esc(p.nameIssue.message)}">${esc(p.nameIssue.message.toLocaleLowerCase(I18n.locale()))}</span>`;
       sr = ', plugin';
       acts += btn('plus', '+', p.name + ' içine yeni prompt') + btn('menu', '⋯', p.name + ' için işlemler');
       break;
@@ -892,7 +892,7 @@ function openModal(o) {
   $('.modal').className = 'modal' + (o.wide ? ' wide' : '');
   $('#overlay').hidden = false;
   document.body.classList.add('noscroll');
-  modalState = { onClose: o.onClose };
+  modalState = { onClose: o.onClose, kind: o.kind || null };
   if (o.onMount) o.onMount($('#mBody'));
   const f = $('#mBody [autofocus]') || $('#mBody input:not([type=checkbox]):not([type=hidden])') || $('#mBody textarea');
   if (f && !o.noFocus) f.focus();
@@ -3147,7 +3147,7 @@ async function reloadState() {
 
 async function mkGitInit(name, ask) {
   if (!name) return;
-  const fromSettings = !$('#overlay').hidden && $('#mTitle').textContent === 'Ayarlar';
+  const fromSettings = !$('#overlay').hidden && !!modalState && modalState.kind === 'settings';
   if (ask) {
     const a = await askChoice({
       title: "Git'i başlat", text: name + ' klasöründe git başlatılacak, eksik iskelet dosyaları eklenecek. Var olan dosyalara dokunulmaz.',
@@ -3168,7 +3168,7 @@ async function mkGitInit(name, ask) {
 const ROOT_BAD = ['kokAyarlanmadi', 'kokYok', 'kokAracReposunda', 'gitBulunamadi'];
 
 function mkRowHtml(i, kind) {
-  const tool = kind === 'ignored' && i.reason === 'Araç reposu';
+  const tool = kind === 'ignored' && i.reasonCode === 'aracReposu';
   const pills = [];
   if (kind === 'item') {
     if (i.active) pills.push('<span class="pill ok">etkin</span>');
@@ -3261,7 +3261,7 @@ async function openSettings(section) {
   let s; let m;
   try { [s, m] = await Promise.all([get('/api/settings'), get('/api/marketplaces')]); } catch (e) { fail(e); return; }
   openModal({
-    title: 'Ayarlar', wide: true, html: settingsHtml(s, m), noFocus: true,
+    title: 'Ayarlar', kind: 'settings', wide: true, html: settingsHtml(s, m), noFocus: true,
     onClose: () => { const b = $('.actions [data-act="settings"]'); if (b) b.focus(); },
     onMount: (b) => { $('#setRootForm', b).addEventListener('submit', (e) => { e.preventDefault(); saveRoot(false); }); }
   });

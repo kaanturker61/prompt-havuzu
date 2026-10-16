@@ -6,6 +6,9 @@ const path = require('path');
 const { UndoStack } = require('./undo');
 const { PpConfigError } = require('./pp-config');
 
+/** Summary: Geri alınan işlemin hata iletisi başlığı (create | rename). */
+const FAIL_LABEL = { create: 'Plugin oluşturulamadı', rename: 'Plugin yeniden adlandırılamadı' };
+
 class PackageError extends Error {
   constructor(status, message, data) {
     super(message);
@@ -73,9 +76,9 @@ class PackageService {
   }
 
   // Geri alır. PpConfigError (bozuk ayar) 500'e çevrilmez, aynen döner (409 ppConfigBozuk / libraryDirGecersiz).
-  _fail(e, undo) {
+  _fail(e, undo, op = 'create') {
     return undo.rollback().then(
-      () => (e instanceof PpConfigError ? e : new PackageError(500, 'Plugin oluşturulamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.')),
+      () => (e instanceof PpConfigError ? e : new PackageError(500, FAIL_LABEL[op] + ': ' + e.message + '. Yapılan değişiklikler geri alındı.')),
       (agg) => new PackageError(500, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: ' + (agg.errors || [agg]).map((x) => x.message).join('; ') + '. Klasörü elle kontrol et.', { rollbackFailed: true })
     );
   }
@@ -161,9 +164,7 @@ class PackageService {
       undo.clear();
       return { name: slug, slug, path: libraryDir + '/' + slug, moved };
     } catch (e) {
-      const pe = await this._fail(e, undo);
-      if (pe instanceof PpConfigError) throw pe;
-      throw new PackageError(500, pe.message.replace('Plugin oluşturulamadı', 'Plugin yeniden adlandırılamadı'), pe.data);
+      throw await this._fail(e, undo, 'rename');
     }
   }
 

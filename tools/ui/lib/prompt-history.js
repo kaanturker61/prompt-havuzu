@@ -225,7 +225,7 @@ class PromptHistory {
 
   async _raw(dir, r) {
     try { return await this.git.showFile(dir, r.commit, r.pathAtRef); } catch (e) {
-      if (e && e.name === 'GitError' && !/Araç reposunda/.test(e.message)) throw new HistoryError(404, 'dosyaYok', 'Bu sürümde dosya yok');
+      if (e && e.name === 'GitError' && e.code !== 'aracReposu') throw new HistoryError(404, 'dosyaYok', 'Bu sürümde dosya yok');
       throw e;
     }
   }
