@@ -16,6 +16,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const FM = require('./public/fm.js');
 const Rules = require('./public/rules.js');
+const I18n = require('./public/i18n.js');
 const { ConfigStore } = require('./lib/config-store');
 const { GitService, GitError, HASH_RE } = require('./lib/git-service');
 const { explainGitError } = require('./lib/git-errors');
@@ -1119,9 +1120,13 @@ async function readBody(req) {
   return parsed;
 }
 
+/** Summary: Statik olarak servis edilen public dosyaları (başka yol 404). */
+const STATIC_FILES = new Set(['index.html', 'fm.js', 'rules.js', 'i18n.js', 'lang/tr.js', 'lang/en.js']);
+
 const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
 
-const server = http.createServer(async (req, res) => {
+/** Summary: Tek HTTP isteğini işler; dil bağlamı çağıran tarafından I18n.run ile kurulur. */
+async function handleRequest(req, res) {
   try {
     const host = String(req.headers.host || '').toLowerCase();
     if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return send(res, 403, { error: 'Geçersiz host' });
@@ -1138,7 +1143,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
       const entry = routes.get(req.method + ' ' + url.pathname);
-      if (!entry) return send(res, 404, { error: 'Bulunamadı' });
+      if (!entry) return send(res, 404, { error: I18n.tx('err.api.notFound') });
       if (!entry.open) {
         const st = await setup.refreshIfStale();
         if (!st.ok) throw setupRequired(st);
@@ -1158,7 +1163,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method !== 'GET') return send(res, 405, 'Method not allowed');
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-    if (!['index.html', 'fm.js', 'rules.js'].includes(name)) return send(res, 404, 'Bulunamadı');
+    if (!STATIC_FILES.has(name)) return send(res, 404, 'Bulunamadı');
     let data;
     try { data = await fsp.readFile(path.join(PUBLIC, name)); } catch (e) { return send(res, 404, 'Bulunamadı: ' + name); }
     return send(res, 200, data, { 'Content-Type': MIME[path.extname(name)] || 'text/plain', 'Content-Security-Policy': CSP });
@@ -1170,7 +1175,9 @@ const server = http.createServer(async (req, res) => {
     if (status === 500) console.error(e);
     send(res, status, { error: e.message || 'Hata', ...(e.data || {}) });
   }
-});
+}
+
+const server = http.createServer((req, res) => I18n.run(req.headers['x-pp-lang'], () => handleRequest(req, res)));
 
 function openBrowser(url) {
   const cmd = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
