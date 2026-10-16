@@ -46,6 +46,79 @@
     'ui.static.addMarketplace': '+ Marketplace',
     'ui.static.addPlugin': '+ Plugin',
     'ui.static.addPrompt': '+ Prompt',
-    'ui.static.close': 'Close'
+    'ui.static.close': 'Close',
+
+    'rules.turYok': 'Publish fields are filled in ({fields}) but "{field}" is missing. This prompt will not be published.',
+    'rules.turGecersiz': 'The "{field}" value was not recognized: "{value}". Valid values: {values}. This prompt will not be published.',
+    'rules.onYuzKapanmamis': 'The frontmatter is not closed (there is no second "---" line). The fields cannot be read, so this prompt will not be published.',
+    'rules.dosyaBuyuk': 'The file is larger than 2 MB. It is not indexed or published.',
+    'rules.yayinDisi': 'No type selected (not published).',
+    'rules.surumGuncelDegil': 'The file has changed since the last version (v{version}) but "{field}" is the same. Press +1 for a new version.',
+    'rules.adUretilemedi': 'Could not generate a name ("{value}"), so "{fallback}" will be used. Enter a value containing a letter or digit in the "Name" field.',
+    'rules.paketUyusmuyor': 'The file is in the folder of package "{folder}" but its "{field}" field is "{value}". The package is taken from the folder; fix the field or move the file.',
+    'rules.paketCokDegerli': '"{field}" must be a single value.',
+    'rules.durumHaric': 'Status is "{status}". Only these statuses are exported: {allowed}.',
+    'rules.durumHaricBos': 'Status is empty. Only these statuses are exported: {allowed}.',
+    'rules.durumBos': '(empty)',
+    'rules.surumArtirilmamis': 'The content has changed but "{field}" was not bumped ({version}). It will be counted as a patch.',
+    'rules.anahtarTekrar': {
+      one: '{key} is written {count} time; the last one is used.',
+      other: '{key} is written {count} times; the last one is used.'
+    },
+    'rules.anahtarTekrarCok': '{list} are written more than once; in each case the last one is used.',
+    'rules.anahtarTekrarOge': { one: '{key} ({count} time)', other: '{key} ({count} times)' },
+    'rules.aygitAdi': '"{name}" is a Windows device name and cannot be used as a file, folder or plugin name. Choose another name.',
+
+    'rules.level.buyuk': 'Major',
+    'rules.level.kucuk': 'Minor',
+    'rules.level.yama': 'Patch',
+
+    'rules.surumBos': 'Version cannot be empty (example: 1.0.0)',
+    'rules.surumBasamak': 'Version components can have at most 9 digits: "{value}"',
+    'rules.surumBicim': 'Version must be in X.Y.Z format (example: 1.0.0): "{value}"',
+
+    'rules.pluginAdGerekli': 'Plugin name is required',
+    'rules.pluginAdGelenKutusu': '"{name}" is reserved for the import folder (Inbox). Choose another name.',
+    'rules.pluginAdSistem': '"{name}" is a reserved system name. Choose another name.',
+    'rules.pluginAdAnthropic': '"{name}" is reserved for Anthropic (it cannot start with {prefixes}; names such as {names} cannot be used). Choose another name.',
+    'rules.pluginUyariKelime': '"{name}" contains the word "{word}"; Claude Code accepts this with a warning.',
+    'rules.pluginUyariUzun': 'Plugin name is longer than 128 characters; Claude Desktop may not accept it.',
+
+    'rules.adBos': 'Name cannot be empty',
+    'rules.adNokta': 'Name cannot be "." or ".."',
+    'rules.adUzun': 'Name can be at most {max} bytes',
+    'rules.adKarakter': 'Name cannot contain these characters: < > : " | ? * and control characters',
+    'rules.adSon': 'Name cannot end with a dot or a space',
+
+    'rules.libDirMetin': 'must be text',
+    'rules.libDirBos': 'cannot be empty',
+    'rules.libDirMutlak': 'cannot be an absolute path (it must be relative to the marketplace folder)',
+    'rules.libDirKarakter': 'contains an invalid character',
+    'rules.libDirIkiNokta': 'cannot contain ".."',
+    'rules.libDirBosBilesen': 'cannot contain an empty or "." component',
+    'rules.libDirNoktaBitis': 'a component cannot end with a dot or a space: "{part}"',
+    'rules.libDirAyrilmis': '"{part}" is a reserved name',
+
+    'rules.mpAdGerekli': 'Marketplace name is required',
+    'rules.mpAdUzun': 'Marketplace name cannot be longer than 128 characters',
+    'rules.mpAdBicim': 'Marketplace name must start with a letter or digit and can contain only letters, digits, ".", "_" and "-": {name}',
+    'rules.mpAdNokta': 'Marketplace name cannot end with a dot: {name}',
+    'rules.mpAdResmi': 'This name is reserved for official Anthropic marketplaces: {name}',
+    'rules.mpAdDizin': 'This name is reserved for Claude directories: {name}',
+    'rules.mpAdAyrilmis': 'This name is reserved by Claude Code: {name}',
+
+    'rules.uzakAdGerekli': 'Remote name is required',
+    'rules.uzakAdBicim': 'Remote name must use lowercase letters, digits, ".", "_" and "-", and must start with a letter or digit (at most 64 characters)',
+
+    'rules.urlGerekli': 'URL is required',
+    'rules.urlUzun': 'URL can be at most {max} characters',
+    'rules.urlTire': 'URL cannot start with "-"',
+    'rules.urlTur': 'This connection type is disabled for security reasons',
+    'rules.urlKarakter': 'URL cannot contain whitespace or control characters',
+    'rules.urlHttp': 'Unencrypted http is not allowed, use https',
+    'rules.urlGecersiz': 'URL is not valid',
+    'rules.urlParola': 'Passwords or tokens must not be written into the URL (it would be saved as plain text in .git/config). Use a credential manager.',
+    'rules.urlYol': 'URL must include the repository path (example: https://github.com/user/repo)',
+    'rules.urlMutlak': 'Enter an absolute path or a URL'
   };
 });
