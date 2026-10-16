@@ -3,6 +3,10 @@
  * net-errors.js kalıbı: git çalıştırmaz, yalnızca metin üretir. Sınıflandırma git-service.js'teki classifyGitError'dadır. */
 
 const { GitError, GitNotFoundError, classifyGitError } = require('./git-service');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const MAX_DETAIL = 600;
 const MAX_INPUT = 20000; // dev çıktılarda düzenli ifadeler gereksiz çalışmasın; arındırma sonrası zaten 600'e inecek
@@ -12,13 +16,13 @@ const PATH_MARK = '<yol>';
 function describeGitError(code) {
   switch (code) {
     case 'kilit':
-      return 'Git şu an başka bir işlemle meşgul ya da yarım kalmış bir kilit dosyası (.git/index.lock) var. Çalışan bir git işlemi yoksa dosyayı silip tekrar dene.';
+      return tx('git.error.kilit');
     case 'commitReddedildi':
-      return 'Git commit\'i reddetti. Bir commit hook\'u ya da git ayarı engelliyor olabilir.';
+      return tx('git.error.commitReddedildi');
     case 'eklenemedi':
-      return 'Git dosyaları ekleyemedi. Dosya adı ya da yolu bu sistemde kullanılamıyor olabilir (örneğin Windows aygıt adı).';
+      return tx('git.error.eklenemedi');
     default:
-      return 'Git işlemi başarısız oldu.';
+      return tx('git.error.bilinmiyor');
   }
 }
 
@@ -68,7 +72,7 @@ function isRawGitFailure(e) {
  * Ham git hatasında error Türkçe özettir ve ham İngilizce başlık ya da mutlak yol içermez; gitDetail yalnızca git stderr'idir (arındırılmış).
  * Diğer hatalarda code null, error hatanın kendi iletisi, gitDetail boştur. Kimlik hatası (needIdentity) çağıranda ayrıca ele alınır. */
 function explainGitError(e, roots = []) {
-  if (!isRawGitFailure(e)) return { code: null, error: String((e && e.message) || 'Git işlemi başarısız oldu.'), gitDetail: '' };
+  if (!isRawGitFailure(e)) return { code: null, error: String((e && e.message) || tx('git.error.bilinmiyor')), gitDetail: '' };
   const code = classifyGitError(e.stderr, e);
   return { code, error: describeGitError(code), gitDetail: sanitizeDetail(e.stderr, roots) };
 }

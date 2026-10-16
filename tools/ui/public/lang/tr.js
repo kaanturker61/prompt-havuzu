@@ -116,6 +116,48 @@
     'rules.urlGecersiz': 'URL geçersiz',
     'rules.urlParola': "Parola veya token URL'ye yazılmaz (düz metin olarak .git/config'e kaydedilir). Credential manager kullan.",
     'rules.urlYol': 'URL depo yolunu içermeli (örnek: https://github.com/kullanıcı/depo)',
-    'rules.urlMutlak': 'Mutlak bir yol ya da URL gir'
+    'rules.urlMutlak': 'Mutlak bir yol ya da URL gir',
+
+    'git.error.kilit': 'Git şu an başka bir işlemle meşgul ya da yarım kalmış bir kilit dosyası (.git/index.lock) var. Çalışan bir git işlemi yoksa dosyayı silip tekrar dene.',
+    'git.error.commitReddedildi': "Git commit'i reddetti. Bir commit hook'u ya da git ayarı engelliyor olabilir.",
+    'git.error.eklenemedi': 'Git dosyaları ekleyemedi. Dosya adı ya da yolu bu sistemde kullanılamıyor olabilir (örneğin Windows aygıt adı).',
+    'git.error.bilinmiyor': 'Git işlemi başarısız oldu.',
+
+    'git.notFound': 'git bulunamadı. Git kurulu ve PATH içinde olmalı.',
+    'git.timeout': 'İşlem zaman aşımına uğradı',
+    'git.toolRepo': 'Araç reposunda git işlemi yapılamaz',
+    'git.emptyResponse': 'Boş yanıt',
+    'git.invalidCommit': 'Geçersiz commit',
+    'git.invalidTagName': 'Geçersiz tag adı',
+    'git.invalidLimit': 'Geçersiz limit',
+    'git.invalidPath': 'Geçersiz yol',
+    'git.headDetachedUndo': 'HEAD bir dala bağlı değil, ilk commit geri alınamadı',
+    'git.invalidRefName': 'Geçersiz ref adı',
+    'git.invalidRemoteName': 'Geçersiz uzak depo adı',
+    'git.invalidUrl': 'Geçersiz URL',
+    'git.headMismatch': 'HEAD beklenen commit değil, geri alma yapılmadı',
+    'git.invalidDirName': 'Geçersiz klasör adı',
+
+    'net.kimlikSsh': "SSH anahtarı kullanılamadı: anahtar ssh-agent'a yüklü olmalı, parola sormamalı ve sunucu known_hosts içinde olmalı.",
+    'net.kimlik': 'Uzak depo kimlik doğrulaması başarısız. Bu araç parola soramaz. Kimlik bilgini bir kez kaydet: GitHub için "gh auth login" + "gh auth setup-git", GitLab için Git Credential Manager ile terminalde bir kez "git -C {dir} fetch" çalıştırıp giriş yap.',
+    'net.ag': "Uzak depoya ulaşılamadı. Ağ bağlantısını ve URL'yi kontrol et.",
+    'net.bulunamadi': 'Depo bulunamadı ya da erişim iznin yok.',
+    'net.reddedildi': 'Uzak depoda yerelde olmayan commit\'ler var. Önce "Kontrol et", sonra "Güncelle" (yalnızca ileri sarma) ya da terminalde "git -C {dir} pull --rebase".',
+    'net.zamanAsimi': 'İşlem zamanında tamamlanmadı. Bir kimlik bilgisi penceresi açık kalmış olabilir.',
+    'net.mesgul': 'Başka bir git işlemi sürüyor, bitmesini bekle.',
+    'net.atomikYok': 'Uzak sunucu atomik push desteklemiyor.',
+    'net.bilinmiyor': 'Uzak depo işlemi başarısız oldu.',
+    'net.dirPlaceholder': '<klasör>',
+
+    'err.path.required': 'Yol gerekli',
+    'err.path.invalid': 'Geçersiz yol',
+    'err.path.dotGit': '.git klasörüne erişim yok',
+    'err.path.linkOutside': 'Geçersiz yol: kök dışına çıkan bağlantı',
+    'err.path.linkBroken': 'Geçersiz yol: kırık bağlantı',
+
+    'err.lock.busy': 'Başka bir git işlemi sürüyor, bitmesini bekle',
+
+    'err.undo.stepNotFunction': 'Geri alma adımı bir fonksiyon olmalı',
+    'err.undo.rollbackFailed': { other: 'Geri alma sırasında {count} adım başarısız oldu' }
   };
 });

@@ -119,6 +119,51 @@
     'rules.urlGecersiz': 'URL is not valid',
     'rules.urlParola': 'Passwords or tokens must not be written into the URL (it would be saved as plain text in .git/config). Use a credential manager.',
     'rules.urlYol': 'URL must include the repository path (example: https://github.com/user/repo)',
-    'rules.urlMutlak': 'Enter an absolute path or a URL'
+    'rules.urlMutlak': 'Enter an absolute path or a URL',
+
+    'git.error.kilit': 'Git is busy with another operation, or an unfinished lock file (.git/index.lock) exists. If no git operation is running, delete the file and try again.',
+    'git.error.commitReddedildi': 'Git rejected the commit. A commit hook or a git setting may be blocking it.',
+    'git.error.eklenemedi': 'Git could not add the files. The file name or path may not be usable on this system (for example, a Windows device name).',
+    'git.error.bilinmiyor': 'The git operation failed.',
+
+    'git.notFound': 'git was not found. Git must be installed and available in PATH.',
+    'git.timeout': 'The operation timed out',
+    'git.toolRepo': 'Git operations cannot be run in the tool repository',
+    'git.emptyResponse': 'Empty response',
+    'git.invalidCommit': 'Invalid commit',
+    'git.invalidTagName': 'Invalid tag name',
+    'git.invalidLimit': 'Invalid limit',
+    'git.invalidPath': 'Invalid path',
+    'git.headDetachedUndo': 'HEAD is not attached to a branch, so the first commit could not be undone',
+    'git.invalidRefName': 'Invalid ref name',
+    'git.invalidRemoteName': 'Invalid remote name',
+    'git.invalidUrl': 'Invalid URL',
+    'git.headMismatch': 'HEAD is not the expected commit, so the undo was not performed',
+    'git.invalidDirName': 'Invalid folder name',
+
+    'net.kimlikSsh': 'The SSH key could not be used: the key must be loaded in ssh-agent, must not ask for a passphrase, and the server must be in known_hosts.',
+    'net.kimlik': 'Authentication with the remote failed. This tool cannot ask for a password. Save your credentials once: for GitHub run "gh auth login" + "gh auth setup-git"; for GitLab use Git Credential Manager and run "git -C {dir} fetch" once in a terminal to sign in.',
+    'net.ag': 'Could not reach the remote. Check your network connection and the URL.',
+    'net.bulunamadi': 'Repository not found, or you do not have access.',
+    'net.reddedildi': 'The remote has commits that are not in your local copy. First press "Check", then "Update" (fast-forward only), or run "git -C {dir} pull --rebase" in a terminal.',
+    'net.zamanAsimi': 'The operation did not finish in time. A credentials window may have been left open.',
+    'net.mesgul': 'Another git operation is in progress, wait for it to finish.',
+    'net.atomikYok': 'The remote server does not support atomic push.',
+    'net.bilinmiyor': 'The remote operation failed.',
+    'net.dirPlaceholder': '<folder>',
+
+    'err.path.required': 'Path is required',
+    'err.path.invalid': 'Invalid path',
+    'err.path.dotGit': 'Access to the .git folder is not allowed',
+    'err.path.linkOutside': 'Invalid path: link that points outside the root',
+    'err.path.linkBroken': 'Invalid path: broken link',
+
+    'err.lock.busy': 'Another git operation is in progress, wait for it to finish',
+
+    'err.undo.stepNotFunction': 'The undo step must be a function',
+    'err.undo.rollbackFailed': {
+      one: '{count} step failed during rollback',
+      other: '{count} steps failed during rollback'
+    }
   };
 });

@@ -7,7 +7,11 @@
 const fs = require('fs');
 const path = require('path');
 const Rules = require('../public/rules.js');
+const I18n = require('../public/i18n.js');
 const paths = require('./paths');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 function httpErr(status, message) {
   const e = new Error(message);
@@ -23,23 +27,23 @@ function isDotGit(name) {
 /* rel'i rootDir içinde çözer. Dönüş: { abs, rel } (rel: '/' ayraçlı, kökten göreli).
  * 400: boş/geçersiz/kök dışı/bağlantı kök dışına çıkıyor/kırık bağlantı. 403: .git. */
 function resolveSafe(rootDir, rel) {
-  if (typeof rel !== 'string' || rel === '') throw httpErr(400, 'Yol gerekli');
-  if (/[\x00-\x1f\x7f]/.test(rel)) throw httpErr(400, 'Geçersiz yol');
+  if (typeof rel !== 'string' || rel === '') throw httpErr(400, tx('err.path.required'));
+  if (/[\x00-\x1f\x7f]/.test(rel)) throw httpErr(400, tx('err.path.invalid'));
   const norm = rel.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (process.platform === 'win32' && /^[A-Za-z]:/.test(norm)) throw httpErr(400, 'Geçersiz yol');
+  if (process.platform === 'win32' && /^[A-Za-z]:/.test(norm)) throw httpErr(400, tx('err.path.invalid'));
   const abs = path.resolve(rootDir, norm);
   const back = path.relative(rootDir, abs);
   // Yalnızca tam ".." bileşeni kök dışıdır; "..foo.md" gibi adlar geçerlidir.
-  if (back === '' || back === '..' || back.startsWith('..' + path.sep) || path.isAbsolute(back)) throw httpErr(400, 'Geçersiz yol');
+  if (back === '' || back === '..' || back.startsWith('..' + path.sep) || path.isAbsolute(back)) throw httpErr(400, tx('err.path.invalid'));
   const parts = back.split(path.sep);
-  if (parts.some(isDotGit)) throw httpErr(403, '.git klasörüne erişim yok');
+  if (parts.some(isDotGit)) throw httpErr(403, tx('err.path.dotGit'));
   // NTFS alternatif veri akışı (a.md:akis) ve sürücü eki bileşeni.
-  if (process.platform === 'win32' && parts.some((p) => p.includes(':'))) throw httpErr(400, 'Geçersiz yol');
+  if (process.platform === 'win32' && parts.some((p) => p.includes(':'))) throw httpErr(400, tx('err.path.invalid'));
 
   // Gerçek yol: bağlantılar çözülür, hedef yoksa en yakın var olan atası çözülür.
-  if (!paths.isInside(abs, rootDir)) throw httpErr(400, 'Geçersiz yol: kök dışına çıkan bağlantı');
+  if (!paths.isInside(abs, rootDir)) throw httpErr(400, tx('err.path.linkOutside'));
   const realRel = path.relative(paths.realish(rootDir), paths.realish(abs));
-  if (realRel.split(path.sep).some(isDotGit)) throw httpErr(403, '.git klasörüne erişim yok');
+  if (realRel.split(path.sep).some(isDotGit)) throw httpErr(403, tx('err.path.dotGit'));
 
   // Kırık bağlantı: realpath çözülemezse hedef kök dışında olabilir ve yazma onu oluştururdu.
   let cur = rootDir;
@@ -48,7 +52,7 @@ function resolveSafe(rootDir, rel) {
     let st;
     try { st = fs.lstatSync(cur); } catch (e) { break; } // buradan sonrası henüz yok
     if (st.isSymbolicLink()) {
-      try { fs.realpathSync.native(cur); } catch (e) { throw httpErr(400, 'Geçersiz yol: kırık bağlantı'); }
+      try { fs.realpathSync.native(cur); } catch (e) { throw httpErr(400, tx('err.path.linkBroken')); }
     }
   }
   return { abs, rel: parts.join('/') };
