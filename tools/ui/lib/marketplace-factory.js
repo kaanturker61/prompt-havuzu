@@ -65,7 +65,7 @@ class MarketplaceFactory {
   _meta(slug, { description, owner }) {
     return {
       name: slug,
-      description: String(description || '').trim() || `Prompt havuzu: ${slug}`,
+      description: String(description || '').trim() || this.t.defaultDescription(slug),
       owner: String(owner || '').trim() || osUser()
     };
   }

@@ -541,7 +541,7 @@ route('POST', '/api/marketplaces/pp-config', async ({ body }) => {
   try { mj = JSON.parse(await fsp.readFile(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8')); } catch (e) { /* manifest yok */ }
   const slug = FM.slug(str(mj.name) || name);
   const owner = str(mj.owner && mj.owner.name) || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })();
-  const description = str(mj.description) || `Prompt havuzu: ${slug}`;
+  const description = str(mj.description) || templates.defaultDescription(slug);
   await atomicWrite(file, templates.ppConfig({ name: slug, description, owner }));
   setup.invalidate();
   catalog.invalidate();

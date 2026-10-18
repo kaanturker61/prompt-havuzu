@@ -300,6 +300,17 @@
     'remote.err.rollbackFailed': 'Update failed and the rollback could not be completed: {detail}. Check the status in the Git panel.',
     'remote.err.failed': 'Update failed: {error}. The changes were rolled back.',
 
+    'gitmsg.publishSubject': '{name}: version {version} published',
+    'gitmsg.updateSubject': 'Marketplace updated',
+    'gitmsg.changeNew': '+ {target} (new)',
+    'gitmsg.changeModified': '~ {target} (changed)',
+    'gitmsg.changeRemoved': '- {target} (removed)',
+    'gitmsg.noChange': 'No changes, the existing output was tagged.',
+
+    'scaffold.readme': "# {name}\n\nThis folder is a Claude Code marketplace repository managed with Prompt Havuzu.\n\n- Prompts are kept as `.md` files under `prompts/`.\n- `plugins/` and `.claude-plugin/` are generated when you publish from the UI and are not edited by hand.\n- You can make the first commit from the Git panel in Prompt Havuzu.\n",
+    'scaffold.pluginsReadme': '# plugins\n\nThe command, agent, and skill files in this folder are generated automatically from the prompts in `{dir}/`.\nMake edits in the source, then publish from the UI. Changes made here are overwritten by the next publish.\n',
+    'scaffold.defaultDescription': 'Prompt library: {slug}',
+
     'err.http.invalidHost': 'Invalid host',
     'err.http.missingHeader': 'Missing request header',
     'err.http.invalidOrigin': 'Invalid origin',

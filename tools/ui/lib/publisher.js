@@ -8,6 +8,7 @@ const { UndoStack } = require('./undo');
 const { BusyError } = require('./op-lock');
 const { describeNetError } = require('./net-errors');
 const { explainGitError, sanitizeDetail } = require('./git-errors');
+const { publishSubject, updateSubject, tagNote } = require('./commit-text');
 const I18n = require('../public/i18n.js');
 
 /** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
@@ -152,7 +153,7 @@ class PackagePublisher {
         undo.push(() => git.unstage(root, paths)); // commit başarısız olsa da gerekir; idempotent
         const parent = await git.headCommit(root);
         if ((await git.isClean(root, paths)).length) {
-          await git.commitPaths(root, `${name}: ${v} sürümü yayınlandı`, paths);
+          await git.commitPaths(root, publishSubject(name, v), paths);
           commit = await git.headCommit(root);
           if (!commit) {
             undo.push(async () => { throw new Error(tx('pub.err.hashUnreadableNoUndo')); });
@@ -162,13 +163,7 @@ class PackagePublisher {
         } else {
           commit = parent;
         }
-        const lines = [];
-        for (const p of analysis.prompts) {
-          if (p.change === 'yeni') lines.push('+ ' + p.target + ' (yeni)');
-          else if (p.change === 'degisti') lines.push('~ ' + p.target + ' (değişti)');
-        }
-        for (const r of analysis.removed) lines.push('- ' + r.target + ' (kaldırıldı)');
-        await git.createTag(root, tag, `${name} ${v}\n\n` + (lines.join('\n') || 'Değişiklik yok, mevcut çıktı etiketlendi.'), commit);
+        await git.createTag(root, tag, tagNote(name, v, analysis.prompts, analysis.removed), commit);
         undo.push(() => git.deleteTag(root, tag));
         undo.clear();
       } catch (e) {
@@ -227,7 +222,7 @@ class PackagePublisher {
         undo.push(() => git.unstage(root, paths));
         const parent = await git.headCommit(root);
         if ((await git.isClean(root, paths)).length) {
-          await git.commitPaths(root, 'Marketplace güncellendi', paths);
+          await git.commitPaths(root, updateSubject(), paths);
           commit = await git.headCommit(root);
           if (!commit) {
             undo.push(async () => { throw new Error(tx('pub.err.hashUnreadableNoUndo')); });

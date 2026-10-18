@@ -16,7 +16,10 @@ const { RemoteError } = require('../lib/remote-sync');
 const { StateStore } = require('../lib/state-store');
 const { describeNetError } = require('../lib/net-errors');
 const { gitAvailable, tmpDir, rmrf, gitEnv, sh, makeRepo, makeBare } = require('./helpers');
-const { seed, write, cmd, commitAll, buildStack } = require('./stack');
+const { seed, write, cmd, commitAll, buildStack, snapshot } = require('./stack');
+const { MarketplaceFactory } = require('../lib/marketplace-factory');
+const templates = require('../lib/templates');
+const { tagNote } = require('../lib/commit-text');
 
 const LIB = path.join(__dirname, '..', 'lib');
 const SOURCES = ['version-service.js', 'prompt-history.js', 'publisher.js', 'remote-sync.js', 'state-store.js'];
@@ -546,12 +549,12 @@ test('PackagePublisher: yayın ve güncelleme hata özetleri (genel hata, hook r
   } finally { rmrf(tmp); }
 });
 
-test('PackagePublisher.updateAll: yanıt iletisi dile göre (Marketplace güncellendi / Değişiklik yok), commit konusu dilden bağımsız', real, async () => {
+test('PackagePublisher.updateAll: yanıt iletisi ve commit konusu işlem anındaki dilde (Marketplace güncellendi / Değişiklik yok)', real, async () => {
   const tmp = tmpDir();
   try {
     const expected = {
-      tr: { updated: 'Marketplace güncellendi', none: 'Değişiklik yok' },
-      en: { updated: 'Marketplace updated', none: 'No changes' }
+      tr: { updated: 'Marketplace güncellendi', none: 'Değişiklik yok', subject: 'Marketplace güncellendi' },
+      en: { updated: 'Marketplace updated', none: 'No changes', subject: 'Marketplace updated' }
     };
     for (const [lang, run] of Object.entries(LANGS)) {
       const mk = seed(tmp, 'mk-' + lang);
@@ -559,11 +562,129 @@ test('PackagePublisher.updateAll: yanıt iletisi dile göre (Marketplace güncel
       const first = await run(() => s.publisher.updateAll(mk));
       assert.ok(first.commit, lang);
       assert.equal(first.message, expected[lang].updated);
-      assert.equal(sh(mk, ['log', '-1', '--format=%s'], gitEnv(tmp)).trim(), 'Marketplace güncellendi', 'commit konusu bu aşamada değişmez');
+      assert.equal(sh(mk, ['log', '-1', '--format=%s'], gitEnv(tmp)).trim(), expected[lang].subject, 'commit konusu işlem anındaki dilde ' + lang);
       const second = await run(() => s.publisher.updateAll(mk));
       assert.equal(second.commit, null);
       assert.equal(second.message, expected[lang].none);
     }
+  } finally { rmrf(tmp); }
+});
+
+/** Summary: HEAD commit konusu. */
+const subjectOf = (mk, tmp) => sh(mk, ['log', '-1', '--format=%s'], gitEnv(tmp)).trim();
+
+/** Summary: Annotated tag notunun satırları (sondaki boş satırlar atılır). */
+const tagLines = (mk, tmp, tag) => sh(mk, ['for-each-ref', '--format=%(contents)', 'refs/tags/' + tag], gitEnv(tmp)).replace(/\n+$/, '').split('\n');
+
+/** Summary: Ajan ve skill promptları ekleyip commit'ler; üç türün de (komut, ajan, skill) çıktıya girmesi için. */
+function addAgentAndSkill(mk, tmp) {
+  write(mk, 'prompts/ornek/ag.md', '---\nbaslik: Ag\ntur: ajan\naciklama: Ajan aciklamasi\nizinli_araclar: Read, Grep\nmodel: sonnet\n---\nAjan govde\n');
+  write(mk, 'prompts/ornek/sk.md', '---\nbaslik: Sk\ntur: skill\naciklama: Skill aciklamasi\n---\nSkill govde\n');
+  commitAll(mk, tmp);
+}
+
+test('PackagePublisher.publish: commit konusu ve tag notu işlem anındaki dilde; tag adı ve sürüm dilden bağımsız', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const expected = {
+      tr: {
+        first: 'ornek: 1.0.0 sürümü yayınlandı',
+        firstLines: ['+ plugins/ornek/commands/aa.md (yeni)', '+ plugins/ornek/commands/bb.md (yeni)'],
+        second: 'ornek: 2.0.0 sürümü yayınlandı',
+        secondLines: ['+ plugins/ornek/commands/cc.md (yeni)', '~ plugins/ornek/commands/aa.md (değişti)', '- plugins/ornek/commands/bb.md (kaldırıldı)'],
+        none: 'ornek 1.0.0\n\nDeğişiklik yok, mevcut çıktı etiketlendi.'
+      },
+      en: {
+        first: 'ornek: version 1.0.0 published',
+        firstLines: ['+ plugins/ornek/commands/aa.md (new)', '+ plugins/ornek/commands/bb.md (new)'],
+        second: 'ornek: version 2.0.0 published',
+        secondLines: ['+ plugins/ornek/commands/cc.md (new)', '~ plugins/ornek/commands/aa.md (changed)', '- plugins/ornek/commands/bb.md (removed)'],
+        none: 'ornek 1.0.0\n\nNo changes, the existing output was tagged.'
+      }
+    };
+    const tags = {};
+    for (const [lang, run] of Object.entries(LANGS)) {
+      const mk = seed(tmp, 'mk-' + lang);
+      const s = buildStack(mk, tmp);
+      const first = await run(() => s.publisher.publish(mk, { name: 'ornek' }));
+      assert.equal(subjectOf(mk, tmp), expected[lang].first, lang);
+      const firstNote = tagLines(mk, tmp, first.tag);
+      assert.deepEqual(firstNote.slice(0, 2), ['ornek 1.0.0', ''], lang);
+      assert.deepEqual(firstNote.slice(2).sort(), expected[lang].firstLines.slice().sort(), lang);
+
+      write(mk, 'prompts/ornek/a.md', cmd('A', 'komut_adi: aa\n') + 'ek satir\n');
+      fs.rmSync(path.join(mk, 'prompts', 'ornek', 'b.md'));
+      write(mk, 'prompts/ornek/c.md', cmd('C', 'komut_adi: cc\n'));
+      commitAll(mk, tmp);
+      const second = await run(() => s.publisher.publish(mk, { name: 'ornek', version: '2.0.0' }));
+      assert.equal(subjectOf(mk, tmp), expected[lang].second, lang);
+      const secondNote = tagLines(mk, tmp, second.tag);
+      assert.deepEqual(secondNote.slice(0, 2), ['ornek 2.0.0', ''], lang);
+      assert.deepEqual(secondNote.slice(2).sort(), expected[lang].secondLines.slice().sort(), lang);
+      tags[lang] = [first.tag, second.tag, first.version, second.version];
+      assert.equal(run(() => tagNote('ornek', '1.0.0', [], [])), expected[lang].none, lang);
+    }
+    assert.deepEqual(tags.tr, ['paket/ornek/v1.0.0', 'paket/ornek/v2.0.0', '1.0.0', '2.0.0']);
+    assert.deepEqual(tags.en, tags.tr);
+    assert.deepEqual(I18n.missing.filter((entry) => entry.includes(':gitmsg.')), []);
+  } finally { rmrf(tmp); }
+});
+
+test('PackagePublisher.publish: plugins/ ve .claude-plugin/ çıktısı (komut, ajan, skill, plugin.json, marketplace.json) tr ve en için bayt bayt aynı', real, async () => {
+  const dirs = { tr: tmpDir(), en: tmpDir() };
+  try {
+    const outputs = {};
+    const subjects = {};
+    for (const [lang, run] of Object.entries(LANGS)) {
+      const mk = seed(dirs[lang], 'mk');
+      addAgentAndSkill(mk, dirs[lang]);
+      const s = buildStack(mk, dirs[lang]);
+      await run(() => s.publisher.publish(mk, { name: 'ornek' }));
+      subjects[lang] = subjectOf(mk, dirs[lang]);
+      outputs[lang] = Object.fromEntries(Object.entries(snapshot(mk)).filter(([rel]) => rel.startsWith('plugins/') || rel.startsWith('.claude-plugin/')));
+    }
+    const files = Object.keys(outputs.tr).filter((rel) => !rel.endsWith('/')).sort();
+    assert.deepEqual(files, [
+      '.claude-plugin/marketplace.json', 'plugins/ornek/.claude-plugin/plugin.json', 'plugins/ornek/agents/ag.md',
+      'plugins/ornek/commands/aa.md', 'plugins/ornek/commands/bb.md', 'plugins/ornek/skills/sk/SKILL.md'
+    ]);
+    assert.deepEqual(outputs.en, outputs.tr);
+    assert.notEqual(subjects.tr, subjects.en);
+  } finally { for (const dir of Object.values(dirs)) rmrf(dir); }
+});
+
+test('yeni marketplace iskeleti, varsayılan açıklama ve plugins/README.md oluşturma anındaki dilde; tr çıktısı eski metinle birebir', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const legacyReadme = (name) => `# ${name}\n\nBu klasör Prompt Havuzu ile yönetilen bir Claude Code marketplace deposudur.\n\n- Promptlar \`prompts/\` altında \`.md\` dosyaları olarak tutulur.\n- \`plugins/\` ve \`.claude-plugin/\` arayüzden yayınlanınca üretilir, elle düzenlenmez.\n- İlk commit'i Prompt Havuzu'nun Git panelinden atabilirsin.\n`;
+    const legacyPluginsReadme = '# plugins\n\nBu klasördeki komut, ajan ve skill dosyaları `prompts/` içindeki promptlardan otomatik üretilir.\nDüzenlemeyi kaynakta yap, sonra arayüzden yayınla. Burada yapılan değişiklikler bir sonraki yayında ezilir.\n';
+    const factory = new MarketplaceFactory({ git: new GitService({ env: gitEnv(tmp) }), templates });
+    const read = (dir, rel) => fs.readFileSync(path.join(dir, ...rel.split('/')), 'utf8');
+    const made = {};
+    for (const [lang, run] of Object.entries(LANGS)) {
+      const created = await run(() => factory.create(tmp, { name: 'Deneme ' + lang }));
+      const own = await run(() => factory.create(tmp, { name: 'Ozel ' + lang, description: 'Özel açıklama' }));
+      const mk = seed(tmp, 'mk-' + lang);
+      await run(() => buildStack(mk, tmp).publisher.updateAll(mk));
+      made[lang] = {
+        readme: read(created.dir, 'README.md'),
+        description: JSON.parse(read(created.dir, 'pp.config.json')).marketplace.description,
+        manifestDescription: JSON.parse(read(created.dir, '.claude-plugin/marketplace.json')).description,
+        ownDescription: JSON.parse(read(own.dir, 'pp.config.json')).marketplace.description,
+        pluginsReadme: read(mk, 'plugins/README.md')
+      };
+      assert.equal(created.name, 'deneme-' + lang);
+    }
+    assert.equal(made.tr.readme, legacyReadme('deneme-tr'));
+    assert.equal(made.tr.pluginsReadme, legacyPluginsReadme);
+    assert.deepEqual([made.tr.description, made.tr.manifestDescription, made.tr.ownDescription], ['Prompt havuzu: deneme-tr', 'Prompt havuzu: deneme-tr', 'Özel açıklama']);
+    assert.ok(made.en.readme.startsWith('# deneme-en\n\nThis folder is a Claude Code marketplace repository managed with Prompt Havuzu.\n'), made.en.readme);
+    assert.ok(made.en.readme.includes('- Prompts are kept as `.md` files under `prompts/`.\n'));
+    assert.ok(!DIACRITIC_RE.test(made.en.readme));
+    assert.ok(made.en.pluginsReadme.startsWith('# plugins\n\nThe command, agent, and skill files in this folder are generated automatically from the prompts in `prompts/`.\n'), made.en.pluginsReadme);
+    assert.ok(!DIACRITIC_RE.test(made.en.pluginsReadme));
+    assert.deepEqual([made.en.description, made.en.manifestDescription, made.en.ownDescription], ['Prompt library: deneme-en', 'Prompt library: deneme-en', 'Özel açıklama']);
+    assert.deepEqual(I18n.missing.filter((entry) => entry.includes(':scaffold.')), []);
   } finally { rmrf(tmp); }
 });
 

@@ -5,6 +5,10 @@
 
 const os = require('os');
 const path = require('path');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 function defaultOwner(cfg) {
   return cfg.marketplace.owner || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })();
@@ -110,7 +114,7 @@ class ManifestWriter {
     const readme = path.join(this.root(), 'plugins', 'README.md');
     try { await this.fsp.access(readme); return; } catch (e) { /* yok */ }
     await this._protect(readme, undo);
-    await this.atomicWrite(readme, `# plugins\n\nBu klasördeki komut, ajan ve skill dosyaları \`${cfg.libraryDir}/\` içindeki promptlardan otomatik üretilir.\nDüzenlemeyi kaynakta yap, sonra arayüzden yayınla. Burada yapılan değişiklikler bir sonraki yayında ezilir.\n`, { mkdir: true });
+    await this.atomicWrite(readme, tx('scaffold.pluginsReadme', { dir: cfg.libraryDir }), { mkdir: true });
   }
 }
 

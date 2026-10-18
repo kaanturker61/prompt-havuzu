@@ -291,6 +291,17 @@
     'remote.err.rollbackFailed': 'Güncelleme başarısız ve geri alma tamamlanamadı: {detail}. Git panelinden durumu kontrol et.',
     'remote.err.failed': 'Güncelleme başarısız: {error}. Yapılan değişiklikler geri alındı.',
 
+    'gitmsg.publishSubject': '{name}: {version} sürümü yayınlandı',
+    'gitmsg.updateSubject': 'Marketplace güncellendi',
+    'gitmsg.changeNew': '+ {target} (yeni)',
+    'gitmsg.changeModified': '~ {target} (değişti)',
+    'gitmsg.changeRemoved': '- {target} (kaldırıldı)',
+    'gitmsg.noChange': 'Değişiklik yok, mevcut çıktı etiketlendi.',
+
+    'scaffold.readme': "# {name}\n\nBu klasör Prompt Havuzu ile yönetilen bir Claude Code marketplace deposudur.\n\n- Promptlar `prompts/` altında `.md` dosyaları olarak tutulur.\n- `plugins/` ve `.claude-plugin/` arayüzden yayınlanınca üretilir, elle düzenlenmez.\n- İlk commit'i Prompt Havuzu'nun Git panelinden atabilirsin.\n",
+    'scaffold.pluginsReadme': '# plugins\n\nBu klasördeki komut, ajan ve skill dosyaları `{dir}/` içindeki promptlardan otomatik üretilir.\nDüzenlemeyi kaynakta yap, sonra arayüzden yayınla. Burada yapılan değişiklikler bir sonraki yayında ezilir.\n',
+    'scaffold.defaultDescription': 'Prompt havuzu: {slug}',
+
     'err.http.invalidHost': 'Geçersiz host',
     'err.http.missingHeader': 'Eksik istek başlığı',
     'err.http.invalidOrigin': 'Geçersiz kaynak',
