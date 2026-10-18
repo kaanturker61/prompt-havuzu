@@ -3027,24 +3027,33 @@ function cloneResultModal(r) {
 }
 
 /* ------------------------------------------------- kurulum durumu, marketplace geçişi */
-const ACTION_LABEL = { ayarlar: 'Ayarları aç', yeniMarketplace: 'Yeni marketplace', marketplaceSec: 'Ağaçtan seç', gitBaslat: "Git'i başlat", ppConfigOlustur: 'Ayar dosyası oluştur' };
+/** Summary: Kurulum sorunu eylem kodu -> düğme etiketi sözlük anahtarı. */
+const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigOlustur: 'ui.common.createPpConfig' };
+
+/** Summary: Kurulum sorunu eylem kodunun düğme etiketi; bilinmeyen kod için boş döner. */
+function actionLabel(code) {
+  if (!Object.prototype.hasOwnProperty.call(ACTION_LABEL_KEYS, code)) return '';
+  const k = ACTION_LABEL_KEYS[code];
+  return tx(k);
+}
 
 function issueButton(i) {
-  if (i.action === 'ayarlar') return '<button class="btn sm" data-act="settings">' + ACTION_LABEL.ayarlar + '</button>';
-  if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + ACTION_LABEL.yeniMarketplace + '</button>';
-  if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + ACTION_LABEL.marketplaceSec + '</button>';
-  if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${ACTION_LABEL.gitBaslat}</button>`;
-  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + ACTION_LABEL.ppConfigOlustur + '</button>';
+  const label = esc(actionLabel(i.action));
+  if (i.action === 'ayarlar') return '<button class="btn sm" data-act="settings">' + label + '</button>';
+  if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + label + '</button>';
+  if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + label + '</button>';
+  if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${label}</button>`;
+  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + label + '</button>';
   return '';
 }
 
 function renderSetup() {
   const st = S.info.setup;
-  $('#main').innerHTML = `<div class="start"><h1 id="setupTitle" tabindex="-1">Kuruluma devam et</h1>
-    <p>Promptlar, araç klasörünün dışındaki bir library kökünde, her marketplace ayrı bir git deposu olarak tutulur. Aşağıdaki sorunları gider.</p>
-    <ul class="setup-list">${st.issues.map((i) => `<li><span class="pill ${i.level === 'error' ? 'bad' : 'warn'}">${i.level === 'error' ? 'Hata' : 'Uyarı'}</span><span class="msg">${esc(i.message)}</span>${issueButton(i)}</li>`).join('')}</ul>
-    <p class="hint">Kurulum tamamlanana kadar Yeni prompt, İçe aktar, Git ve Marketplace düğmeleri kapalıdır. Ayarlar her zaman açıktır.</p>
-    <p class="hint">Ayar dosyası: <code>${esc(S.info.configPath)}</code></p>${lostEditHtml()}</div>`;
+  $('#main').innerHTML = `<div class="start"><h1 id="setupTitle" tabindex="-1">${esc(tx('ui.setup.title'))}</h1>
+    <p>${esc(tx('ui.setup.intro'))}</p>
+    <ul class="setup-list">${st.issues.map((i) => `<li><span class="pill ${i.level === 'error' ? 'bad' : 'warn'}">${esc(i.level === 'error' ? tx('ui.setup.levelError') : tx('ui.setup.levelWarn'))}</span><span class="msg">${esc(i.message)}</span>${issueButton(i)}</li>`).join('')}</ul>
+    <p class="hint">${esc(tx('ui.setup.buttonsDisabled'))}</p>
+    <p class="hint">${th('ui.settings.configFile', { path: S.info.configPath })}</p>${lostEditHtml()}</div>`;
   const h = $('#setupTitle'); if (h) h.focus();
 }
 
@@ -3053,9 +3062,9 @@ function renderPick() {
   const codes = S.info.setup.issues.map((i) => i.code);
   if (!codes.includes('marketplaceSecilmedi') && !codes.includes('marketplaceYok')) { renderSetup(); return; }
   const none = codes.includes('marketplaceYok');
-  $('#main').innerHTML = `<div class="start"><h1 id="pickTitle" tabindex="-1">Bir marketplace seç</h1>
-    <p>${none ? 'Henüz marketplace yok. Yeni bir tane oluştur.' : 'Soldaki ağaçtan bir marketplace\'e tıkla ya da yeni bir tane oluştur.'}</p>
-    <div class="btns"><button class="btn primary" data-act="new-mp">Yeni marketplace</button></div>${lostEditHtml()}</div>`;
+  $('#main').innerHTML = `<div class="start"><h1 id="pickTitle" tabindex="-1">${esc(tx('ui.setup.pickTitle'))}</h1>
+    <p>${esc(none ? tx('ui.setup.pickNone') : tx('ui.setup.pickHint'))}</p>
+    <div class="btns"><button class="btn primary" data-act="new-mp">${esc(tx('ui.tree.newMarketplace'))}</button></div>${lostEditHtml()}</div>`;
 }
 
 function paintWarnBand() {
@@ -3065,7 +3074,7 @@ function paintWarnBand() {
   if (!warns.length) return;
   const band = document.createElement('div');
   band.id = 'warnBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
-  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">Uyarı</span> ${esc(i.message)} ${i.action === 'ayarlar' ? '<button class="link" data-act="settings">Ayarları aç</button>' : ''}${i.action === 'ppConfigOlustur' ? '<button class="link" data-act="mk-ppconfig" data-name="' + esc(activeName()) + '">Ayar dosyası oluştur</button>' : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="Uyarıyı kapat">Kapat</button>`;
+  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigOlustur' ? `<button class="link" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(actionLabel('ppConfigOlustur'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
   $('#main').prepend(band);
 }
 
@@ -3073,14 +3082,14 @@ function paintWarnBand() {
 function paintMkCur() {
   const b = $('#mkCur'); if (!b) return;
   const n = activeName();
-  b.innerHTML = n ? 'Marketplace: <b>' + esc(n) + '</b><span class="sr">. Etkin marketplace: ' + esc(n) + '</span>' : 'Marketplace seçilmedi';
+  b.innerHTML = n ? th('ui.setup.mkCurrent', { name: n }) : esc(tx('ui.setup.mkNone'));
   b.disabled = !rootOk();
 }
 
 // Düğmeleri ve kenar çubuğunu kurulum durumuna göre ayarlar.
 function applySetupUi() {
   const ok = setupOk(); const rok = rootOk();
-  const why = 'Kurulum tamamlanmadı: ' + firstError();
+  const why = tx('ui.setup.notComplete', { reason: firstError() });
   $$('[data-needs-setup]').forEach((b) => {
     if (b.dataset.title0 === undefined) b.dataset.title0 = b.getAttribute('title') || '';
     b.disabled = !ok;
@@ -3089,8 +3098,8 @@ function applySetupUi() {
   ['q', 'fDurum', 'fTur', 'fScope'].forEach((id) => { const el = $('#' + id); if (el) el.disabled = !rok; });
   if (!rok) {
     $('#list').setAttribute('role', 'list');
-    $('#list').innerHTML = '<div class="empty">Library kökü hazır olunca marketplace\'ler burada görünür.</div>';
-    $('#listTitle').textContent = 'Kütüphane';
+    $('#list').innerHTML = `<div class="empty">${esc(tx('ui.setup.listWaitingRoot'))}</div>`;
+    $('#listTitle').textContent = tx('ui.static.library');
     $('#tagbar').innerHTML = '';
   }
   if (!ok) { $('#gitBadge').hidden = true; $('#mkBadge').hidden = true; }
@@ -3112,37 +3121,37 @@ function onSetupLost(setup) {
   S.info.setup = setup; S.info.root = null; S.info.isRepo = false;
   S.cur = null; S.git = null; S.gen++;
   if (!setup.rootOk) { S.lib = null; S.results = null; }
-  document.title = 'Prompt havuzu';
+  document.title = tx('ui.static.title');
   applySetupUi(); renderList(); renderMain();
-  if (kept) toast('Kurulum bozuldu. Kaydedilmemiş metnin korundu; kurulum ekranından panoya kopyalayabilirsin.', 'error', 9000);
+  if (kept) toast(tx('ui.setup.lostToast'), 'error', 9000);
 }
 
 // Kurulum ekranındaki "kaydedilmemiş metin" kartı (HTML); korunan metin yoksa boş.
 function lostEditHtml() {
   const l = S.lostEdit; if (!l) return '';
   return `<section class="lostedit" id="lostEdit" aria-labelledby="lostTitle">
-    <h2 id="lostTitle">Kaydedilmemiş metnin korundu</h2>
-    <p><b>${esc(base(l.path))}</b> (${esc(l.mp)}) dosyasındaki kaydedilmemiş değişiklikler bellekte tutuluyor; disk eski haliyle duruyor. Sayfayı yenilersen kaybolur, önce panoya kopyala.</p>
-    ${l.commitMsg ? `<p>Commit mesajın: <code>${esc(l.commitMsg)}</code></p>` : ''}
-    <textarea id="lostRaw" readonly spellcheck="false" aria-label="Korunan metin">${esc(l.raw)}</textarea>
-    <div class="lostbtns"><button type="button" class="btn primary" data-act="lost-copy">Metni panoya kopyala</button><button type="button" class="btn" data-act="lost-drop">At</button></div>
-    <p class="hint">Kurulum düzelince dosyayı yeniden açtığında metni geri yüklemeyi önereceğim.</p>
+    <h2 id="lostTitle">${esc(tx('ui.lostEdit.cardTitle'))}</h2>
+    <p>${th('ui.lostEdit.cardText', { name: base(l.path), mp: l.mp })}</p>
+    ${l.commitMsg ? `<p>${th('ui.lostEdit.cardCommit', { message: l.commitMsg })}</p>` : ''}
+    <textarea id="lostRaw" readonly spellcheck="false" aria-label="${esc(tx('ui.lostEdit.rawLabel'))}">${esc(l.raw)}</textarea>
+    <div class="lostbtns"><button type="button" class="btn primary" data-act="lost-copy">${esc(tx('ui.lostEdit.copyText'))}</button><button type="button" class="btn" data-act="lost-drop">${esc(tx('ui.lostEdit.drop'))}</button></div>
+    <p class="hint">${esc(tx('ui.lostEdit.cardHint'))}</p>
   </section>`;
 }
 
 async function lostCopy() {
   const l = S.lostEdit; if (!l) return;
   const ok = await copyText(l.raw);
-  toast(ok ? 'Metin panoya kopyalandı' : 'Kopyalanamadı, metni kutudan elle seç', ok ? 'ok' : 'error');
+  toast(ok ? tx('ui.lostEdit.copied') : tx('ui.lostEdit.copyFailed'), ok ? 'ok' : 'error');
 }
 
 async function lostDrop() {
   if (!S.lostEdit) return;
-  const a = await askChoice({ title: 'Korunan metin atılsın mı?', text: 'Kaydedilmemiş metin ve commit mesajı bellekten silinir; geri alınamaz.', choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'At', kind: 'danger' }] });
+  const a = await askChoice({ title: tx('ui.lostEdit.dropTitle'), text: tx('ui.lostEdit.dropText'), choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.lostEdit.drop'), kind: 'danger' }] });
   if (a !== 'yes') return;
   S.lostEdit = null;
   renderMain();
-  toast('Korunan metin atıldı');
+  toast(tx('ui.lostEdit.dropped'));
 }
 
 // Sunucudan gelen yeni /api/info ile etkin marketplace'e geçiş durumunu uygular.
@@ -3155,7 +3164,7 @@ function adoptInfo(info) {
     const a = S.lib.marketplaces.find((m) => m.active && m.state === 'hazir');
     S.lib.libraryDir = a ? a.libraryDir : null;
   }
-  document.title = 'Prompt havuzu';
+  document.title = tx('ui.static.title');
   applySetupUi();
 }
 
@@ -3172,7 +3181,7 @@ async function activateMarketplace(name, o) {
   S.remoteCheck = null; paintRemoteBadge();
   if (setupOk()) await loadGit();
   renderMkBadge(); renderFilters(); renderList(); renderMain();
-  if (!o.quiet) toast('Etkin marketplace: ' + name);
+  if (!o.quiet) toast(tx('ui.setup.activated', { name }));
   backgroundRemoteCheck();
   return true;
 }
@@ -3216,15 +3225,15 @@ async function mkGitInit(name, ask) {
   const fromSettings = !$('#overlay').hidden && !!modalState && modalState.kind === 'settings';
   if (ask) {
     const a = await askChoice({
-      title: "Git'i başlat", text: name + ' klasöründe git başlatılacak, eksik iskelet dosyaları eklenecek. Var olan dosyalara dokunulmaz.',
-      choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: "Git'i başlat", kind: 'primary' }]
+      title: tx('ui.common.initGit'), text: tx('ui.setup.gitInitText', { name }),
+      choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.common.initGit'), kind: 'primary' }]
     });
     if (a !== 'yes') { if (fromSettings) openSettings('mk'); return; }
   }
   try {
     const r = await api('POST', '/api/marketplaces/git-init', { name });
     await reloadState();
-    toast('Git başlatıldı: ' + name);
+    toast(tx('ui.setup.gitInited', { name }));
     if (fromSettings) openSettings('mk');
     return r;
   } catch (e) { fail(e); if (fromSettings) openSettings('mk'); }
@@ -3237,42 +3246,42 @@ function mkRowHtml(i, kind) {
   const tool = kind === 'ignored' && i.reasonCode === 'aracReposu';
   const pills = [];
   if (kind === 'item') {
-    if (i.active) pills.push('<span class="pill ok">etkin</span>');
-    if (!i.valid) pills.push(`<span class="pill bad">geçersiz: ${esc(i.reason || '')}</span>`);
-    if (!i.hasManifest) pills.push('<span class="pill warn">manifest yok</span>');
-    if (i.valid && i.hasPpConfig === false) pills.push('<span class="pill warn">Prompt Havuzu ayarı yok</span>');
+    if (i.active) pills.push(`<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>`);
+    if (!i.valid) pills.push(`<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: i.reason || '' }))}</span>`);
+    if (!i.hasManifest) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoManifest'))}</span>`);
+    if (i.valid && i.hasPpConfig === false) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoPpConfig'))}</span>`);
   } else pills.push(`<span class="pill ${tool ? '' : 'warn'}">${esc(i.reason)}</span>`);
   const btns = [];
-  if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">Etkinleştir</button>`);
+  if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">${esc(tx('ui.menu.activate'))}</button>`);
   // Geçerli olmayan ama .git içeren klasörde sunucu git başlatmayı reddeder; yalnızca git deposu olmayanlarda göster.
-  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">Ayar dosyası oluştur</button>`);
-  if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">Git'i başlat</button>`);
+  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">${esc(tx('ui.common.createPpConfig'))}</button>`);
+  if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">${esc(tx('ui.common.initGit'))}</button>`);
   return `<div class="mkrow ${tool ? 'dim' : ''}"><div><b>${esc(i.name)}</b> ${pills.join(' ')}<div class="hint mono">${esc(i.path)}</div></div><div></div><div class="mkbtns">${btns.join('')}</div></div>`;
 }
 
 function settingsHtml(s, m) {
   const rootBad = s.setup.issues.some((i) => ROOT_BAD.includes(i.code));
   const rootVal = s.libraryRoot || s.suggestedRoot || '';
-  const hint = s.suggestedRootNote || (s.suggestedRoot && !s.libraryRoot ? 'Önerilen klasör: ' + s.suggestedRoot : 'Marketplace depoları bu klasörün altında tutulur. Araç klasörünün dışında olmalı.');
+  const hint = s.suggestedRootNote || (s.suggestedRoot && !s.libraryRoot ? tx('ui.settings.suggestedRoot', { path: s.suggestedRoot }) : tx('ui.settings.rootHint'));
   const rows = m.items.map((i) => mkRowHtml(i, 'item')).concat(m.ignored.map((i) => mkRowHtml(i, 'ignored'))).join('');
   const curLang = I18n.LANGUAGES.includes(s.language) ? s.language : 'auto';
   const langOpts = [['auto', 'ui.settings.languageAuto'], ['tr', 'ui.settings.languageTr'], ['en', 'ui.settings.languageEn']]
     .map(([v, k]) => `<option value="${v}" ${v === curLang ? 'selected' : ''}>${esc(tx(k))}</option>`).join('');
   return `<div class="stack">
     <form class="stack" id="setRootForm" novalidate>
-      <h3>Library kökü</h3>
-      <label>Library kökü<input id="setRoot" value="${esc(rootVal)}" autocomplete="off" aria-describedby="setRootHint setRootErr"></label>
+      <h3>${esc(tx('ui.settings.libraryRoot'))}</h3>
+      <label>${esc(tx('ui.settings.libraryRoot'))}<input id="setRoot" value="${esc(rootVal)}" autocomplete="off" aria-describedby="setRootHint setRootErr"></label>
       <p class="hint" id="setRootHint" style="margin:0">${esc(hint)}</p>
       <p class="issue error" id="setRootErr" role="alert" style="margin:0" hidden></p>
-      <div class="foot-left"><button class="btn primary">Kaydet</button><span class="hint">Ayar dosyası: <code>${esc(s.configPath)}</code></span></div>
+      <div class="foot-left"><button class="btn primary">${esc(tx('ui.file.save'))}</button><span class="hint">${th('ui.settings.configFile', { path: s.configPath })}</span></div>
     </form>
     <h3>${esc(tx('ui.settings.language'))}</h3>
     <label>${esc(tx('ui.settings.language'))}<select id="setLanguage">${langOpts}</select></label>
-    <h3>Uzak depo</h3>
-    <label>Uzak depoyu kontrol et<select id="setRemoteCheck"><option value="acilista" ${s.remoteCheck !== 'elle' ? 'selected' : ''}>Açılışta (saatte en fazla bir kez)</option><option value="elle" ${s.remoteCheck === 'elle' ? 'selected' : ''}>Yalnızca elle</option></select></label>
-    <h3 id="setMkTitle" tabindex="-1">Marketplace'ler</h3>
-    ${rows ? `<div class="mklist">${rows}</div>` : `<p class="hint">${rootBad ? 'Önce geçerli bir library kökü kaydet.' : 'Bu kökte henüz marketplace yok.'}</p>`}
-    <div class="foot-left"><button type="button" class="btn" data-act="new-mp" ${rootBad ? 'disabled' : ''}>Yeni marketplace…</button>${rootBad ? '<span class="hint">Önce geçerli bir library kökü kaydet.</span>' : ''}</div>
+    <h3>${esc(tx('ui.git.tabRemote'))}</h3>
+    <label>${esc(tx('ui.settings.remoteCheck'))}<select id="setRemoteCheck"><option value="acilista" ${s.remoteCheck !== 'elle' ? 'selected' : ''}>${esc(tx('ui.settings.remoteCheckStartup'))}</option><option value="elle" ${s.remoteCheck === 'elle' ? 'selected' : ''}>${esc(tx('ui.settings.remoteCheckManual'))}</option></select></label>
+    <h3 id="setMkTitle" tabindex="-1">${esc(tx('ui.settings.marketplaces'))}</h3>
+    ${rows ? `<div class="mklist">${rows}</div>` : `<p class="hint">${esc(rootBad ? tx('ui.settings.needRoot') : tx('ui.settings.noMarketplaces'))}</p>`}
+    <div class="foot-left"><button type="button" class="btn" data-act="new-mp" ${rootBad ? 'disabled' : ''}>${esc(tx('ui.settings.newMarketplace'))}</button>${rootBad ? `<span class="hint">${esc(tx('ui.settings.needRoot'))}</span>` : ''}</div>
   </div>`;
 }
 
@@ -3303,17 +3312,17 @@ async function saveRoot(create, onVal) {
   const before = { root: S.info.libraryRoot, active: S.info.activeMarketplace, ok: setupOk() };
   try {
     const r = await api('PUT', '/api/settings', { libraryRoot: val, create: !!create });
-    toast('Library kökü kaydedildi');
+    toast(tx('ui.settings.rootSaved'));
     S.info = await get('/api/info');
     const changed = before.root !== S.info.libraryRoot || before.active !== S.info.activeMarketplace || before.ok !== setupOk();
-    if (changed) reloadWith('Library kökü kaydedildi'); else openSettings();
+    if (changed) reloadWith(tx('ui.settings.rootSaved')); else openSettings();
     return r;
   } catch (e) {
     if (create) { showFieldErr('setRootErr', e.message); const i = $('#setRoot'); if (i) i.focus(); return; }
     if (e.status === 404 && e.data && e.data.notFound) {
       const a = await askChoice({
-        title: 'Klasör yok', text: 'Klasör yok: ' + val.trim() + '. Oluşturulsun mu?',
-        choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Oluştur', kind: 'primary' }]
+        title: tx('ui.settings.folderMissingTitle'), text: tx('ui.settings.folderMissingText', { path: val.trim() }),
+        choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.common.create'), kind: 'primary' }]
       });
       if (a === 'yes') return saveRoot(true, val);
       openSettings();
@@ -3327,7 +3336,7 @@ async function openSettings(section) {
   let s; let m;
   try { [s, m] = await Promise.all([get('/api/settings'), get('/api/marketplaces')]); } catch (e) { fail(e); return; }
   openModal({
-    title: 'Ayarlar', kind: 'settings', wide: true, html: settingsHtml(s, m), noFocus: true,
+    title: tx('ui.static.settings'), kind: 'settings', wide: true, html: settingsHtml(s, m), noFocus: true,
     onClose: () => { const b = $('.actions [data-act="settings"]'); if (b) b.focus(); },
     onMount: (b) => { $('#setRootForm', b).addEventListener('submit', (e) => { e.preventDefault(); saveRoot(false); }); }
   });
@@ -3445,7 +3454,7 @@ document.addEventListener('click', async (ev) => {
     case 'open-close': closeModal(); await openIn(el.dataset.mp, p); break;
     case 'menu': { ev.stopPropagation(); const it = S.modelMap.get(el.dataset.key); if (it) { const r = el.getBoundingClientRect(); S.focusKey = it.key; openMenuFor(it, r.left, r.bottom + 4); } break; }
     case 'm-activate': break; // etkinleştirme yukarıda yapıldı
-    case 'm-copy-path': { const full = ((S.lib && S.lib.libraryRoot) || '') + pathSep() + el.dataset.mp; const ok = await copyText(full); toast(ok ? 'Yol kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
+    case 'm-copy-path': { const full = ((S.lib && S.lib.libraryRoot) || '') + pathSep() + el.dataset.mp; const ok = await copyText(full); toast(ok ? tx('ui.events.pathCopied') : tx('ui.copy.failed'), ok ? 'ok' : 'error'); break; }
     case 'tab': setTab(el.dataset.tab); break;
     case 'save': await save(); break;
     case 'copy': await copyBody(); break;
@@ -3464,7 +3473,7 @@ document.addEventListener('click', async (ev) => {
     case 'm-rename-plugin': await renamePlugin(el.dataset.name); break;
     case 'm-delete-plugin': {
       const pl = pluginsOf(activeMp()).find((x) => x.name === el.dataset.name); if (!pl) break;
-      await deleteItem(pl.path, '"' + pl.name + '" plugin\'i ve içindeki ' + pl.count + ' prompt çöp kutusuna (.pp/trash) taşınır.');
+      await deleteItem(pl.path, tx('ui.delete.pluginText', { name: pl.name, count: pl.count }));
       break;
     }
     case 'm-move': await openMove(p); break;
@@ -3507,13 +3516,13 @@ document.addEventListener('click', async (ev) => {
     case 'ver-commit': {
       const c = S.cur; const box = $('#verCDiff'); if (!c || !box) break;
       $$('.commits li', box.parentElement).forEach((x) => x.classList.toggle('on', x === el));
-      box.hidden = false; box.textContent = 'Fark yükleniyor…';
-      try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path || c.path }))).diff || '(fark yok)'); } catch (e) { box.textContent = e.message; }
+      box.hidden = false; box.textContent = tx('ui.ver.diffLoading');
+      try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path || c.path }))).diff || tx('ui.hist.noDiff')); } catch (e) { box.textContent = e.message; }
       break;
     }
     case 'hist-load': await loadOldVersion(el.dataset.hash); break;
     case 'open-package': await openPackage(FM.slug(el.dataset.name), el.dataset.from === 'panel' ? 'panel' : 'tree'); break;
-    case 'pk-desc': try { await api('PUT', '/api/package', { name: S.pk.name, description: $('#pkDesc').value }); toast('Açıklama kaydedildi'); S.pk.noFocus = true; await pkLoad(); afterWrite(); } catch (e) { fail(e); } break;
+    case 'pk-desc': try { await api('PUT', '/api/package', { name: S.pk.name, description: $('#pkDesc').value }); toast(tx('ui.pluginDesc.saved')); S.pk.noFocus = true; await pkLoad(); afterWrite(); } catch (e) { fail(e); } break;
     case 'pk-publish': pkAsk(); break;
     case 'pk-confirm': await pkPublish(); break;
     case 'pk-cancel': { if (S.pk) S.pk.pending = null; const cf = $('#pkConfirm'); if (cf) cf.innerHTML = ''; const g = $('#pkGo'); if (g) g.focus(); break; }
@@ -3529,7 +3538,7 @@ document.addEventListener('click', async (ev) => {
     case 'remote-pull': await remotePull(); break;
     case 'remote-details': openGit('remote'); break;
     case 'remote-band-close': { const rc = S.remoteCheck; if (rc) ls.set(lsKey('dismissedCheck'), rc.checkedAt || rc.at || ''); paintRemoteBand(); break; }
-    case 'copy-text': { const ok = await copyText(el.dataset.text); toast(ok ? 'Kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); break; }
+    case 'copy-text': { const ok = await copyText(el.dataset.text); toast(ok ? tx('ui.events.copied') : tx('ui.copy.failed'), ok ? 'ok' : 'error'); break; }
     case 'git': openGit(); break;
     case 'git-tab': el.dataset.tab === 'log' ? paintGitLog() : el.dataset.tab === 'remote' ? paintGitRemote() : paintGit(); break;
     case 'mk-git-init': await mkGitInit(el.dataset.name, el.dataset.confirm !== undefined); break;
@@ -3540,12 +3549,12 @@ document.addEventListener('click', async (ev) => {
     case 'warn-close': S.warnHidden = true; paintWarnBand(); break;
     case 'git-diff': await gitDiffFor(p); break;
     case 'git-selall': { S.gitSelTouched = true; const all = S.git.files.every((f) => S.gitSel.has(f.path)); S.gitSel = new Set(all ? [] : S.git.files.map((f) => f.path)); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); break; }
-    case 'git-identity': try { await api('POST', '/api/git/identity', { name: $('#gName').value, email: $('#gMail').value }); await loadGit(); toast('Kimlik kaydedildi'); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); } catch (e) { fail(e); } break;
+    case 'git-identity': try { await api('POST', '/api/git/identity', { name: $('#gName').value, email: $('#gMail').value }); await loadGit(); toast(tx('ui.identity.saved')); S.gitMsg = ($('#gMsg') || {}).value; paintGit(); } catch (e) { fail(e); } break;
     case 'git-commit': await gitCommit(); break;
     case 'gitlog-mode': ls.set('pp.gitLogMode', el.dataset.mode); await paintGitLog(); break;
     case 'gitlog-more': S.gitLogLimit = Math.min(3000, (S.gitLogLimit || 300) + 300); await paintGitLog(); break;
     case 'gitlog-ver': await openVersionInHistory(el.dataset.path, el.dataset.tag); break;
-    case 'gitlog-file-commit': { const box = $('#gDiff'); if (!box) break; $$('.gfile .gcs .link').forEach((x) => x.classList.toggle('on', x === el)); box.textContent = 'Fark yükleniyor…'; try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path }))).diff || '(fark yok)'); } catch (e) { box.textContent = e.message; } break; }
+    case 'gitlog-file-commit': { const box = $('#gDiff'); if (!box) break; $$('.gfile .gcs .link').forEach((x) => x.classList.toggle('on', x === el)); box.textContent = tx('ui.ver.diffLoading'); try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash, path: el.dataset.path }))).diff || tx('ui.hist.noDiff')); } catch (e) { box.textContent = e.message; } break; }
     case 'git-show': { $$('.commits li').forEach((x) => x.classList.toggle('on', x === el)); const box = $('#gDiff'); try { box.innerHTML = diffHtml((await get('/api/git/diff?' + qs({ hash: el.dataset.hash }))).diff); } catch (e) { box.textContent = e.message; } break; }
     case 'market': openMarket(); break;
     case 'mk-init': {
@@ -3558,12 +3567,12 @@ document.addEventListener('click', async (ev) => {
       if (verErr) { showVerErr(verErr); break; }
       const durumlar = f.getAll('exdurum');
       showFieldErr('mkExpErr', '');
-      if (!durumlar.length) { showFieldErr('mkExpErr', 'En az bir durum seçilmeli'); break; }
+      if (!durumlar.length) { showFieldErr('mkExpErr', tx('ui.mp.statusRequired')); break; }
       const cfgBody = Object.fromEntries(f.entries()); delete cfgBody.exdurum;
       const oldEx = (S.mk && S.mk.export) || { durumlar: [] };
       const extra = oldEx.durumlar.filter((d) => !DURUM_OPTS.some(([v]) => fold(v).trim() === fold(d).trim()));
       cfgBody.export = { durumlar: durumlar.concat(extra), haricKlasorler: oldEx.haricKlasorler };
-      try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast('Marketplace dosyaları yazıldı: ' + r.packages.join(', ')); await mkReload(); }
+      try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast(tx('ui.mp.filesWritten', { packages: r.packages.join(', ') })); await mkReload(); }
       catch (e) { if (e.status === 400 && e.data && e.data.field === 'version') showVerErr(e.message); else fail(e); }
       break;
     }
@@ -3599,7 +3608,7 @@ document.addEventListener('change', (ev) => {
   const t = ev.target;
   if (t.id === 'fDurum') { S.f.durum = t.value; runSearch(); }
   else if (t.id === 'fTur') { S.f.tur = t.value; runSearch(); }
-  else if (t.id === 'setRemoteCheck') { api('PUT', '/api/settings', { remoteCheck: t.value }).then(() => toast('Ayar kaydedildi')).catch(fail); }
+  else if (t.id === 'setRemoteCheck') { api('PUT', '/api/settings', { remoteCheck: t.value }).then(() => toast(tx('ui.settings.saved'))).catch(fail); }
   else if (t.id === 'setLanguage') { setLanguage(t.value); }
   else if (S.pk && t.closest && t.closest('.pkrel')) pkValidate();
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
@@ -3656,7 +3665,7 @@ window.addEventListener('focus', async () => {
   if (c && !c.dirty) {
     try {
       const r = await get('/api/file?' + qs({ path: c.path }));
-      if (r.mtime !== c.mtime) { await openFile(c.path, { reload: true, tab: c.tab }); toast('Dosya diskte değişmişti, yenilendi'); }
+      if (r.mtime !== c.mtime) { await openFile(c.path, { reload: true, tab: c.tab }); toast(tx('ui.events.reloadedFromDisk')); }
     } catch (e) { /* silinmiş olabilir */ }
   } else if (c && c.dirty) {
     try { const r = await get('/api/file?' + qs({ path: c.path })); if (r.mtime !== c.mtime && !c.external) { c.external = true; renderMainKeepEdits(); } } catch (e) { /* sessiz */ }
@@ -3667,7 +3676,7 @@ function renderMainKeepEdits() { syncFromDom(); renderMain(); updateDirty(); }
 
 /* ------------------------------------------------------------------ başlangıç */
 async function init() {
-  try { S.info = await get('/api/info'); } catch (e) { $('#main').innerHTML = '<div class="start"><h1>Sunucuya ulaşılamadı</h1><p>Terminalde <code>node tools/ui/server.js</code> komutunun çalıştığından emin ol, sonra sayfayı yenile.</p></div>'; return; }
+  try { S.info = await get('/api/info'); } catch (e) { $('#main').innerHTML = `<div class="start"><h1>${esc(tx('ui.init.serverDownTitle'))}</h1><p>${th('ui.init.serverDownText')}</p></div>`; return; }
   S.info = await syncLanguage(S.info);
   // Eski (marketplace'siz) anahtarlar bir kez silinir.
   try { localStorage.removeItem('pp.last'); localStorage.removeItem('pp.expanded'); } catch (e) { /* özel pencere */ }
@@ -3675,7 +3684,7 @@ async function init() {
   applySetupUi();
   if (!rootOk()) { renderMain(); return; }
   try { await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]); } catch (e) { if (e.setupRequired) return; throw e; }
-  if (!S.info.gitAvailable) toast('Git bulunamadı. Geçmiş özellikleri çalışmaz; git kurup yeniden başlat.', 'error', 8000);
+  if (!S.info.gitAvailable) toast(tx('ui.init.gitMissing'), 'error', 8000);
   initExpansion();
   renderFilters(); renderList();
   const last = setupOk() ? ls.get(lsKey('last'), null) : null;

@@ -60,7 +60,7 @@ test('openModal: kind modalState içinde saklanır, verilmezse null; closeModal 
 test('openSettings: pencere kind settings ile açılır, başlık ve diğer seçenekler aynı', async () => {
   let opened = null;
   const ctx = vm.createContext({
-    console, get: async (u) => ({ u }), settingsHtml: () => '<x>', fail: (e) => { throw e; },
+    console, ...uiGlobals(), get: async (u) => ({ u }), settingsHtml: () => '<x>', fail: (e) => { throw e; },
     openModal: (o) => { opened = o; }, $: () => null
   });
   vm.runInContext(fnSrc('openSettings'), ctx);
@@ -80,7 +80,7 @@ function gitInitCtx({ overlayHidden = false, state = null, title = '', answer = 
   const dom = modalDom(overlayHidden);
   dom.nodes['#mTitle'].textContent = title;
   const ctx = vm.createContext({
-    console, $: dom.$, document: dom.document,
+    console, ...uiGlobals(), $: dom.$, document: dom.document,
     askChoice: async () => { log.push('askChoice'); return answer; },
     api: async (method, url, body) => { log.push(method + ' ' + url + ' ' + body.name); if (apiError) throw apiError; return { ok: true }; },
     reloadState: async () => { log.push('reloadState'); },
@@ -137,7 +137,7 @@ test('Ayarlar akışı: gerçek openSettings + openModal + mkGitInit birlikte', 
   const log = [];
   const dom = modalDom();
   const ctx = vm.createContext({
-    console, $: (sel) => (sel === '#setRootForm' ? { addEventListener() {} } : dom.$(sel)), document: dom.document,
+    console, ...uiGlobals(), $: (sel) => (sel === '#setRootForm' ? { addEventListener() {} } : dom.$(sel)), document: dom.document,
     get: async () => ({}), settingsHtml: () => '', fail: (e) => log.push('fail:' + e.message),
     askChoice: async () => 'yes', api: async (m, u, b) => { log.push(m + ' ' + u + ' ' + b.name); return {}; },
     reloadState: async () => {}, toast: () => {}
@@ -158,7 +158,7 @@ test('Ayarlar akışı: gerçek openSettings + openModal + mkGitInit birlikte', 
 
 /** Summary: mkRowHtml'i yalnızca esc bağımlılığıyla çalıştırır. */
 function rowFn() {
-  const ctx = vm.createContext({ console });
+  const ctx = vm.createContext({ console, ...uiGlobals() });
   vm.runInContext([constSrc('esc'), fnSrc('mkRowHtml'), 'this.row = mkRowHtml;'].join('\n'), ctx);
   return ctx.row;
 }
