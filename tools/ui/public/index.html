@@ -44,6 +44,8 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .searchbox { flex: 1 1 260px; max-width: 560px; }
 .searchbox input { width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.langsw { margin: 0; }
+.langsw button { padding: 6px 10px; line-height: 1.4; }
 .only-narrow { display: none; }
 
 /* düğmeler */
@@ -332,6 +334,10 @@ details summary { cursor: pointer; }
     <button class="btn" data-act="git" data-needs-setup><span data-i18n="ui.static.git"></span><span id="gitBadge" class="badge" hidden></span><span id="gitDown" class="badge" hidden></span></button>
     <button class="btn" data-act="market" data-needs-setup><span data-i18n="ui.static.marketplace"></span><span id="mkBadge" class="badge warn" hidden></span></button>
     <button class="btn" data-act="settings" data-i18n="ui.static.settings"></button>
+    <div class="seg langsw" role="group" data-i18n-aria-label="ui.settings.language">
+      <button type="button" data-act="lang" data-lang="tr" aria-pressed="false" data-i18n-title="ui.settings.language">TR</button>
+      <button type="button" data-act="lang" data-lang="en" aria-pressed="false" data-i18n-title="ui.settings.language">EN</button>
+    </div>
   </nav>
 </header>
 <button class="btn only-narrow fab" data-act="side" data-i18n-aria-label="ui.static.openList" data-i18n="ui.static.list"></button>
@@ -439,6 +445,7 @@ function applyLanguage(lang) {
   const applied = I18n.setLanguage(lang);
   document.documentElement.lang = HTML_LANG[applied];
   I18n.applyDom(document);
+  document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === applied)));
   return applied;
 }
 
@@ -3295,14 +3302,20 @@ function reloadWith(msg) {
   location.reload();
 }
 
-/** Summary: Dil ayarını kaydedip sayfayı yeni dille yeniden yükler; kaydedilmemiş değişiklik varsa önce sorulur. */
-async function setLanguage(setting) {
-  if (!(await confirmDiscard())) { openSettings(); return false; }
-  try { await api('PUT', '/api/settings', { language: setting }); } catch (e) { fail(e); openSettings(); return false; }
+/** Summary: Dil ayarını kaydedip sayfayı yeni dille yeniden yükler; kaydedilmemiş değişiklik varsa önce sorulur, reopenSettings vazgeçme/hatada Ayarlar'ı yeniden açar. */
+async function setLanguage(setting, { reopenSettings = true } = {}) {
+  if (!(await confirmDiscard())) { if (reopenSettings) openSettings(); return false; }
+  try { await api('PUT', '/api/settings', { language: setting }); } catch (e) { fail(e); if (reopenSettings) openSettings(); return false; }
   const lang = resolveLang(setting);
   writeLangCache(lang);
   reloadWith(tx('ui.settings.languageChanged', {}, { lang }));
   return true;
+}
+
+/** Summary: Üst çubuk TR/EN kısayolu; etkin dile tıklamak bir şey yapmaz, vazgeçme/hata Ayarlar'ı açmaz. */
+async function quickLanguage(lang) {
+  if (!I18n.LANGUAGES.includes(lang) || lang === I18n.current()) return false;
+  return setLanguage(lang, { reopenSettings: false });
 }
 
 // Library kökü değişince (bilinçli ve nadir) sayfa yeniden yüklenir.
@@ -3544,6 +3557,7 @@ document.addEventListener('click', async (ev) => {
     case 'mk-git-init': await mkGitInit(el.dataset.name, el.dataset.confirm !== undefined); break;
     case 'mk-activate': if (await activateMarketplace(el.dataset.name)) closeModal(); break;
     case 'settings': openSettings(el.dataset.section); break;
+    case 'lang': await quickLanguage(el.dataset.lang); break;
     case 'lost-copy': await lostCopy(); break;
     case 'lost-drop': await lostDrop(); break;
     case 'warn-close': S.warnHidden = true; paintWarnBand(); break;

@@ -322,6 +322,42 @@ test('setLanguage: pp.lang yazılamasa da (özel pencere) yenileme sürer', asyn
   assert.deepEqual(f.log, ['confirmDiscard', 'PUT /api/settings {"language":"en"}', 'reloadWith:Language saved']);
 });
 
+test('Üst çubuk TR/EN kısayolu: açık dil yazar, etkin dile tıklamak bir şey yapmaz, vazgeçmede Ayarlar açılmaz', async () => {
+  const run = async (current, lang, confirm = true) => {
+    const log = [];
+    const g = uiGlobals({ browser: true });
+    g.I18n.setLanguage(current);
+    const ctx = load({ fns: ['setLanguage', 'quickLanguage'], consts: ['tx', ...LANG_CONSTS] }, {
+      ...g, navigator: NAV_TR, localStorage: fakeStorage({}, { log }),
+      confirmDiscard: async () => { log.push('confirmDiscard'); return confirm; },
+      api: async (method, url, body) => { log.push(method + ' ' + url + ' ' + JSON.stringify(body)); return {}; },
+      reloadWith: (msg) => log.push('reloadWith:' + msg),
+      openSettings: () => log.push('openSettings'),
+      fail: () => log.push('fail')
+    });
+    await ctx.quickLanguage(lang);
+    return log;
+  };
+  assert.deepEqual(await run('tr', 'en'), ['confirmDiscard', 'PUT /api/settings {"language":"en"}', 'pp.lang=en', 'reloadWith:Language saved']);
+  assert.deepEqual(await run('en', 'tr'), ['confirmDiscard', 'PUT /api/settings {"language":"tr"}', 'pp.lang=tr', 'reloadWith:Dil kaydedildi']);
+  assert.deepEqual(await run('tr', 'tr'), []);
+  assert.deepEqual(await run('en', 'en'), []);
+  assert.deepEqual(await run('tr', 'en', false), ['confirmDiscard']);
+  assert.match(html, /case 'lang': await quickLanguage\(el\.dataset\.lang\); break;/);
+  assert.doesNotMatch(html, /data-act="lang"[^>]*data-needs-setup/);
+});
+
+test('Üst çubuk TR/EN kısayolu: etkin dil düğmesi aria-pressed="true" taşır, diğeri "false"', () => {
+  const nodes = [fakeNode({ 'data-lang': 'tr', 'aria-pressed': 'false' }), fakeNode({ 'data-lang': 'en', 'aria-pressed': 'false' })];
+  const document = fakeDoc(nodes);
+  const ctx = load({ fns: ['applyLanguage'], consts: LANG_CONSTS }, { ...uiGlobals({ browser: true }), document, navigator: NAV_TR, localStorage: fakeStorage() });
+  ctx.applyLanguage('en');
+  assert.deepEqual(nodes.map((n) => n.map['aria-pressed']), ['false', 'true']);
+  ctx.applyLanguage('tr');
+  assert.deepEqual(nodes.map((n) => n.map['aria-pressed']), ['true', 'false']);
+  assert.match(html, /<div class="seg langsw" role="group" data-i18n-aria-label="ui\.settings\.language">\s*<button type="button" data-act="lang" data-lang="tr" aria-pressed="false" data-i18n-title="ui\.settings\.language">TR<\/button>\s*<button type="button" data-act="lang" data-lang="en" aria-pressed="false" data-i18n-title="ui\.settings\.language">EN<\/button>/);
+});
+
 test('setLanguage: ileti metnine bağlı karşılaştırma yok; seçici change olayına bağlı', () => {
   const src = fnSrc('setLanguage');
   assert.doesNotMatch(src, /textContent|innerText|innerHTML|\.title\b/);
@@ -430,9 +466,10 @@ const STATIC_TR = {
   'ui.static.addMarketplace': '+ Marketplace',
   'ui.static.addPlugin': '+ Plugin',
   'ui.static.addPrompt': '+ Prompt',
-  'ui.static.close': 'Kapat'
+  'ui.static.close': 'Kapat',
+  'ui.settings.language': 'Dil / Language'
 };
-const SAME_IN_EN = ['ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
+const SAME_IN_EN = ['ui.settings.language', 'ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
 
 /** Summary: <title> ve gövdedeki (ilk <script>'e kadar) data-i18n* öznitelikli etiketleri sahte öğelere çevirir. */
 function staticNodes() {
@@ -449,7 +486,7 @@ function staticNodes() {
 
 test('statik işaretleme: görünen metin kalmadı; <title> dahil her metin ve öznitelik data-i18n* ile', () => {
   const body = html.slice(html.indexOf('<body>'), html.indexOf('<script'));
-  assert.equal(body.replace(/<[^>]*>/g, '').trim(), '', 'işaretlemede çıplak metin yok');
+  assert.equal(body.replace(/<[^>]*>/g, '').replace(/\b(?:TR|EN)\b/g, '').trim(), '', 'işaretlemede çıplak metin yok');
   assert.doesNotMatch(body, /\s(?:title|placeholder|aria-label)="/, 'çıplak title/placeholder/aria-label yok');
   assert.match(html, /<title data-i18n="ui\.static\.title"><\/title>/);
   assert.match(html, /^<html lang="tr">/m);
@@ -457,7 +494,7 @@ test('statik işaretleme: görünen metin kalmadı; <title> dahil her metin ve �
   const text = nodes.filter((n) => 'data-i18n' in n.map);
   const attrs = nodes.flatMap((n) => ['data-i18n-title', 'data-i18n-placeholder', 'data-i18n-aria-label'].filter((k) => k in n.map));
   assert.equal(text.length, 25, '24 metin düğümü + <title>');
-  assert.equal(attrs.length, 9, '9 öznitelik metni');
+  assert.equal(attrs.length, 12, '12 öznitelik metni');
 });
 
 test('statik işaretleme: kullanılan her anahtar tr ve en sözlüğünde; tr harfi harfine eski metin; en farklı', () => {
@@ -504,7 +541,7 @@ test('statik işaretleme: applyDom tüm düğümleri iki dilde doldurur, boş ka
     for (const node of nodes) {
       for (const [key, got] of filled(node)) { assert.equal(got, dict[key], lang + ' ' + key); n++; }
     }
-    assert.equal(n, 34);
+    assert.equal(n, 37);
   }
 });
 
