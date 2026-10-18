@@ -2372,26 +2372,34 @@ function openImport(preset) {
 function renderGitBadge() {
   const b = $('#gitBadge'); const g = S.git;
   if (!g) { b.hidden = true; return; }
-  if (!g.isRepo) { b.hidden = false; b.className = 'badge warn'; b.textContent = '!'; b.title = 'Git deposu değil'; return; }
+  if (!g.isRepo) { b.hidden = false; b.className = 'badge warn'; b.textContent = '!'; b.title = tx('ui.tree.notGitRepo'); return; }
   const n = g.files.length;
-  b.className = 'badge'; b.hidden = !n; b.textContent = n; b.title = n + ' değişiklik commit bekliyor';
+  b.className = 'badge'; b.hidden = !n; b.textContent = n; b.title = tx('ui.git.badgePending', { count: n });
 }
 
-const GLABEL = { '?': 'yeni', M: 'değişti', D: 'silindi', A: 'eklendi', R: 'taşındı' };
+/** Summary: Git durum kodu -> görünen etiket sözlük anahtarı. */
+const GLABEL_KEYS = { '?': 'ui.git.changeNew', M: 'ui.git.changeModified', D: 'ui.git.changeDeleted', A: 'ui.git.changeAdded', R: 'ui.git.changeMoved' };
 
-const gitTitle = () => 'Git: ' + (S.info.activeMarketplace || 'marketplace seçilmedi');
-const gitTarget = () => `<p class="hint" style="margin:0">Commit bu depoya atılır: <b>${esc(S.info.activeMarketplace)}</b> <code>${esc(S.info.root || '')}</code></p>`;
+/** Summary: Git durum kodunun görünen etiketi; bilinmeyen kod ham döner. */
+function changeLabel(code) {
+  if (!Object.prototype.hasOwnProperty.call(GLABEL_KEYS, code)) return code;
+  const k = GLABEL_KEYS[code];
+  return tx(k);
+}
+
+const gitTitle = () => (S.info.activeMarketplace ? tx('ui.git.title', { name: S.info.activeMarketplace }) : tx('ui.git.titleNoMarketplace'));
+const gitTarget = () => `<p class="hint" style="margin:0">${th('ui.git.target', { name: S.info.activeMarketplace || '', root: S.info.root || '' })}</p>`;
 
 async function openGit(tab) {
   S.gitLogLimit = 300;
   if (!setupOk()) {
     openModal({
-      title: 'Git',
-      html: `<p>Git işlemleri kapalı: ${esc(firstError())}</p><div class="foot"><button class="btn primary" data-act="settings">Ayarları aç</button></div>`
+      title: tx('ui.static.git'),
+      html: `<p>${th('ui.git.disabled', { error: firstError() || '' })}</p><div class="foot"><button class="btn primary" data-act="settings">${esc(tx('ui.common.openSettings'))}</button></div>`
     });
     return;
   }
-  openModal({ title: gitTitle(), wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
+  openModal({ title: gitTitle(), wide: true, html: `<p class="hint">${esc(tx('ui.common.loading'))}</p>`, noFocus: true });
   await loadGit();
   if (tab === 'log') return paintGitLog();
   if (tab === 'remote') return paintGitRemote();
@@ -2399,30 +2407,31 @@ async function openGit(tab) {
 }
 
 function gitTabs(on) {
-  return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">Değişiklikler${S.git && S.git.isRepo ? ' (' + S.git.files.length + ')' : ''}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">Geçmiş</button><button class="tab ${on === 'remote' ? 'on' : ''}" data-act="git-tab" data-tab="remote">Uzak depo</button></div><div style="height:14px"></div>`;
+  const changes = S.git && S.git.isRepo ? tx('ui.git.tabChangesCount', { count: S.git.files.length }) : tx('ui.git.tabChanges');
+  return `<div class="tabs" role="tablist"><button class="tab ${on === 'changes' ? 'on' : ''}" data-act="git-tab" data-tab="changes">${esc(changes)}</button><button class="tab ${on === 'log' ? 'on' : ''}" data-act="git-tab" data-tab="log">${esc(tx('ui.main.tabHistory'))}</button><button class="tab ${on === 'remote' ? 'on' : ''}" data-act="git-tab" data-tab="remote">${esc(tx('ui.git.tabRemote'))}</button></div><div style="height:14px"></div>`;
 }
 
 // Git panelindeki dal etiketi (düz metin). Ayrık HEAD'de dal adı yoktur: 'main' yazılmaz, kısa commit gösterilir.
 function branchLabel(g) {
-  if (g.detached) return 'Ayrık HEAD (' + (g.head || '?') + ')';
+  if (g.detached) return tx('ui.git.detachedHead', { head: g.head || '?' });
   return g.branch || '?';
 }
 
 // Dal satırı (HTML). Ayrıkken ek bir satır, commit'lerin bir dala bağlı olmadığını söyler.
 function branchLine(g) {
   if (g.detached) {
-    return `<div class="hint"><b>${esc(branchLabel(g))}</b></div><div class="hint" id="detachedHint">Commit'ler bir dala bağlı değil. Bir dala geçmeden atılan commit'ler sonradan bulunamayabilir.</div>`;
+    return `<div class="hint"><b>${esc(branchLabel(g))}</b></div><div class="hint" id="detachedHint">${esc(tx('ui.git.detachedHint'))}</div>`;
   }
-  return `<div class="hint">Dal: <b>${esc(branchLabel(g))}</b>${g.hasCommits ? '' : ' (henüz commit yok)'}</div>`;
+  return `<div class="hint">${g.hasCommits ? th('ui.git.branch', { branch: branchLabel(g) }) : th('ui.git.branchNoCommits', { branch: branchLabel(g) })}</div>`;
 }
 
 function paintGit() {
   const g = S.git; const body = $('#mBody');
   if (!g.isRepo) {
     // Kurulum hazırken normalde ulaşılmaz; savunma amaçlı.
-    body.innerHTML = `<p>Seçili marketplace'te git başlatılmamış${g.error ? ': ' + esc(g.error) : '.'}</p>
-      <p class="hint">Git, marketplace klasöründe başlatılır: <code>${esc(S.info.root || '')}</code>. Eksik iskelet dosyaları eklenir, var olan dosyalara dokunulmaz.</p>
-      <div class="foot"><button class="btn primary" data-act="mk-git-init" data-name="${esc(S.info.activeMarketplace)}">Git'i başlat</button></div>`;
+    body.innerHTML = `<p>${g.error ? th('ui.git.notInitializedError', { error: g.error }) : esc(tx('ui.git.notInitialized'))}</p>
+      <p class="hint">${th('ui.git.initHint', { root: S.info.root || '' })}</p>
+      <div class="foot"><button class="btn primary" data-act="mk-git-init" data-name="${esc(S.info.activeMarketplace)}">${esc(tx('ui.common.initGit'))}</button></div>`;
     return;
   }
   if (!S.gitSel) S.gitSel = new Set();
@@ -2430,25 +2439,25 @@ function paintGit() {
   for (const p of Array.from(S.gitSel)) if (!paths.includes(p)) S.gitSel.delete(p);
   if (S.gitSel.size === 0 && !S.gitSelTouched) paths.forEach((p) => S.gitSel.add(p));
   const idOpen = !g.identity.name || !g.identity.email;
-  const suggestion = g.files.length === 1 ? (stem(g.files[0].path) + ': güncelle') : (g.files.length ? g.files.length + ' dosya güncellendi' : '');
+  const suggestion = g.files.length === 1 ? tx('ui.git.suggestOne', { name: stem(g.files[0].path) }) : (g.files.length ? tx('ui.git.suggestMany', { count: g.files.length }) : '');
   body.innerHTML = gitTabs('changes') + `<div class="gitgrid"><div class="gitleft">
     ${gitTarget()}
     ${branchLine(g)}
-    ${g.files.length ? `<div class="ftable">${g.files.map((f) => `<div class="gf" data-gpath="${esc(f.path)}"><input type="checkbox" data-gsel="${esc(f.path)}" ${S.gitSel.has(f.path) ? 'checked' : ''} aria-label="${esc(f.path)} commit'e dahil"><button class="link" data-act="git-diff" data-path="${esc(f.path)}" title="${esc(f.path)}">${esc(f.path)}</button><span class="pill ${f.code === 'D' ? 'bad' : f.code === '?' ? 'ok' : 'warn'}">${GLABEL[f.code] || f.code}</span></div>`).join('')}</div>
-      <button class="btn sm" data-act="git-selall" style="justify-self:start">Tümünü seç / bırak</button>`
-      : '<p>Commit bekleyen değişiklik yok. Her şey kayıtlı.</p>'}
-    <details id="gitId" ${idOpen ? 'open' : ''}><summary>Git kimliği ${idOpen ? '(commit için gerekli)' : ''}</summary>
-      <div class="stack" style="margin-top:8px"><input id="gName" placeholder="Ad Soyad" value="${esc(g.identity.name)}" aria-label="Git adı"><input id="gMail" placeholder="e-posta" value="${esc(g.identity.email)}" aria-label="Git e-postası"><button class="btn sm" data-act="git-identity" style="justify-self:start">Kimliği kaydet</button></div></details>
-    ${g.files.length ? `<label>Commit mesajı<textarea id="gMsg" rows="4" placeholder="Ne değişti ve neden? İlk satır özet olsun.">${esc(S.gitMsg || suggestion)}</textarea></label>
-      <button class="btn primary" data-act="git-commit">Seçilenleri commit et</button>` : ''}
-    </div><div><pre class="diff" id="gDiff">Bir dosya adına tıkla, farkı burada gör.</pre></div></div>`;
+    ${g.files.length ? `<div class="ftable">${g.files.map((f) => `<div class="gf" data-gpath="${esc(f.path)}"><input type="checkbox" data-gsel="${esc(f.path)}" ${S.gitSel.has(f.path) ? 'checked' : ''} aria-label="${esc(tx('ui.git.includeInCommit', { path: f.path }))}"><button class="link" data-act="git-diff" data-path="${esc(f.path)}" title="${esc(f.path)}">${esc(f.path)}</button><span class="pill ${f.code === 'D' ? 'bad' : f.code === '?' ? 'ok' : 'warn'}">${esc(changeLabel(f.code))}</span></div>`).join('')}</div>
+      <button class="btn sm" data-act="git-selall" style="justify-self:start">${esc(tx('ui.import.toggleAll'))}</button>`
+      : `<p>${esc(tx('ui.git.noChanges'))}</p>`}
+    <details id="gitId" ${idOpen ? 'open' : ''}><summary>${idOpen ? esc(tx('ui.git.identityRequired')) : esc(tx('ui.identity.title')) + ' '}</summary>
+      <div class="stack" style="margin-top:8px"><input id="gName" placeholder="${esc(tx('ui.identity.name'))}" value="${esc(g.identity.name)}" aria-label="${esc(tx('ui.git.identityNameLabel'))}"><input id="gMail" placeholder="${esc(tx('ui.git.identityEmailPlaceholder'))}" value="${esc(g.identity.email)}" aria-label="${esc(tx('ui.git.identityEmailLabel'))}"><button class="btn sm" data-act="git-identity" style="justify-self:start">${esc(tx('ui.git.saveIdentity'))}</button></div></details>
+    ${g.files.length ? `<label>${esc(tx('ui.git.commitMessage'))}<textarea id="gMsg" rows="4" placeholder="${esc(tx('ui.git.commitPlaceholder'))}">${esc(S.gitMsg || suggestion)}</textarea></label>
+      <button class="btn primary" data-act="git-commit">${esc(tx('ui.git.commitSelected'))}</button>` : ''}
+    </div><div><pre class="diff" id="gDiff">${esc(tx('ui.git.diffPlaceholder'))}</pre></div></div>`;
 }
 
 const GITLOG_MODES = ['file', 'commit', 'version'];
 
 function gitLogBar(mode) {
-  const b = (m, t) => `<button type="button" data-act="gitlog-mode" data-mode="${m}" aria-pressed="${mode === m}">${t}</button>`;
-  return `<div class="seg" role="group" aria-label="Geçmiş görünümü">${b('file', 'Dosyaya göre')}${b('commit', "Commit'e göre")}${b('version', 'Sürüme göre')}</div> <span class="hint">Etkin depo: <b>${esc(S.info.activeMarketplace)}</b></span>`;
+  const b = (m, label) => `<button type="button" data-act="gitlog-mode" data-mode="${m}" aria-pressed="${mode === m}">${esc(label)}</button>`;
+  return `<div class="seg" role="group" aria-label="${esc(tx('ui.hist.viewLabel'))}">${b('file', tx('ui.git.logByFile'))}${b('commit', tx('ui.git.logByCommit'))}${b('version', tx('ui.git.logByVersion'))}</div> <span class="hint">${th('ui.git.activeRepo', { name: S.info.activeMarketplace || '' })}</span>`;
 }
 
 async function paintGitLog() {
@@ -2457,28 +2466,28 @@ async function paintGitLog() {
   let mode = ls.get('pp.gitLogMode', 'file'); if (!GITLOG_MODES.includes(mode)) mode = 'file';
   const tok = S.glTok = (S.glTok || 0) + 1;
   const head = gitTabs('log') + gitLogBar(mode);
-  body.innerHTML = head + '<div id="glBody"><p class="hint">Yükleniyor…</p></div>';
+  body.innerHTML = head + `<div id="glBody"><p class="hint">${esc(tx('ui.common.loading'))}</p></div>`;
   const live = () => tok === S.glTok && $('#glBody');
   const fill = (html) => { if (live()) $('#glBody').innerHTML = html; };
   try {
     if (mode === 'commit') {
       const r = await get('/api/git/log');
       fill(r.commits.length
-        ? `<div class="hist"><ul class="commits" style="max-height:62vh">${r.commits.map((k) => `<li role="button" tabindex="0" data-act="git-show" data-hash="${k.hash}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="gDiff">Bir kayıt seç.</pre></div>`
-        : '<p>Henüz commit yok.</p>');
+        ? `<div class="hist"><ul class="commits" style="max-height:62vh">${r.commits.map((k) => `<li role="button" tabindex="0" data-act="git-show" data-hash="${k.hash}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="gDiff">${esc(tx('ui.hist.pickEntry'))}</pre></div>`
+        : `<p>${esc(tx('ui.git.noCommitsYet'))}</p>`);
     } else if (mode === 'file') {
       const r = await get('/api/history/changes?' + qs({ group: 'file', limit: S.gitLogLimit || 300 }));
-      if (!r.files.length) { fill('<p>Henüz commit yok.</p>'); return; }
-      const files = r.files.map((f) => `<details class="gfile"><summary>${esc(f.path)} <span class="hint">${f.count} commit · son: ${esc(fmtDate(f.last.date))}</span>${f.status === 'D' ? ' <span class="pill bad">Silindi</span>' : ''}${f.oldPaths.length ? ' <span class="pill">Yeniden adlandırıldı</span>' : ''}</summary>
-        <div class="gcs">${f.exists ? `<div><button class="btn sm" data-act="open-close" data-mp="${esc(r.mp)}" data-path="${esc(f.path)}">Dosyayı aç</button></div>` : ''}${f.commits.map((k) => `<button type="button" class="link" data-act="gitlog-file-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path)}">${esc(k.subject)} <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}${k.oldPath ? ', ' + esc(k.oldPath) + ' → ' + esc(k.path) : ''}</span></button>`).join('')}</div></details>`).join('');
-      const more = r.hasMore && (S.gitLogLimit || 300) < 3000 ? '<p><button class="btn sm" data-act="gitlog-more">Daha eski kayıtları yükle</button></p>' : (r.hasMore ? '<p class="hint">Daha eski kayıtlar için sınıra ulaşıldı (3000 commit).</p>' : '');
-      fill(`<div class="hist"><div><div class="gfilelist">${files}</div>${more}</div><pre class="diff" id="gDiff">Soldan bir dosyayı aç, sonra bir commit seç; o commit'in o dosyadaki farkı burada görünür.</pre></div>`);
+      if (!r.files.length) { fill(`<p>${esc(tx('ui.git.noCommitsYet'))}</p>`); return; }
+      const files = r.files.map((f) => `<details class="gfile"><summary>${esc(f.path)} <span class="hint">${esc(tx('ui.git.fileCommits', { count: f.count, date: fmtDate(f.last.date) }))}</span>${f.status === 'D' ? ` <span class="pill bad">${esc(tx('ui.git.fileDeleted'))}</span>` : ''}${f.oldPaths.length ? ` <span class="pill">${esc(tx('ui.git.fileRenamed'))}</span>` : ''}</summary>
+        <div class="gcs">${f.exists ? `<div><button class="btn sm" data-act="open-close" data-mp="${esc(r.mp)}" data-path="${esc(f.path)}">${esc(tx('ui.git.openFile'))}</button></div>` : ''}${f.commits.map((k) => `<button type="button" class="link" data-act="gitlog-file-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path)}">${esc(k.subject)} <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}${k.oldPath ? ', ' + esc(k.oldPath) + ' → ' + esc(k.path) : ''}</span></button>`).join('')}</div></details>`).join('');
+      const more = r.hasMore && (S.gitLogLimit || 300) < 3000 ? `<p><button class="btn sm" data-act="gitlog-more">${esc(tx('ui.git.loadOlder'))}</button></p>` : (r.hasMore ? `<p class="hint">${esc(tx('ui.git.olderLimit', { limit: 3000 }))}</p>` : '');
+      fill(`<div class="hist"><div><div class="gfilelist">${files}</div>${more}</div><pre class="diff" id="gDiff">${esc(tx('ui.git.fileDiffPlaceholder'))}</pre></div>`);
     } else {
       const r = await get('/api/history/changes?group=version');
-      if (!r.prompts.length && !r.unmatched.length) { fill("<p>Bu marketplace'te henüz hiç sürüm oluşturulmadı.</p>"); return; }
+      if (!r.prompts.length && !r.unmatched.length) { fill(`<p>${esc(tx('ui.git.noVersions'))}</p>`); return; }
       const ver = (p, v) => `<li><button type="button" class="link" data-act="gitlog-ver" data-path="${esc(p)}" data-tag="${esc(v.tag)}">v${esc(v.version)}</button> <span class="hint">${esc(fmtDate(v.date))}${v.subject ? ', ' + esc(v.subject) : ''}</span></li>`;
-      fill(`<div class="gfilelist">${r.prompts.map((p) => `<details class="gfile"><summary>${esc(p.ad)} <span class="hint">son sürüm: v${esc(p.versions[0].version)}</span></summary><ul>${p.versions.map((v) => ver(p.path, v)).join('')}</ul></details>`).join('')}</div>`
-        + (r.unmatched.length ? `<h3>Dosyası bulunamayan sürümler</h3><ul>${r.unmatched.map((u) => `<li><code>${esc(u.ad)}</code>: ${u.versions.map((v) => 'v' + esc(v.version)).join(', ')}</li>`).join('')}</ul>` : ''));
+      fill(`<div class="gfilelist">${r.prompts.map((p) => `<details class="gfile"><summary>${esc(p.ad)} <span class="hint">${esc(tx('ui.git.latestVersion', { version: p.versions[0].version }))}</span></summary><ul>${p.versions.map((v) => ver(p.path, v)).join('')}</ul></details>`).join('')}</div>`
+        + (r.unmatched.length ? `<h3>${esc(tx('ui.git.unmatchedVersions'))}</h3><ul>${r.unmatched.map((u) => `<li><code>${esc(u.ad)}</code>: ${u.versions.map((v) => 'v' + esc(v.version)).join(', ')}</li>`).join('')}</ul>` : ''));
     }
   } catch (e) { fill(`<p class="issue error">${esc(e.message)}</p>`); }
 }
@@ -2503,23 +2512,23 @@ async function gitDiffFor(p) {
   try {
     if (f && f.code === '?') {
       const r = await get('/api/file?' + qs({ path: p }));
-      box.innerHTML = diffHtml(('+++ ' + p + ' (yeni dosya)\n' + r.raw.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n').map((l) => '+' + l).join('\n')));
+      box.innerHTML = diffHtml(('+++ ' + tx('ui.git.newFile', { path: p }) + '\n' + r.raw.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n').map((l) => '+' + l).join('\n')));
       return;
     }
     const r = await get('/api/git/diff?' + qs({ path: p, working: 1 }));
-    box.innerHTML = r.diff ? diffHtml(r.diff) : 'Fark yok.';
+    box.innerHTML = r.diff ? diffHtml(r.diff) : esc(tx('ui.git.noDiff'));
   } catch (e) { box.textContent = e.message; }
 }
 
 async function gitCommit() {
   const msg = ($('#gMsg') || {}).value || '';
   const paths = Array.from(S.gitSel || []);
-  if (!paths.length) { toast('Commit için en az bir dosya seç', 'error'); return; }
-  if (!msg.trim()) { toast('Commit mesajı yaz', 'error'); return; }
+  if (!paths.length) { toast(tx('ui.git.pickFile'), 'error'); return; }
+  if (!msg.trim()) { toast(tx('ui.git.writeMessage'), 'error'); return; }
   try {
     const r = await api('POST', '/api/git/commit', { message: msg, paths });
     S.gitMsg = ''; S.gitSel = null; S.gitSelTouched = false;
-    toast('Commit oluşturuldu (' + r.commit + ')');
+    toast(tx('ui.git.committed', { hash: r.commit }));
     await loadGit(); paintGit(); loadRecent();
     if (S.cur && S.cur.tab === 'hist') loadHistory();
   } catch (e) {
@@ -2827,13 +2836,26 @@ async function pkAlignField(path) {
 }
 
 /* ------------------------------------------------------- uzak depo (Aşama 4) */
-const PROVIDER_LABEL = { github: 'GitHub', gitlab: 'GitLab', diger: 'Diğer' };
+/** Summary: Uzak depo sağlayıcısının görünen adı (github|gitlab|diger); bilinmeyen değer ham döner. */
+function providerLabel(provider) {
+  if (provider === 'github') return 'GitHub';
+  if (provider === 'gitlab') return 'GitLab';
+  if (provider === 'diger') return tx('ui.remote.providerOther');
+  return provider == null ? '' : String(provider);
+}
+
+/** Summary: Uzak depo durum satırı (HTML): dal, varsa izlenen dal, ileri/geri sayısı ve varsa son kontrol saati. */
+function remoteStatusLine(r, time) {
+  const p = { branch: r.branch || '?', upstream: r.upstream, ahead: r.ahead, behind: r.behind, time };
+  if (r.upstream) return time ? th('ui.remote.statusBranchUpstreamChecked', p) : th('ui.remote.statusBranchUpstream', p);
+  return time ? th('ui.remote.statusBranchChecked', p) : th('ui.remote.statusBranch', p);
+}
 
 async function paintGitRemote() {
   const body = $('#mBody');
   if (!S.git.isRepo) return paintGit();
   const tok = S.glTok = (S.glTok || 0) + 1;
-  body.innerHTML = gitTabs('remote') + '<div id="rmBody"><p class="hint">Yükleniyor…</p></div>';
+  body.innerHTML = gitTabs('remote') + `<div id="rmBody"><p class="hint">${esc(tx('ui.common.loading'))}</p></div>`;
   let r;
   try { r = await get('/api/git/remotes'); } catch (e) { if (tok === S.glTok && $('#rmBody')) $('#rmBody').innerHTML = `<p class="issue error">${esc(e.message)}</p>`; return; }
   if (tok !== S.glTok || !$('#rmBody')) return;
@@ -2841,23 +2863,23 @@ async function paintGitRemote() {
   const lc = r.lastCheck;
   const time = lc && lc.at ? I18n.time(lc.at) : null;
   const canPull = r.behind > 0 && r.ahead === 0;
-  const whyNo = !r.remotes.length ? 'Uzak depo tanımlı değil.' : r.behind === 0 ? 'Uzak depoda yeni commit yok.' : r.ahead > 0 ? 'Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş; bu araç birleştirme yapmaz.' : '';
+  const whyNo = !r.remotes.length ? tx('ui.remote.whyNoRemote') : r.behind === 0 ? tx('ui.remote.whyUpToDate') : r.ahead > 0 ? tx('ui.remote.whyDiverged') : '';
   const hasR = r.remotes.length > 0;
-  $('#rmBody').innerHTML = `<p class="hint" style="margin:0">Etkin depo: <b>${esc(activeName())}</b></p>
-    ${r.remotes.length ? `<div class="mklist">${r.remotes.map((x) => `<div class="mkrow"><div><b>${esc(x.name)}</b> <span class="pill">${PROVIDER_LABEL[x.provider]}</span><div class="hint mono">${esc(x.url)}</div></div><div></div><div class="mkbtns"><button class="btn sm" data-act="remote-edit" data-name="${esc(x.name)}" data-url="${esc(x.url)}">Düzenle</button></div></div>`).join('')}</div>` : '<p class="hint">Henüz uzak depo yok. Aşağıdan GitHub ya da GitLab linkini ekle.</p>'}
-    <form class="stack" id="rmAdd" novalidate style="margin:10px 0"><h3>Uzak depo ekle</h3>
-      <div class="inline"><label>Ad<input id="rmName" value="${r.remotes.length ? '' : 'origin'}" autocomplete="off" style="width:110px"></label><label class="grow">URL<input id="rmUrl" autocomplete="off" aria-describedby="rmUrlHint rmErr" placeholder="https://github.com/kullanıcı/depo"></label><button class="btn" data-act="remote-add">Ekle</button></div>
-      <div class="hint" id="rmUrlHint">GitHub: https://github.com/kullanıcı/depo ya da git@github.com:kullanıcı/depo.git · GitLab: https://gitlab.com/grup/proje ya da git@gitlab.com:grup/proje.git</div>
+  $('#rmBody').innerHTML = `<p class="hint" style="margin:0">${th('ui.git.activeRepo', { name: activeName() })}</p>
+    ${r.remotes.length ? `<div class="mklist">${r.remotes.map((x) => `<div class="mkrow"><div><b>${esc(x.name)}</b> <span class="pill">${esc(providerLabel(x.provider))}</span><div class="hint mono">${esc(x.url)}</div></div><div></div><div class="mkbtns"><button class="btn sm" data-act="remote-edit" data-name="${esc(x.name)}" data-url="${esc(x.url)}">${esc(tx('ui.main.tabEdit'))}</button></div></div>`).join('')}</div>` : `<p class="hint">${esc(tx('ui.remote.none'))}</p>`}
+    <form class="stack" id="rmAdd" novalidate style="margin:10px 0"><h3>${esc(tx('ui.remote.addTitle'))}</h3>
+      <div class="inline"><label>${esc(tx('ui.fields.name'))}<input id="rmName" value="${r.remotes.length ? '' : 'origin'}" autocomplete="off" style="width:110px"></label><label class="grow">${esc(tx('ui.remote.urlLabel'))}<input id="rmUrl" autocomplete="off" aria-describedby="rmUrlHint rmErr" placeholder="${esc(tx('ui.newMp.urlPlaceholder'))}"></label><button class="btn" data-act="remote-add">${esc(tx('ui.remote.add'))}</button></div>
+      <div class="hint" id="rmUrlHint">${esc(tx('ui.remote.urlHint'))}</div>
       <div class="issue error" id="rmErr" role="alert" hidden></div></form>
-    ${hasR ? `<h3>Durum</h3><p>Dal <b>${esc(r.branch || '?')}</b>${r.upstream ? ' → ' + esc(r.upstream) : ''} · ${r.ahead} önde · ${r.behind} geride${time ? ' (son kontrol: ' + esc(time) + ')' : ''}</p>
-      ${lc && lc.ok === false ? `<div class="issue warn" role="status">Son kontrol başarısız: ${esc(lc.error || '')}</div>` : ''}
-      ${r.pendingTags.length ? `<p class="issue warn">Push bekleyen etiketler: ${r.pendingTags.map(esc).join(', ')}</p>` : ''}
-      <div class="inline"><button class="btn primary" data-act="remote-push">Push et</button><button class="btn" data-act="remote-fetch">Kontrol et</button>
-        <button class="btn" data-act="remote-pull" ${canPull ? '' : 'disabled'} aria-describedby="rmWhy">Güncelle (yalnızca ileri sarma)</button></div>
-      <div class="hint" id="rmWhy">${esc(canPull ? 'Uzak depodaki ' + r.behind + ' yeni commit ileri sarma ile alınır; birleştirme commit\'i üretilmez.' : whyNo)}</div>
+    ${hasR ? `<h3>${esc(tx('ui.fields.status'))}</h3><p>${remoteStatusLine(r, time)}</p>
+      ${lc && lc.ok === false ? `<div class="issue warn" role="status">${th('ui.remote.lastCheckFailed', { error: lc.error || '' })}</div>` : ''}
+      ${r.pendingTags.length ? `<p class="issue warn">${th('ui.remote.pendingTags', { tags: r.pendingTags.join(', ') })}</p>` : ''}
+      <div class="inline"><button class="btn primary" data-act="remote-push">${esc(tx('ui.remote.push'))}</button><button class="btn" data-act="remote-fetch">${esc(tx('ui.remote.check'))}</button>
+        <button class="btn" data-act="remote-pull" ${canPull ? '' : 'disabled'} aria-describedby="rmWhy">${esc(tx('ui.remote.update'))}</button></div>
+      <div class="hint" id="rmWhy">${esc(canPull ? tx('ui.remote.whyCanPull', { count: r.behind }) : whyNo)}</div>
       <div id="rmMsg" aria-live="polite"></div>
-      ${lc && lc.newCommits && lc.newCommits.length ? `<h3>Yeni commit'ler</h3><ul>${lc.newCommits.map((c) => `<li>${esc(c.subject)} <span class="hint">${esc(c.short)}, ${esc(fmtDate(c.date))}</span></li>`).join('')}</ul>` : ''}
-      ${lc && lc.newTags && lc.newTags.length ? `<h3>Yeni etiketler</h3><ul>${lc.newTags.map((t) => `<li><code>${esc(t)}</code></li>`).join('')}</ul>` : ''}` : ''}`;
+      ${lc && lc.newCommits && lc.newCommits.length ? `<h3>${esc(tx('ui.remote.newCommits'))}</h3><ul>${lc.newCommits.map((c) => `<li>${esc(c.subject)} <span class="hint">${esc(c.short)}, ${esc(fmtDate(c.date))}</span></li>`).join('')}</ul>` : ''}
+      ${lc && lc.newTags && lc.newTags.length ? `<h3>${esc(tx('ui.remote.newTags'))}</h3><ul>${lc.newTags.map((t) => `<li><code>${esc(t)}</code></li>`).join('')}</ul>` : ''}` : ''}`;
 }
 
 function rmMsg(html, kind) {
@@ -2871,15 +2893,15 @@ async function remoteAdd() {
   if (ne) { showFieldErr('rmErr', ne); $('#rmName').focus(); return; }
   const n = Rules.normalizeRepoUrl(raw);
   if (n.error) { showFieldErr('rmErr', n.error); $('#rmUrl').focus(); return; }
-  try { await api('POST', '/api/git/remotes', { name, url: n.url }); toast('Uzak depo eklendi'); await paintGitRemote(); } catch (e) { showFieldErr('rmErr', e.message); }
+  try { await api('POST', '/api/git/remotes', { name, url: n.url }); toast(tx('ui.remote.added')); await paintGitRemote(); } catch (e) { showFieldErr('rmErr', e.message); }
 }
 
 async function remoteEdit(name, url) {
-  const v = await askText({ title: 'Uzak depo adresini düzenle: ' + name, label: 'URL', value: url, ok: 'Kaydet' });
+  const v = await askText({ title: tx('ui.remote.editTitle', { name }), label: tx('ui.remote.urlLabel'), value: url, ok: tx('ui.file.save') });
   if (!v) { await paintGitRemote(); return; }
   const n = Rules.normalizeRepoUrl(v);
   if (n.error) { toast(n.error, 'error'); await openGit('remote'); return; }
-  try { await api('PUT', '/api/git/remotes', { name, url: n.url }); toast('Adres güncellendi'); } catch (e) { fail(e); }
+  try { await api('PUT', '/api/git/remotes', { name, url: n.url }); toast(tx('ui.remote.urlUpdated')); } catch (e) { fail(e); }
   await openGit('remote');
 }
 
@@ -2890,7 +2912,7 @@ function netErrHtml(r) {
 async function remotePush() {
   try {
     const r = await api('POST', '/api/git/push', {});
-    if (r.ok) { toast('Push edildi'); await paintGitRemote(); loadGit(); } else rmMsg(netErrHtml(r));
+    if (r.ok) { toast(tx('ui.remote.pushed')); await paintGitRemote(); loadGit(); } else rmMsg(netErrHtml(r));
   } catch (e) { rmMsg(esc(e.message), 'error'); }
 }
 
@@ -2899,7 +2921,7 @@ async function remoteFetch(manual) {
     const r = await api('POST', '/api/git/fetch', {});
     S.remoteCheck = r; paintRemoteBadge(); paintRemoteBand();
     if (!r.ok) { if ($('#rmMsg')) rmMsg(netErrHtml(r)); else toast(r.error, 'error'); return r; }
-    if (manual) toast(r.behind ? r.behind + ' yeni commit var' : 'Uzak depo güncel');
+    if (manual) toast(r.behind ? tx('ui.remote.newCommitsFound', { count: r.behind }) : tx('ui.remote.upToDate'));
     if ($('#rmBody')) await paintGitRemote();
     return r;
   } catch (e) { fail(e); }
@@ -2909,7 +2931,7 @@ async function remoteFetch(manual) {
 async function remotePull() {
   try {
     const r = await api('POST', '/api/git/pull', {});
-    toast('Güncellendi' + (r.adoptedTags.length ? ': ' + r.adoptedTags.length + ' yeni etiket' : ''));
+    toast(r.adoptedTags.length ? tx('ui.remote.updatedWithTags', { count: r.adoptedTags.length }) : tx('ui.remote.updated'));
     S.remoteCheck = { ok: true, behind: 0, ahead: 0, newTags: [], newCommits: [], checkedAt: new Date().toISOString() };
     paintRemoteBadge(); paintRemoteBand();
     await afterWrite(); if (S.cur && S.cur.tab === 'hist') loadHistory();
@@ -2917,8 +2939,8 @@ async function remotePull() {
   } catch (e) {
     const c = e.data && e.data.code;
     let html = esc(e.message);
-    if (c === 'kirliCalismaAgaci') html = 'Önce değişiklikleri commit et. <button class="btn sm" data-act="git-tab" data-tab="changes">Değişiklikler sekmesini aç</button>';
-    else if (c === 'ayristi') html = esc('Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş. Bu araç birleştirme yapmaz.') + cmdLine('git -C ' + (S.info.root || '') + ' pull --rebase');
+    if (c === 'kirliCalismaAgaci') html = esc(tx('ui.remote.commitFirst')) + ` <button class="btn sm" data-act="git-tab" data-tab="changes">${esc(tx('ui.remote.openChangesTab'))}</button>`;
+    else if (c === 'ayristi') html = esc(tx('ui.remote.divergedMsg')) + cmdLine('git -C ' + (S.info.root || '') + ' pull --rebase');
     if ($('#rmMsg')) rmMsg(html);
     else { toast(e.message, 'error', 8000); if (c === 'kirliCalismaAgaci' || c === 'ayristi') openGit('remote'); }
   }
@@ -2941,9 +2963,9 @@ function paintRemoteBadge() {
   const b = $('#gitDown'); if (!b) return;
   const r = S.remoteCheck;
   if (!r || !setupOk()) { b.hidden = true; return; }
-  if (r.ok === false) { b.hidden = false; b.className = 'badge warn'; b.textContent = '?'; b.title = 'Uzak depo kontrol edilemedi, elle kontrol et'; b.setAttribute('aria-label', b.title); return; }
+  if (r.ok === false) { b.hidden = false; b.className = 'badge warn'; b.textContent = '?'; b.title = tx('ui.remote.badgeFailed'); b.setAttribute('aria-label', b.title); return; }
   const n = r.behind || 0;
-  b.hidden = !n; b.className = 'badge'; b.textContent = '↓' + n; b.title = 'Uzak depoda ' + n + ' yeni commit var'; b.setAttribute('aria-label', b.title);
+  b.hidden = !n; b.className = 'badge'; b.textContent = '↓' + n; b.title = tx('ui.remote.badgeBehind', { count: n }); b.setAttribute('aria-label', b.title);
 }
 
 function paintRemoteBand() {
@@ -2956,9 +2978,9 @@ function paintRemoteBand() {
   const band = document.createElement('div');
   band.id = 'remoteBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
   const parts = [];
-  if (r.behind) parts.push(r.behind + ' commit');
+  if (r.behind) parts.push(tx('ui.remote.bandCommits', { count: r.behind }));
   if (r.newTags && r.newTags.length) parts.push(r.newTags.slice(0, 3).join(', ') + (r.newTags.length > 3 ? ' …' : ''));
-  band.innerHTML = `<div style="flex:1">Uzak depoda yeni sürüm var: ${esc(parts.join(', '))}. <button class="link" data-act="remote-details">Ayrıntılar</button> <button class="btn sm" data-act="remote-pull" ${r.behind > 0 ? '' : 'disabled'}>Güncelle</button></div><button class="btn sm ghost" data-act="remote-band-close" aria-label="Bildirimi kapat">Kapat</button>`;
+  band.innerHTML = `<div style="flex:1">${th('ui.remote.bandNew', { list: parts.join(', ') })} <button class="link" data-act="remote-details">${esc(tx('ui.remote.bandDetails'))}</button> <button class="btn sm" data-act="remote-pull" ${r.behind > 0 ? '' : 'disabled'}>${esc(tx('ui.remote.bandUpdate'))}</button></div><button class="btn sm ghost" data-act="remote-band-close" aria-label="${esc(tx('ui.remote.bandCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
   $('#main').prepend(band);
 }
 
@@ -2967,7 +2989,7 @@ async function mkCreatePpConfig(name) {
   try {
     await api('POST', '/api/marketplaces/pp-config', { name });
     S.info = await get('/api/info');
-    toast('pp.config.json oluşturuldu. Git panelinden commit atabilirsin.', 'ok', 5000);
+    toast(tx('ui.clone.ppConfigCreated'), 'ok', 5000);
     await refreshAll(); applySetupUi();
     if (!$('#overlay').hidden && $('#mkForm')) await openMarket();
     paintWarnBand();
@@ -2976,10 +2998,10 @@ async function mkCreatePpConfig(name) {
 
 function cloneResultModal(r) {
   openModal({
-    title: 'Klonlama tamamlandı',
-    html: `<p><b>${esc(r.marketplace ? r.marketplace.name : '')}</b> eklendi.</p>
-      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">Ayar dosyası oluştur</button>` : ''}</div>`).join('')}
-      <div class="foot"><button class="btn primary" data-act="close" autofocus>Tamam</button></div>`
+    title: tx('ui.clone.doneTitle'),
+    html: `<p>${th('ui.clone.added', { name: r.marketplace ? r.marketplace.name : '' })}</p>
+      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">${esc(tx('ui.common.createPpConfig'))}</button>` : ''}</div>`).join('')}
+      <div class="foot"><button class="btn primary" data-act="close" autofocus>${esc(tx('ui.common.ok'))}</button></div>`
   });
 }
 

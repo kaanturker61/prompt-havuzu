@@ -707,3 +707,172 @@ test('renamePlugin ve deleteItem: çoğul ve parametreli iletiler iki dilde, dil
   assert.deepEqual(await rename('tr', 1), trOne, 'tr yeniden aynı');
   assert.deepEqual(await remove('tr'), trDelete, 'tr yeniden aynı');
 });
+
+/** Summary: Uzak depo sekmesini (paintGitRemote) verilen /api/git/remotes yanıtıyla, verilen arayüz dilinde çizer; #rmBody çıktısını döner. */
+async function remoteTabOut(lang, payload) {
+  const g = uiGlobals({ browser: true });
+  g.I18n.setLanguage(lang);
+  const dom = stubDom();
+  const ctx = load({ fns: ['paintGitRemote', 'providerLabel', 'remoteStatusLine'], consts: ['esc', 'fmtDate', 'activeName'] }, {
+    ...g, S: { git: { isRepo: true, files: [] }, info: { activeMarketplace: XSS_INPUT }, glTok: 0 }, $: dom.$, $$: dom.$$,
+    get: async () => payload, gitTabs: () => '', paintGit() {}
+  });
+  await ctx.paintGitRemote();
+  return dom.els['#rmBody'].innerHTML;
+}
+
+test('Uzak depo sekmesi: açıklama (whyNo) seçimi, durum satırı, düğme etiketleri ve çoğul iki dilde; kullanıcı girdileri kaçışlı', async () => {
+  const origin = { name: 'origin', url: XSS_INPUT, provider: 'diger' };
+  const base = { remotes: [origin], branch: XSS_INPUT, upstream: 'origin/main', ahead: 0, behind: 0, pendingTags: [XSS_INPUT], lastCheck: { at: '2026-03-05T14:05:00.000Z', ok: false, error: XSS_INPUT } };
+  const why = (out) => /id="rmWhy">([^<]*)</.exec(out)[1];
+  const cases = [
+    ['güncel', base, 'Uzak depoda yeni commit yok.', 'There are no new commits on the remote.'],
+    ['ayrışmış', { ...base, ahead: 2, behind: 1 }, 'Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş; bu araç birleştirme yapmaz.', 'There are local commits that have not been pushed and the remote has also moved ahead; this tool does not merge.'],
+    ['1 commit geride', { ...base, behind: 1 }, 'Uzak depodaki 1 yeni commit ileri sarma ile alınır; birleştirme commit&#39;i üretilmez.', '1 new commit on the remote is brought in by fast-forward; no merge commit is created.'],
+    ['3 commit geride', { ...base, behind: 3 }, 'Uzak depodaki 3 yeni commit ileri sarma ile alınır; birleştirme commit&#39;i üretilmez.', '3 new commits on the remote are brought in by fast-forward; no merge commit is created.']
+  ];
+  for (const [ad, payload, tr, en] of cases) {
+    assert.equal(why(await remoteTabOut('tr', payload)), tr, 'tr ' + ad);
+    assert.equal(why(await remoteTabOut('en', payload)), en, 'en ' + ad);
+  }
+  const trOut = await remoteTabOut('tr', { ...base, behind: 3 });
+  const enOut = await remoteTabOut('en', { ...base, behind: 3 });
+  const emptyTr = await remoteTabOut('tr', { ...base, remotes: [] });
+  const emptyEn = await remoteTabOut('en', { ...base, remotes: [] });
+  assert.ok(emptyTr.includes('<p class="hint">Henüz uzak depo yok. Aşağıdan GitHub ya da GitLab linkini ekle.</p>') && !emptyTr.includes('id="rmWhy"'));
+  assert.ok(emptyEn.includes('<p class="hint">There is no remote yet. Add a GitHub or GitLab link below.</p>') && !emptyEn.includes('id="rmWhy"'));
+  assert.ok(trOut.includes('<button class="btn primary" data-act="remote-push">Push et</button><button class="btn" data-act="remote-fetch">Kontrol et</button>'));
+  assert.ok(enOut.includes('<button class="btn primary" data-act="remote-push">Push</button><button class="btn" data-act="remote-fetch">Check</button>'));
+  assert.ok(trOut.includes('aria-describedby="rmWhy">Güncelle (yalnızca ileri sarma)</button>') && !/data-act="remote-pull" disabled/.test(trOut));
+  assert.ok(enOut.includes('aria-describedby="rmWhy">Update (fast-forward only)</button>') && !/data-act="remote-pull" disabled/.test(enOut));
+  assert.match(await remoteTabOut('en', base), /data-act="remote-pull" disabled/);
+  assert.match(trOut, /<p>Dal <b>&lt;img[^<]*<\/b> → origin\/main · 0 önde · 3 geride \(son kontrol: [^)]+\)<\/p>/);
+  assert.match(enOut, /<p>Branch <b>&lt;img[^<]*<\/b> → origin\/main · 0 ahead · 3 behind \(last check: [^)]+\)<\/p>/);
+  assert.ok(trOut.includes('<div class="issue warn" role="status">Son kontrol başarısız: ' + XSS_ESCAPED + '</div>'));
+  assert.ok(enOut.includes('<div class="issue warn" role="status">Last check failed: ' + XSS_ESCAPED + '</div>'));
+  assert.ok(trOut.includes('Push bekleyen etiketler: ' + XSS_ESCAPED) && enOut.includes('Tags waiting to be pushed: ' + XSS_ESCAPED));
+  assert.ok(trOut.includes('<span class="pill">Diğer</span>') && enOut.includes('<span class="pill">Other</span>'));
+  assert.ok(trOut.includes('Etkin depo: <b>' + XSS_ESCAPED + '</b>') && enOut.includes('Active repository: <b>' + XSS_ESCAPED + '</b>'));
+  for (const rendered of [trOut, enOut]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+  const noUpstream = { ...base, upstream: null, lastCheck: null };
+  assert.match(await remoteTabOut('tr', noUpstream), /<p>Dal <b>[^<]*<\/b> · 0 önde · 0 geride<\/p>/);
+  assert.match(await remoteTabOut('en', noUpstream), /<p>Branch <b>[^<]*<\/b> · 0 ahead · 0 behind<\/p>/);
+  assert.equal(await remoteTabOut('tr', { ...base, behind: 3 }), trOut, 'tr yeniden aynı: bayatlamaz');
+});
+
+/** Summary: Git değişiklikler sekmesini (paintGit) verilen durumla, verilen arayüz dilinde çizer; #mBody çıktısını döner. */
+function gitPanelOut(lang, git) {
+  const g = uiGlobals({ browser: true });
+  g.I18n.setLanguage(lang);
+  const dom = stubDom();
+  const ctx = load({ fns: ['paintGit', 'gitTabs', 'branchLabel', 'branchLine', 'changeLabel'], consts: ['esc', 'base', 'stem', 'GLABEL_KEYS', 'gitTarget'] }, {
+    ...g, S: { git, info: { activeMarketplace: 'mp', root: '/r' }, gitSel: null, gitSelTouched: false, gitMsg: '' }, $: dom.$, $$: dom.$$
+  });
+  ctx.paintGit();
+  return dom.els['#mBody'].innerHTML;
+}
+
+test('Git paneli: değişiklik etiketleri, commit önerisi (tekil/çoğul) ve kimlik özeti iki dilde; bilinmeyen kod ham, dosya yolu kaçışlı', () => {
+  const id = { name: 'A', email: 'a@b.c' };
+  const files = [{ path: XSS_INPUT, code: 'M' }, { path: 'b.md', code: '?' }, { path: 'c.md', code: 'D' }, { path: 'd.md', code: 'A' }, { path: 'e.md', code: 'R' }, { path: 'f.md', code: 'Z' }];
+  const many = { isRepo: true, branch: 'main', hasCommits: true, identity: id, files };
+  const trOut = gitPanelOut('tr', many);
+  const enOut = gitPanelOut('en', many);
+  const pills = (out) => [...out.matchAll(/<span class="pill [^"]*">([^<]*)<\/span>/g)].map((m) => m[1]);
+  assert.deepEqual(pills(trOut), ['değişti', 'yeni', 'silindi', 'eklendi', 'taşındı', 'Z']);
+  assert.deepEqual(pills(enOut), ['modified', 'new', 'deleted', 'added', 'moved', 'Z']);
+  assert.ok(trOut.includes('aria-label="' + XSS_ESCAPED + ' commit&#39;e dahil"'));
+  assert.ok(enOut.includes('aria-label="' + XSS_ESCAPED + ' included in the commit"'));
+  assert.ok(trOut.includes('>6 dosya güncellendi</textarea>') && enOut.includes('>6 files updated</textarea>'));
+  assert.ok(trOut.includes('Değişiklikler (6)</button>') && enOut.includes('Changes (6)</button>'));
+  assert.ok(trOut.includes('<summary>Git kimliği </summary>') && enOut.includes('<summary>Git identity </summary>'));
+  for (const rendered of [trOut, enOut]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+  const one = { ...many, identity: { name: '', email: '' }, files: [{ path: 'alt/ornek.md', code: 'M' }] };
+  assert.ok(gitPanelOut('tr', one).includes('>ornek: güncelle</textarea>') && gitPanelOut('en', one).includes('>ornek: update</textarea>'));
+  assert.ok(gitPanelOut('tr', one).includes('<summary>Git kimliği (commit için gerekli)</summary>'));
+  assert.ok(gitPanelOut('en', one).includes('<summary>Git identity (required for committing)</summary>'));
+  const none = { ...many, files: [] };
+  assert.ok(gitPanelOut('tr', none).includes('<p>Commit bekleyen değişiklik yok. Her şey kayıtlı.</p>'));
+  assert.ok(gitPanelOut('en', none).includes('<p>No changes are waiting to be committed. Everything is saved.</p>'));
+  assert.ok(!gitPanelOut('en', none).includes('id="gMsg"'));
+  assert.equal(gitPanelOut('tr', many), trOut, 'tr yeniden aynı: etiket tablosu bayatlamaz');
+});
+
+/** Summary: Uzak depo eylemlerini (pull/fetch) sahte api ile çalıştırır; toast, #rmMsg ve openGit çağrılarını kaydeder. */
+function remoteActionCtx(lang, { withMsg = true } = {}) {
+  const g = uiGlobals({ browser: true });
+  g.I18n.setLanguage(lang);
+  const env = { toasts: [], opened: [], msg: { innerHTML: '' }, response: null, failure: null };
+  env.ctx = load({ fns: ['remotePull', 'remoteFetch', 'rmMsg', 'netErrHtml'], consts: ['esc'] }, {
+    ...g, S: { info: { root: '/r' }, cur: null, remoteCheck: null },
+    $: (selector) => (selector === '#rmMsg' && withMsg ? env.msg : null),
+    api: async () => { if (env.failure) throw env.failure; return env.response; },
+    toast: (message, kind, ms) => env.toasts.push([message, kind || null, ms || null]), fail(e) { throw e; },
+    openGit: (tab) => env.opened.push(tab), paintRemoteBadge() {}, paintRemoteBand() {}, paintGitRemote: async () => {}, afterWrite: async () => {}, loadHistory() {},
+    cmdLine: (text) => '<cmd>' + text + '</cmd>'
+  });
+  return env;
+}
+
+test('Uzak depo eylemleri: hata koduna göre yardım metni (sunucu iletisi yok sayılır), çoğul toast; iki dilde', async () => {
+  const pulled = async (lang, tags) => { const env = remoteActionCtx(lang); env.response = { adoptedTags: tags }; await env.ctx.remotePull(); return env.toasts[0][0]; };
+  assert.deepEqual([await pulled('tr', []), await pulled('tr', ['a']), await pulled('tr', ['a', 'b', 'c'])], ['Güncellendi', 'Güncellendi: 1 yeni etiket', 'Güncellendi: 3 yeni etiket']);
+  assert.deepEqual([await pulled('en', []), await pulled('en', ['a']), await pulled('en', ['a', 'b', 'c'])], ['Updated', 'Updated: 1 new tag', 'Updated: 3 new tags']);
+  const failed = async (lang, code, message, withMsg = true) => {
+    const env = remoteActionCtx(lang, { withMsg });
+    env.failure = Object.assign(new Error(message), { data: { code } });
+    await env.ctx.remotePull();
+    return env;
+  };
+  const dirtyTr = (await failed('tr', 'kirliCalismaAgaci', 'Sunucu metni')).msg.innerHTML;
+  const dirtyEn = (await failed('en', 'kirliCalismaAgaci', 'Sunucu metni')).msg.innerHTML;
+  assert.equal(dirtyTr, '<div class="issue warn" role="alert">Önce değişiklikleri commit et. <button class="btn sm" data-act="git-tab" data-tab="changes">Değişiklikler sekmesini aç</button></div>');
+  assert.equal(dirtyEn, '<div class="issue warn" role="alert">Commit your changes first. <button class="btn sm" data-act="git-tab" data-tab="changes">Open the Changes tab</button></div>');
+  const divTr = (await failed('tr', 'ayristi', 'Sunucu metni')).msg.innerHTML;
+  const divEn = (await failed('en', 'ayristi', 'Sunucu metni')).msg.innerHTML;
+  assert.ok(divTr.includes('Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş. Bu araç birleştirme yapmaz.<cmd>git -C /r pull --rebase</cmd>'));
+  assert.ok(divEn.includes('There are local commits that have not been pushed and the remote has also moved ahead. This tool does not merge.<cmd>git -C /r pull --rebase</cmd>'));
+  assert.ok(!divTr.includes('Sunucu metni') && !divEn.includes('Sunucu metni'), 'kodlu hatada sunucu iletisi yerine arayüz metni');
+  const other = await failed('en', 'baska', XSS_INPUT);
+  assert.equal(other.msg.innerHTML, '<div class="issue warn" role="alert">' + XSS_ESCAPED + '</div>', 'bilinmeyen kod: sunucu iletisi ham, kaçışlı');
+  const noPanel = await failed('en', 'ayristi', 'Sunucu metni', false);
+  assert.deepEqual(noPanel.toasts, [['Sunucu metni', 'error', 8000]]);
+  assert.deepEqual(noPanel.opened, ['remote']);
+  const fetched = async (lang, behind) => { const env = remoteActionCtx(lang, { withMsg: false }); env.response = { ok: true, behind }; await env.ctx.remoteFetch(true); return env.toasts[0][0]; };
+  assert.deepEqual([await fetched('tr', 0), await fetched('tr', 2)], ['Uzak depo güncel', '2 yeni commit var']);
+  assert.deepEqual([await fetched('en', 0), await fetched('en', 1), await fetched('en', 2)], ['The remote is up to date', '1 new commit is available', '2 new commits are available']);
+});
+
+test('Uzak depo rozeti ve şeridi: çoğul başlık/metin iki dilde, etiket adı kaçışlı, 3 etiketten sonra ellipsis; dil değişince bayatlamaz', () => {
+  const run = (lang, check) => {
+    const g = uiGlobals({ browser: true });
+    g.I18n.setLanguage(lang);
+    const els = {};
+    const main = { placed: null, prepend(node) { main.placed = node; } };
+    const ctx = load({ fns: ['paintRemoteBadge', 'paintRemoteBand'], consts: ['esc'] }, {
+      ...g, S: { remoteCheck: check }, setupOk: () => true, ls: { get: (key, fallback) => fallback }, lsKey: (key) => key,
+      $: (selector) => (selector === '#remoteBand' ? null : selector === '#main' ? main : (els[selector] = els[selector] || { setAttribute() {} })),
+      document: { createElement: () => ({ setAttribute() {} }) }
+    });
+    ctx.paintRemoteBadge();
+    ctx.paintRemoteBand();
+    return { title: els['#gitDown'] && els['#gitDown'].title, band: main.placed ? main.placed.innerHTML : null };
+  };
+  const behind3 = { ok: true, behind: 3, newTags: [XSS_INPUT, 'b', 'c', 'd'], checkedAt: 'x1' };
+  const trBand = run('tr', behind3).band;
+  const enBand = run('en', behind3).band;
+  assert.ok(trBand.includes('Uzak depoda yeni sürüm var: 3 commit, ' + XSS_ESCAPED + ', b, c ….'));
+  assert.ok(enBand.includes('There is a new version on the remote: 3 commits, ' + XSS_ESCAPED + ', b, c ….'));
+  assert.ok(trBand.includes('>Ayrıntılar</button>') && trBand.includes('>Güncelle</button>') && trBand.includes('aria-label="Bildirimi kapat">Kapat</button>'));
+  assert.ok(enBand.includes('>Details</button>') && enBand.includes('>Update</button>') && enBand.includes('aria-label="Dismiss the notification">Close</button>'));
+  assert.ok(!trBand.includes('<img') && !enBand.includes('<img'));
+  assert.ok(run('en', { ok: true, behind: 1, newTags: [], checkedAt: 'x2' }).band.includes('remote: 1 commit.'));
+  const onlyTag = run('en', { ok: true, behind: 0, newTags: ['t'], checkedAt: 'x3' }).band;
+  assert.ok(onlyTag.includes('remote: t.') && onlyTag.includes('data-act="remote-pull" disabled'));
+  const titles = (lang) => [1, 3].map((n) => run(lang, { ok: true, behind: n, newTags: [] }).title);
+  assert.deepEqual(titles('tr'), ['Uzak depoda 1 yeni commit var', 'Uzak depoda 3 yeni commit var']);
+  assert.deepEqual(titles('en'), ['There is 1 new commit on the remote', 'There are 3 new commits on the remote']);
+  assert.equal(run('tr', { ok: false }).title, 'Uzak depo kontrol edilemedi, elle kontrol et');
+  assert.equal(run('en', { ok: false }).title, 'Could not check the remote; check it manually');
+  assert.equal(run('tr', behind3).band, trBand, 'tr yeniden aynı');
+});
