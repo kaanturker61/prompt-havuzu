@@ -44,10 +44,8 @@ const EXPECTED_KEYS = [
   'remote.err.kirli', 'remote.err.commitYok', 'remote.err.uzakDalYok', 'remote.err.ayristi', 'remote.err.guncel',
   'remote.err.rollbackFailed', 'remote.err.failed'
 ].sort();
-/** Summary: Bilinçli olarak çevrilmeyen Türkçe dize değişmezleri (yayın commit konusu ve tag notu satırları; Aşama 6'da ele alınır). */
-const ALLOWED_TURKISH_LITERALS = [
-  '${name}: ${v} sürümü yayınlandı', ' (değişti)', ' (kaldırıldı)', 'Değişiklik yok, mevcut çıktı etiketlendi.', 'Marketplace güncellendi'
-];
+/** Summary: Bilinçli olarak çevrilmeyen Türkçe dize değişmezleri (Aşama 6 sonrası kalmadı). */
+const ALLOWED_TURKISH_LITERALS = [];
 /** Summary: Eski sürümlerin diske yazdığı, error metni içeren başarısız lastCheck kaydı. */
 const OLD_FAILED_CHECK = {
   at: '2026-01-01T10:00:00.000Z', ok: false, code: 'ag', error: 'Eski diskten gelen Türkçe ileti', behind: 0, newTags: [], newCommits: []
