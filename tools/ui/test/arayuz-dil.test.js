@@ -506,9 +506,9 @@ test('statik işaretleme: applyDom tüm düğümleri iki dilde doldurur, boş ka
   }
 });
 
-test('index.html: yeni kod tx adını kullanır (yerel t ile gölgelenmez), th tanımı yok; LF', () => {
+test('index.html: yeni kod tx ve th adlarını kullanır (yerel t ile gölgelenmez); LF', () => {
   assert.match(html, /^const tx = I18n\.tx;$/m);
-  assert.doesNotMatch(html, /^\s*(?:const|let|var)\s+th\b/m);
+  assert.match(html, /^const th = I18n\.th;$/m);
   assert.ok(!html.includes('\r'));
   assert.ok(!fs.readFileSync(__filename, 'utf8').includes('\r'));
 });

@@ -405,6 +405,16 @@ const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'ta
 
 /** Summary: Çeviri işlevi (düz metin); HTML için I18n.th kullanılır. */
 const tx = I18n.tx;
+/** Summary: Çeviri işlevi (HTML); parametreler kaçışlanır. */
+const th = I18n.th;
+
+/** Summary: Kanonik tür değerinin (komut|ajan|skill) rozet etiketi; bilinmeyen değer ham döner. */
+function turLabel(v) {
+  if (v === 'komut') return tx('ui.common.turCommand');
+  if (v === 'ajan') return tx('ui.common.turAgent');
+  if (v === 'skill') return tx('ui.common.turSkill');
+  return v == null ? '' : String(v);
+}
 /** Summary: Çözülen dilin açılış önbelleği anahtarı (kaynak sunucudaki ayardır, bu yalnızca titremeyi önler). */
 const LANG_KEY = 'pp.lang';
 /** Summary: Dil koduna karşılık gelen <html lang> değeri. */
@@ -453,7 +463,7 @@ async function api(method, url, body) {
   const r = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   let j = {}; try { j = await r.json(); } catch (e) { /* gövde yok */ }
   if (!r.ok) {
-    const e = new Error(j.error || ('İstek başarısız (' + r.status + ')')); e.status = r.status; e.data = j;
+    const e = new Error(j.error || tx('ui.common.requestFailed', { status: r.status })); e.status = r.status; e.data = j;
     // Başka sekmede etkin marketplace değişti: yazma reddedildi; durumu eşle.
     if (r.status === 409 && j.code === 'etkinDegil') { e.etkinDegil = true; resyncActive(); }
     // Kurulum bozulduysa (örn. klasör dışarıdan silindi) kurulum ekranına düş; `conflict` 409'undan ayrı.
@@ -484,7 +494,7 @@ function errText(e) {
   const line = detail.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || '';
   const cut = line.length > 160 ? line.slice(0, 159) + '…' : line;
   if (!cut || msg.includes(cut)) return msg;
-  return msg ? msg + ' (Ayrıntı: ' + cut + ')' : cut;
+  return msg ? tx('ui.common.errorDetail', { message: msg, detail: cut }) : cut;
 }
 const fail = (e) => { if (e && e.setupRequired) return; toast(errText(e) || String(e), 'error'); };
 
@@ -587,7 +597,7 @@ function renderMkBadge() {
   const b = $('#mkBadge'); if (!b) return;
   const n = (S.facets && S.facets.yayinUyariByMp && S.facets.yayinUyariByMp[activeName()]) || 0;
   b.hidden = !n || !setupOk(); b.textContent = n;
-  b.title = n + ' prompt yayınlanmayacak';
+  b.title = tx('ui.common.wontPublish', { count: n });
 }
 async function loadGit() {
   const gen = S.gen;
@@ -625,7 +635,7 @@ function renderFilters() {
   const tags = S.facets.tags;
   const shown = S.tagsAll ? tags : tags.slice(0, 14);
   let h = shown.map((t) => `<button class="tagbtn ${S.f.tags.some((x) => fold(x) === fold(t.name)) ? 'on' : ''}" data-act="tag" data-tag="${esc(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('');
-  if (tags.length > 14) h += `<button class="tagbtn" data-act="tags-all">${S.tagsAll ? 'Daha az göster' : 'Tüm etiketler (' + tags.length + ')'}</button>`;
+  if (tags.length > 14) h += `<button class="tagbtn" data-act="tags-all">${esc(S.tagsAll ? tx('ui.filters.showLess') : tx('ui.filters.allTags', { count: tags.length }))}</button>`;
   $('#tagbar').innerHTML = h;
   const opt = (arr) => arr.map((x) => `<option value="${esc(x)}">`).join('');
   $('#dl-etiketler').innerHTML = opt(tags.map((t) => t.name));
@@ -687,8 +697,8 @@ function treeModel() {
         if (open) nodes(kids2, m.name, 3, it.key, k.kind === 'teknik');
       }
     });
-    if (!m.libraryDirExists) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: 'Prompt klasörü yok (' + m.libraryDir + '/).' });
-    else if (!m.plugins.length) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: 'Henüz plugin yok.', action: 'new-plugin', actionLabel: 'Yeni plugin' });
+    if (!m.libraryDirExists) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: tx('ui.tree.noPromptDir', { dir: m.libraryDir }) });
+    else if (!m.plugins.length) out.push({ kind: 'note', key: nodeKey(m.name, '#not'), mp: m.name, level: 2, text: tx('ui.tree.noPlugins'), action: 'new-plugin', actionLabel: tx('ui.tree.newPlugin') });
   });
   if (gl.length) {
     const open = S.gitlessOpen;
@@ -715,45 +725,45 @@ function rowHtml(it, focusKey) {
     case 'mp': {
       const m = it.node; const bad = m.state !== 'hazir';
       label = esc(m.name); cls = ' mp' + (isEtkin ? ' etkin' : '');
-      pills = (isEtkin ? '<span class="pill ok">etkin</span>' : '') + (bad ? `<span class="pill bad">geçersiz: ${esc(m.reason || '')}</span>` : cnt(m.count))
-        + (m.yayinUyari ? `<span class="pill warn" title="${m.yayinUyari} prompt yayınlanmayacak">${m.yayinUyari} uyarı</span>` : '');
-      sr = ', marketplace' + (isEtkin ? ', etkin marketplace' : '');
-      if (!bad) acts += btn('plus', '+', m.name + ' için yeni plugin');
-      acts += btn('menu', '⋯', m.name + ' için işlemler');
+      pills = (isEtkin ? `<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>` : '') + (bad ? `<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: m.reason || '' }))}</span>` : cnt(m.count))
+        + (m.yayinUyari ? `<span class="pill warn" title="${esc(tx('ui.common.wontPublish', { count: Number(m.yayinUyari) }))}">${esc(tx('ui.tree.warningCount', { count: Number(m.yayinUyari) }))}</span>` : '');
+      sr = isEtkin ? tx('ui.tree.srMarketplaceActive') : tx('ui.tree.srMarketplace');
+      if (!bad) acts += btn('plus', '+', tx('ui.tree.newPluginFor', { name: m.name }));
+      acts += btn('menu', '⋯', tx('ui.tree.actionsFor', { name: m.name }));
       break;
     }
     case 'plugin': {
       const p = it.node; label = esc(p.name);
       pills = cnt(p.count);
       if (p.nameIssue) pills += p.nameIssue.level === 'error' ? `<span class="pill bad" title="${esc(p.nameIssue.message)}">!</span>` : `<span class="pill" title="${esc(p.nameIssue.message)}">${esc(p.nameIssue.message.toLocaleLowerCase(I18n.locale()))}</span>`;
-      sr = ', plugin';
-      acts += btn('plus', '+', p.name + ' içine yeni prompt') + btn('menu', '⋯', p.name + ' için işlemler');
+      sr = tx('ui.tree.srPlugin');
+      acts += btn('plus', '+', tx('ui.tree.newPromptIn', { name: p.name })) + btn('menu', '⋯', tx('ui.tree.actionsFor', { name: p.name }));
       break;
     }
-    case 'dir': label = esc(it.node.name); pills = cnt(it.node.count); acts = btn('menu', '⋯', it.node.name + ' için işlemler'); sr = ', klasör'; break;
-    case 'tdir': label = esc(it.node.name); sr = ', klasör'; icon = ICON.dir; break;
-    case 'inbox': label = 'Gelen kutusu'; pills = cnt(it.node.count); acts = btn('menu', '⋯', 'Gelen kutusu için işlemler'); break;
-    case 'loose': label = 'Klasörsüz promptlar'; pills = cnt(it.node.length);
+    case 'dir': label = esc(it.node.name); pills = cnt(it.node.count); acts = btn('menu', '⋯', tx('ui.tree.actionsFor', { name: it.node.name })); sr = tx('ui.tree.srFolder'); break;
+    case 'tdir': label = esc(it.node.name); sr = tx('ui.tree.srFolder'); icon = ICON.dir; break;
+    case 'inbox': label = esc(tx('ui.tree.inbox')); pills = cnt(it.node.count); acts = btn('menu', '⋯', tx('ui.tree.actionsFor', { name: tx('ui.tree.inbox') })); break;
+    case 'loose': label = esc(tx('ui.tree.loose')); pills = cnt(it.node.length);
       break;
-    case 'teknik': label = 'Teknik dosyalar'; cls = ' soft'; break;
-    case 'gitless': label = 'Git deposu olmayan klasörler (' + it.node.length + ')'; icon = ICON.warn; cls = ' soft'; break;
-    case 'gitlessItem': label = esc(it.node.name); pills = '<span class="pill warn">Git deposu değil</span>'; icon = ICON.gitless; cls = ' soft';
-      acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">Git'i başlat</button>`; break;
-    case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', it.node.name + ' için işlemler') : ''; break;
+    case 'teknik': label = esc(tx('ui.tree.technical')); cls = ' soft'; break;
+    case 'gitless': label = esc(tx('ui.tree.gitless', { count: it.node.length })); icon = ICON.warn; cls = ' soft'; break;
+    case 'gitlessItem': label = esc(it.node.name); pills = `<span class="pill warn">${esc(tx('ui.tree.notGitRepo'))}</span>`; icon = ICON.gitless; cls = ' soft';
+      acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">${th('ui.tree.initGit')}</button>`; break;
+    case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', tx('ui.tree.actionsFor', { name: it.node.name })) : ''; break;
     default: { // file
       const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
       label = esc(txt);
       icon = `<span class="dot ${m ? durumClass(m.durum) : ''}"></span>`;
-      pills = (m && m.tur ? `<span class="pill">${esc(m.tur)}</span>` : '')
-        + (m && m.uyari ? '<span class="pill warn" title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>' : '')
-        + (m && m.surum ? '<span class="pill warn" title="Son sürümden beri değişti, versiyon aynı" aria-label="Sürüm uyarısı">v</span>' : '')
-        + (m && m.paketUyusmuyor ? '<span class="pill warn" title="paket alanı klasörle uyuşmuyor" aria-label="Paket klasörle uyuşmuyor">p</span>' : '');
-      acts = btn('menu', '⋯', txt + ' için işlemler');
+      pills = (m && m.tur ? `<span class="pill">${esc(turLabel(m.tur))}</span>` : '')
+        + (m && m.uyari ? `<span class="pill warn" title="${esc(tx('ui.tree.warnPublishTitle'))}" aria-label="${esc(tx('ui.tree.warnPublishLabel'))}">!</span>` : '')
+        + (m && m.surum ? `<span class="pill warn" title="${esc(tx('ui.tree.warnVersionTitle'))}" aria-label="${esc(tx('ui.tree.warnVersionLabel'))}">v</span>` : '')
+        + (m && m.paketUyusmuyor ? `<span class="pill warn" title="${esc(tx('ui.tree.warnPackageTitle'))}" aria-label="${esc(tx('ui.tree.warnPackageLabel'))}">p</span>` : '');
+      acts = btn('menu', '⋯', tx('ui.tree.actionsFor', { name: txt }));
     }
   }
   if (it.kind === 'loose') acts = '';
   const caret = it.expandable ? `<span class="caret ${it.expanded ? 'open' : ''}"></span>` : '<span class="caret" style="visibility:hidden"></span>';
-  const title = it.kind === 'loose' ? `Yayında "${(it.mpNode && it.mpNode.defaultPlugin) || (mpByName(it.mp) || {}).defaultPlugin || ''}" plugin'ine gider.`
+  const title = it.kind === 'loose' ? tx('ui.tree.looseTitle', { plugin: (it.mpNode && it.mpNode.defaultPlugin) || (mpByName(it.mp) || {}).defaultPlugin || '' })
     : isFileKind(it.kind) ? it.path : it.kind === 'plugin' ? (it.node.description || it.node.name) : '';
   return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node" tabindex="${it.key === focusKey ? 0 : -1}"
     aria-level="${it.level}" aria-posinset="${it.posinset}" aria-setsize="${it.setsize}" ${it.expandable ? `aria-expanded="${it.expanded}"` : ''} ${selected ? 'aria-selected="true"' : ''}
@@ -765,26 +775,26 @@ function treeHtml() {
   S.modelMap = new Map(S.model.filter((x) => x.kind !== 'note').map((x) => [x.key, x]));
   if (!S.lib) {
     // Kök sonradan kullanılamaz olduysa (örn. diskten silindi) S.lib boşalır; "Yükleniyor…" sonsuza dek kalmasın.
-    if (S.info && S.info.setup && !S.info.setup.rootOk) return '<div class="empty">Library kökü kullanılamıyor; kurulum ekranındaki adımları izle.</div>';
-    return '<div class="empty">Yükleniyor…</div>';
+    if (S.info && S.info.setup && !S.info.setup.rootOk) return `<div class="empty">${esc(tx('ui.tree.rootUnavailable'))}</div>`;
+    return `<div class="empty">${esc(tx('ui.common.loading'))}</div>`;
   }
   if (!S.lib.marketplaces.length && !(S.lib.ignored || []).length) {
-    return '<div class="empty">Henüz marketplace yok.<br><button class="btn sm primary" data-act="new-mp" style="margin-top:8px">Yeni marketplace</button></div>';
+    return `<div class="empty">${esc(tx('ui.tree.noMarketplace'))}<br><button class="btn sm primary" data-act="new-mp" style="margin-top:8px">${esc(tx('ui.tree.newMarketplace'))}</button></div>`;
   }
   let fk = S.focusKey;
   if (!fk || !S.modelMap.has(fk)) { const f = S.model.find((x) => x.kind !== 'note'); fk = f ? f.key : null; S.focusKey = fk; }
   return S.model.map((it) => rowHtml(it, fk)).join('');
 }
 
-const whereOf = (r) => (r.kind === 'paket' ? r.plugin : r.kind === 'klasorsuz' ? 'Klasörsüz' : r.kind === 'gelenKutusu' ? 'Gelen kutusu' : (r.path.split('/').slice(0, -1).join('/') || 'Teknik'));
+const whereOf = (r) => (r.kind === 'paket' ? r.plugin : r.kind === 'klasorsuz' ? tx('ui.search.whereLoose') : r.kind === 'gelenKutusu' ? tx('ui.tree.inbox') : (r.path.split('/').slice(0, -1).join('/') || tx('ui.search.whereTechnical')));
 
 function resultsHtml() {
   const tokens = fold(S.f.q).split(/\s+/).filter(Boolean);
-  if (!S.results.length) return '<div class="empty">Eşleşen prompt yok. Filtreleri veya arama sözcüklerini değiştir.</div>';
+  if (!S.results.length) return `<div class="empty">${esc(tx('ui.search.noMatch'))}</div>`;
   return S.results.map((r, i) => {
     const act = S.cur && S.cur.mp === r.mp && S.cur.path === r.path;
     return `<div class="res ${act ? 'active' : ''}" role="listitem" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}" data-ri="${i}" ${act ? 'aria-selected="true"' : ''}>
-    <div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${hl(r.baslik, tokens)}</span>${r.tur ? `<span class="pill">${esc(r.tur)}</span>` : ''}</div>
+    <div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${hl(r.baslik, tokens)}</span>${r.tur ? `<span class="pill">${esc(turLabel(r.tur))}</span>` : ''}</div>
     <div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div>
     ${r.snippet ? `<div class="rs">${hl(r.snippet, tokens)}</div>` : ''}
     ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`;
@@ -795,13 +805,13 @@ function resultsHtml() {
 function resultsTitle(results, info, mpCount) {
   const n = results.length;
   const cnt = info && info.truncated && info.total > n ? n + ' / ' + info.total : String(n);
-  return 'Sonuçlar (' + cnt + ')' + (mpCount > 1 ? ' · ' + mpCount + ' marketplace' : '');
+  return mpCount > 1 ? tx('ui.search.titleMulti', { total: cnt, count: mpCount }) : tx('ui.search.title', { total: cnt });
 }
 
 // Sonuçlar kesilmişse listenin altına daraltma ipucu (HTML); aksi halde boş. `.res` olmadığı için data-ri sırasını ve klavye gezintisini etkilemez.
 function resultsNote(info) {
   if (!info || !info.truncated) return '';
-  return `<div class="hint res-note" role="listitem">İlk ${esc(info.limit)} sonuç gösteriliyor. Daraltmak için etiket, durum, tür filtresi ya da daha uzun bir sözcük kullan.</div>`;
+  return `<div class="hint res-note" role="listitem">${esc(tx('ui.search.truncated', { limit: info.limit }))}</div>`;
 }
 
 // Araç çubuğu düğmelerinin açık/kapalı durumu ve nedeni.
@@ -812,11 +822,11 @@ function paintToolbar() {
     if (!b) return;
     b.disabled = off;
     if (w) w.textContent = off ? why : '';
-    b.title = off ? why : (id === 'tbPlugin' ? 'Yeni plugin: ' + activeName() : id === 'tbPrompt' ? 'Yeni prompt: ' + activeName() : 'Yeni marketplace');
+    b.title = off ? why : (id === 'tbPlugin' ? tx('ui.toolbar.newPluginIn', { name: activeName() }) : id === 'tbPrompt' ? tx('ui.toolbar.newPromptIn', { name: activeName() }) : tx('ui.toolbar.newMarketplace'));
   };
-  set('tbMp', 'Library kökü hazır değil: önce Ayarlar\'dan kökü seç', !rok);
-  set('tbPlugin', !rok ? 'Library kökü hazır değil' : 'Önce bir marketplace seç', !(ok && m));
-  set('tbPrompt', !(ok && m) ? 'Önce bir marketplace seç' : 'Önce bir plugin oluştur', !(ok && m && m.plugins.length));
+  set('tbMp', tx('ui.toolbar.rootNotReadyPickRoot'), !rok);
+  set('tbPlugin', !rok ? tx('ui.toolbar.rootNotReady') : tx('ui.toolbar.pickMarketplace'), !(ok && m));
+  set('tbPrompt', !(ok && m) ? tx('ui.toolbar.pickMarketplace') : tx('ui.toolbar.createPluginFirst'), !(ok && m && m.plugins.length));
 }
 
 function renderList() {
@@ -824,14 +834,14 @@ function renderList() {
   const hadFocus = list.contains(document.activeElement) && document.activeElement.closest('[data-key],[data-ri]');
   const fk = hadFocus ? (hadFocus.dataset.key || null) : null; const fri = hadFocus ? hadFocus.dataset.ri : null;
   if (S.results) {
-    list.setAttribute('role', 'list'); list.setAttribute('aria-label', 'Arama sonuçları');
+    list.setAttribute('role', 'list'); list.setAttribute('aria-label', tx('ui.search.resultsLabel'));
     list.innerHTML = resultsHtml() + resultsNote(S.resultsInfo);
     $('#listTitle').textContent = resultsTitle(S.results, S.resultsInfo, new Set(S.results.map((r) => r.mp)).size);
     if (fri != null) { const el = list.querySelector('[data-ri="' + fri + '"]'); if (el) el.focus(); }
   } else {
-    list.setAttribute('role', 'tree'); list.setAttribute('aria-label', 'Kütüphane');
+    list.setAttribute('role', 'tree'); list.setAttribute('aria-label', tx('ui.static.library'));
     list.innerHTML = treeHtml();
-    $('#listTitle').textContent = 'Kütüphane (' + (S.facets.total || 0) + ')';
+    $('#listTitle').textContent = tx('ui.tree.listTitle', { count: S.facets.total || 0 });
     if (fk) { const el = rowEl(fk); if (el) el.focus(); }
   }
   $('#btnClear').hidden = !isFiltering();
@@ -945,7 +955,7 @@ function askText(o) {
       title: o.title,
       html: `<form class="stack" id="askForm"><label>${esc(o.label)}<input id="askIn" value="${esc(o.value || '')}" autocomplete="off"></label>
         ${o.hint ? `<p class="hint">${esc(o.hint)}</p>` : ''}
-        <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">${esc(o.ok || 'Tamam')}</button></div></form>`,
+        <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(o.ok || tx('ui.common.ok'))}</button></div></form>`,
       onMount: (b) => {
         $('#askForm', b).addEventListener('submit', (e) => { e.preventDefault(); fin($('#askIn', b).value.trim() || null); closeModal(); });
         $('#askIn', b).select();
@@ -1001,29 +1011,29 @@ function menuItemsFor(it) {
   const items = [];
   switch (it.kind) {
     case 'mp':
-      if (!it.node.active) items.push(mk('Etkinleştir', 'm-activate'));
-      if (it.node.state === 'hazir') items.push(mk('Yeni plugin', 'new-plugin'), mk('Git paneli', 'git'), mk('Marketplace (yayın)', 'market'));
-      items.push(mk('Yolu kopyala', 'm-copy-path'));
+      if (!it.node.active) items.push(mk(tx('ui.menu.activate'), 'm-activate'));
+      if (it.node.state === 'hazir') items.push(mk(tx('ui.menu.newPlugin'), 'new-plugin'), mk(tx('ui.menu.gitPanel'), 'git'), mk(tx('ui.menu.marketplacePublish'), 'market'));
+      items.push(mk(tx('ui.menu.copyPath'), 'm-copy-path'));
       break;
     case 'plugin':
-      items.push(mk('Yeni prompt', 'm-new-prompt', { name: it.node.name }), mk('Paket sayfasını aç', 'open-package', { name: it.node.name }), mk('Açıklamayı düzenle', 'm-desc', { name: it.node.name }),
-        mk('Yeniden adlandır', 'm-rename-plugin', { name: it.node.name }), mk('Sil (çöp kutusuna taşı)', 'm-delete-plugin', { name: it.node.name, danger: true }));
+      items.push(mk(tx('ui.menu.newPrompt'), 'm-new-prompt', { name: it.node.name }), mk(tx('ui.menu.openPackage'), 'open-package', { name: it.node.name }), mk(tx('ui.menu.editDescription'), 'm-desc', { name: it.node.name }),
+        mk(tx('ui.menu.rename'), 'm-rename-plugin', { name: it.node.name }), mk(tx('ui.menu.deleteToTrash'), 'm-delete-plugin', { name: it.node.name, danger: true }));
       break;
     case 'dir':
-      items.push(mk('Yeniden adlandır veya taşı', 'rename'), mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+      items.push(mk(tx('ui.menu.renameOrMove'), 'rename'), mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
     case 'file': {
       if (/\.(md|markdown)$/i.test(it.path)) {
         const loose = Rules.classifyPromptPath(it.path, libDirOf(it.mp)).kind === 'klasorsuz';
-        items.push(mk(loose ? "Plugin'e taşı…" : 'Taşı…', 'm-move'), mk('Yeniden adlandır', 'm-rename-file'));
-      } else items.push(mk('Yeniden adlandır veya taşı', 'rename'));
-      items.push(mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+        items.push(mk(loose ? tx('ui.menu.moveToPlugin') : tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
+      } else items.push(mk(tx('ui.menu.renameOrMove'), 'rename'));
+      items.push(mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
     }
     case 'tfile':
-      items.push(mk('Yeniden adlandır veya taşı', 'rename'), mk('Sil (çöp kutusuna taşı)', 'delete', { danger: true }));
+      items.push(mk(tx('ui.menu.renameOrMove'), 'rename'), mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
-    case 'inbox': items.push(mk('İçe aktar', 'import')); break;
+    case 'inbox': items.push(mk(tx('ui.menu.import'), 'import')); break;
     default: break;
   }
   return isProtectedItem(it) ? items.filter((x) => !PROTECTED_ACTS.includes(x.act)) : items;
@@ -1055,9 +1065,9 @@ function syncFromDom() {
 const uncommitted = (p) => !!(S.git && S.git.isRepo && S.git.files.some((f) => f.path === p));
 function saveLabel() {
   const c = S.cur; const msg = c.commitMsg.trim();
-  if (c.dirty) return msg ? 'Kaydet ve commit et' : 'Kaydet';
-  if (msg && uncommitted(c.path)) return 'Commit et';
-  return 'Kaydet';
+  if (c.dirty) return msg ? tx('ui.file.saveAndCommit') : tx('ui.file.save');
+  if (msg && uncommitted(c.path)) return tx('ui.file.commit');
+  return tx('ui.file.save');
 }
 function updateDirty() {
   const c = S.cur; if (!c) return;
@@ -1065,21 +1075,21 @@ function updateDirty() {
   const b = $('#btnSave');
   if (b) { b.disabled = !(c.dirty || (uncommitted(c.path) && c.commitMsg.trim())); b.textContent = saveLabel(); }
   const cp = $('#commitPill'); if (cp) cp.hidden = !(uncommitted(c.path) && !c.dirty);
-  document.title = (c.dirty ? '• ' : '') + 'Prompt havuzu';
+  document.title = (c.dirty ? '• ' : '') + tx('ui.static.title');
   const n = $('#dirtyNote'); if (n) n.hidden = !c.dirty;
 }
 
 // Açık dosya kapanırken (silme, başka marketplace'e taşıma): son açılan kaydı ve sekme başlığını sıfırlar, kaydedilmemiş dosyanın "•" işareti kalmaz.
 function clearCur() {
   S.cur = null; ls.set(lsKey('last'), null);
-  document.title = 'Prompt havuzu';
+  document.title = tx('ui.static.title');
 }
 
 async function confirmDiscard() {
   if (!isDirty()) return true;
   const a = await askChoice({
-    title: 'Kaydedilmemiş değişiklikler var', text: '"' + base(S.cur.path) + '" dosyasında kaydetmediğin değişiklikler var.',
-    choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'discard', label: 'Değişiklikleri at', kind: 'danger' }, { id: 'save', label: 'Kaydet ve devam et', kind: 'primary' }]
+    title: tx('ui.discard.title'), text: tx('ui.discard.text', { name: base(S.cur.path) }),
+    choices: [{ id: 'cancel', label: tx('ui.common.cancel') }, { id: 'discard', label: tx('ui.discard.discard'), kind: 'danger' }, { id: 'save', label: tx('ui.discard.save'), kind: 'primary' }]
   });
   if (a === 'save') return save();
   if (a === 'discard') { S.cur.dirty = false; return true; }
@@ -1112,7 +1122,7 @@ async function openFile(p, o) {
   closeSide(); renderList(); renderMain();
   loadVersion();
   if (S.cur.tab === 'hist') loadHistory();
-  document.title = 'Prompt havuzu';
+  document.title = tx('ui.static.title');
   await offerLostEdit();
 }
 
@@ -1122,9 +1132,9 @@ async function offerLostEdit() {
   const l = S.lostEdit; const c = S.cur;
   if (!l || !c || l.mp !== c.mp || l.path !== c.path) return;
   const a = await askChoice({
-    title: 'Kaydedilmemiş metin bulundu',
-    text: 'Kurulum bozulmadan önce "' + base(c.path) + '" dosyasında kaydedilmemiş değişiklikler vardı' + (l.commitMsg ? ' (commit mesajın da korundu)' : '') + '. Geri yüklensin mi?',
-    choices: [{ id: 'later', label: 'Daha sonra' }, { id: 'drop', label: 'At', kind: 'danger' }, { id: 'restore', label: 'Geri yükle', kind: 'primary' }]
+    title: tx('ui.lostEdit.title'),
+    text: l.commitMsg ? tx('ui.lostEdit.textWithMessage', { name: base(c.path) }) : tx('ui.lostEdit.text', { name: base(c.path) }),
+    choices: [{ id: 'later', label: tx('ui.lostEdit.later') }, { id: 'drop', label: tx('ui.lostEdit.drop'), kind: 'danger' }, { id: 'restore', label: tx('ui.lostEdit.restore'), kind: 'primary' }]
   });
   if (S.cur !== c) return; // pencere açıkken başka dosya açıldı
   if (a === 'drop') { S.lostEdit = null; return; }
@@ -1133,14 +1143,14 @@ async function offerLostEdit() {
   c.parsed = p; c.eol = p.eol; c.bom = p.bom; c.lead = leadOf(p); c.commitMsg = l.commitMsg || '';
   S.lostEdit = null;
   renderMain(); updateDirty(); // dirty, diskteki sürümle karşılaştırılarak yeniden hesaplanır
-  toast('Kaydedilmemiş metin geri yüklendi');
+  toast(tx('ui.lostEdit.restored'));
 }
 
 // Açık dosya başka bir marketplace'e aitse (başka sekmede geçiş) yazma engellenir.
 function staleGuard() {
   const c = S.cur;
   if (!c || c.mp === activeName()) return false;
-  toast('Bu dosya "' + c.mp + "\" marketplace'ine ait ama etkin marketplace \"" + activeName() + '". Dosyayı ağaçtan yeniden aç.', 'error', 7000);
+  toast(tx('ui.file.staleMarketplace', { mp: c.mp, active: activeName() }), 'error', 7000);
   return true;
 }
 
