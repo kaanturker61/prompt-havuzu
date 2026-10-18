@@ -8,6 +8,29 @@ const { UndoStack } = require('./undo');
 const { BusyError } = require('./op-lock');
 const { describeNetError } = require('./net-errors');
 const { explainGitError, sanitizeDetail } = require('./git-errors');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
+/** Summary: İşlem türüne (publish | update) göre hata iletisi üreticileri; ileti çağrı anındaki dilde üretilir. */
+const FAIL_MESSAGES = {
+  publish: {
+    rollback: (detail) => tx('pub.err.publishRollbackFailed', { detail }),
+    git: (error) => tx('pub.err.publishFailedGit', { error }),
+    plain: (error) => tx('pub.err.publishFailed', { error })
+  },
+  update: {
+    rollback: (detail) => tx('pub.err.updateRollbackFailed', { detail }),
+    git: (error) => tx('pub.err.updateFailedGit', { error }),
+    plain: (error) => tx('pub.err.updateFailed', { error })
+  }
+};
+
+/** Summary: Kirli dosya listesini en çok 5 öğeyle birleştirir, fazlası için sonuna ' …' ekler. */
+function dirtyList(files) {
+  return files.slice(0, 5).join(', ') + (files.length > 5 ? ' …' : '');
+}
 
 class PublishError extends Error {
   constructor(status, message, data) {
@@ -43,23 +66,24 @@ class PackagePublisher {
   }
 
   // Ham git hataları Türkçe özete çevrilir (gitCode); git stderr'i arındırılmış olarak gitDetail'de kalır (hook çıktısı kaybolmaz).
-  async _fail(e, undo, prefix, root) {
+  async _fail(e, undo, kind, root) {
     const roots = root ? [root] : [];
+    const messages = FAIL_MESSAGES[kind];
     try { await undo.rollback(); } catch (agg) {
       const xs = (agg.errors || [agg]).map((x) => explainGitError(x, roots));
       const detail = xs.map((x) => x.gitDetail).filter(Boolean).join('\n');
-      return new PublishError(500, prefix + ' başarısız ve geri alma tamamlanamadı: ' + xs.map((x) => (x.code ? x.error.replace(/\.$/, '') : x.error)).join('; ') + '. Git panelinden durumu kontrol et.',
+      return new PublishError(500, messages.rollback(xs.map((x) => (x.code ? x.error.replace(/\.$/, '') : x.error)).join('; ')),
         { code: 'rollbackFailed', rollbackFailed: true, ...(detail ? { gitDetail: sanitizeDetail(detail, roots) } : {}) });
     }
     if (e instanceof GitError && e.isIdentityError) {
-      return new PublishError(400, 'Git, commit yazarını bilmiyor. Ad ve e-posta gir. Değişiklikler geri alındı.', { needIdentity: true });
+      return new PublishError(400, tx('pub.err.needIdentity'), { needIdentity: true });
     }
     const x = explainGitError(e, roots);
     if (x.code) {
-      return new PublishError(500, prefix + ' başarısız: ' + x.error + ' Yapılan değişiklikler geri alındı.',
+      return new PublishError(500, messages.git(x.error),
         { code: 'geriAlindi', gitCode: x.code, ...(x.gitDetail ? { gitDetail: x.gitDetail } : {}) });
     }
-    return new PublishError(500, prefix + ' başarısız: ' + e.message + '. Yapılan değişiklikler geri alındı.', { code: 'geriAlindi' });
+    return new PublishError(500, messages.plain(e.message), { code: 'geriAlindi' });
   }
 
   /* Paket sayfası verisi (A.2). built: catalog.build(cfg) sonucu. */
@@ -79,37 +103,37 @@ class PackagePublisher {
     return this.lock.run(root, 'yaz', async () => {
       const cfg = await this.config.load();
       if (this.guard) await this.guard();
-      if (!(await git.hasCommits(root))) throw new PublishError(409, 'Henüz hiç commit yok. Önce Git panelinden ilk commit\'i at.', { code: 'commitYok' });
+      if (!(await git.hasCommits(root))) throw new PublishError(409, tx('pub.err.commitYok'), { code: 'commitYok' });
       const built = await this.catalog.build(cfg);
       const pkg = built.packages.get(name);
-      if (!pkg) throw new PublishError(404, 'Paket bulunamadı: ' + name);
+      if (!pkg) throw new PublishError(404, tx('pub.err.paketYok', { name }));
       const dirty = await git.isClean(root, this._dirtyPaths(cfg, name, pkg));
       if (dirty.length) {
-        throw new PublishError(409, 'Önce bu dosyaları kaydet (commit): ' + dirty.slice(0, 5).join(', ') + (dirty.length > 5 ? ' …' : ''), { code: 'kirliCalismaAgaci', files: dirty });
+        throw new PublishError(409, tx('pub.err.kirli', { files: dirtyList(dirty) }), { code: 'kirliCalismaAgaci', files: dirty });
       }
       const blocking = this.catalog.blocking(pkg);
-      if (blocking.length) throw new PublishError(400, 'Paket doğrulanamadı: ' + blocking.length + ' sorun var', { code: 'dogrulama', issues: blocking });
-      if (!pkg.prompts.length) throw new PublishError(409, 'Pakette yayınlanacak prompt yok', { code: 'bosPaket' });
+      if (blocking.length) throw new PublishError(400, tx('pub.err.dogrulama', { count: blocking.length }), { code: 'dogrulama', issues: blocking });
+      if (!pkg.prompts.length) throw new PublishError(409, tx('pub.err.bosPaket'), { code: 'bosPaket' });
 
       const analysis = await this.advisor.analyze(root, pkg, cfg);
       const v = String(version == null || version === '' ? (analysis.version || '') : version).trim();
       const bad = this.advisor.validateChoice(analysis, v);
       if (bad) throw new PublishError(bad.status, bad.message, { code: bad.code });
       const tag = Rules.packageTag(name, v);
-      if (analysis.base.tags.some((t) => t.version === v)) throw new PublishError(409, 'Bu sürümün etiketi zaten var: ' + tag, { code: 'tagVar', tag });
+      if (analysis.base.tags.some((t) => t.version === v)) throw new PublishError(409, tx('pub.err.tagVar', { tag }), { code: 'tagVar', tag });
 
       const curCat = cfg.marketplace.version;
       let catV;
       if (marketplaceVersion == null || marketplaceVersion === '') {
         catV = Rules.bumpVersion(curCat, 'yama');
-        if (!catV) throw new PublishError(400, 'Katalog sürümü yorumlanamadı: "' + curCat + '". Marketplace panelinden düzelt.', { code: 'katalogSurumGecersiz' });
+        if (!catV) throw new PublishError(400, tx('pub.err.katalogSurumYorumlanamadi', { value: curCat }), { code: 'katalogSurumGecersiz' });
       } else {
         catV = String(marketplaceVersion).trim();
         const ce = Rules.checkVersion(catV);
         if (ce) throw new PublishError(400, ce, { code: 'katalogSurumGecersiz' });
         const cur = Rules.coerceVersion(curCat);
         if (cur && cur.version && Rules.compareVersions(catV, cur.version) < 0) {
-          throw new PublishError(400, 'Katalog sürümü mevcut sürümden (' + cur.version + ') küçük olamaz', { code: 'katalogSurumGecersiz' });
+          throw new PublishError(400, tx('pub.err.katalogSurumKucuk', { version: cur.version }), { code: 'katalogSurumGecersiz' });
         }
       }
 
@@ -131,8 +155,8 @@ class PackagePublisher {
           await git.commitPaths(root, `${name}: ${v} sürümü yayınlandı`, paths);
           commit = await git.headCommit(root);
           if (!commit) {
-            undo.push(async () => { throw new Error('commit oluştu ama hash okunamadı, commit geri alınamadı'); });
-            throw new Error('commit hash okunamadı');
+            undo.push(async () => { throw new Error(tx('pub.err.hashUnreadableNoUndo')); });
+            throw new Error(tx('pub.err.hashUnreadable'));
           }
           undo.push(() => git.undoCommit(root, { commit, parent }));
         } else {
@@ -150,9 +174,9 @@ class PackagePublisher {
       } catch (e) {
         if (/already exists/i.test(e.message)) {
           await undo.rollback().catch(() => {});
-          throw new PublishError(409, 'Bu sürümün etiketi zaten var: ' + tag, { code: 'tagVar', tag });
+          throw new PublishError(409, tx('pub.err.tagVar', { tag }), { code: 'tagVar', tag });
         }
-        throw await this._fail(e, undo, 'Yayın', root);
+        throw await this._fail(e, undo, 'publish', root);
       }
       this.onChanged(root);
 
@@ -173,13 +197,13 @@ class PackagePublisher {
     return this.lock.run(root, 'yaz', async () => {
       const cfg = await this.config.load();
       if (this.guard) await this.guard();
-      if (!(await git.hasCommits(root))) throw new PublishError(409, 'Henüz hiç commit yok. Önce Git panelinden ilk commit\'i at.', { code: 'commitYok' });
+      if (!(await git.hasCommits(root))) throw new PublishError(409, tx('pub.err.commitYok'), { code: 'commitYok' });
       const built = await this.catalog.build(cfg);
       const names = await this.catalog.packageNames(built);
       const srcPaths = [cfg.libraryDir + '/'];
       const dirty = await git.isClean(root, srcPaths);
       if (dirty.length) {
-        throw new PublishError(409, 'Önce bu dosyaları kaydet (commit): ' + dirty.slice(0, 5).join(', ') + (dirty.length > 5 ? ' …' : ''), { code: 'kirliCalismaAgaci', files: dirty });
+        throw new PublishError(409, tx('pub.err.kirli', { files: dirtyList(dirty) }), { code: 'kirliCalismaAgaci', files: dirty });
       }
       const plans = [];
       const skippedPackages = [];
@@ -206,19 +230,19 @@ class PackagePublisher {
           await git.commitPaths(root, 'Marketplace güncellendi', paths);
           commit = await git.headCommit(root);
           if (!commit) {
-            undo.push(async () => { throw new Error('commit oluştu ama hash okunamadı, commit geri alınamadı'); });
-            throw new Error('commit hash okunamadı');
+            undo.push(async () => { throw new Error(tx('pub.err.hashUnreadableNoUndo')); });
+            throw new Error(tx('pub.err.hashUnreadable'));
           }
           undo.push(() => git.undoCommit(root, { commit, parent }));
         }
         undo.clear();
       } catch (e) {
-        throw await this._fail(e, undo, 'Güncelleme', root);
+        throw await this._fail(e, undo, 'update', root);
       }
       this.onChanged(root);
       return {
         ok: true, commit, written, removed, skippedPackages,
-        message: commit ? 'Marketplace güncellendi' : 'Değişiklik yok'
+        message: commit ? tx('pub.updated') : tx('pub.noChange')
       };
     });
   }

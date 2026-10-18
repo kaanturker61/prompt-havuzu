@@ -7,6 +7,14 @@ const path = require('path');
 
 const EMPTY = () => ({ pendingTags: [], lastCheck: null });
 
+/** Summary: lastCheck kaydından yerelleştirilmiş metni (eski dosyalardaki error alanı) atar; yalnızca kod ve veri kalır. */
+function plainLastCheck(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out = { ...value };
+  delete out.error;
+  return out;
+}
+
 class StateStore {
   _file(dir) { return path.join(dir, '.git', 'pp-state.json'); }
 
@@ -15,7 +23,7 @@ class StateStore {
       const raw = JSON.parse(await fsp.readFile(this._file(dir), 'utf8'));
       return {
         pendingTags: Array.isArray(raw.pendingTags) ? raw.pendingTags.filter((t) => typeof t === 'string') : [],
-        lastCheck: raw.lastCheck && typeof raw.lastCheck === 'object' ? raw.lastCheck : null
+        lastCheck: plainLastCheck(raw.lastCheck)
       };
     } catch (e) { return EMPTY(); }
   }
@@ -42,7 +50,7 @@ class StateStore {
 
   async setLastCheck(dir, lastCheck) {
     const st = await this.get(dir);
-    st.lastCheck = lastCheck;
+    st.lastCheck = plainLastCheck(lastCheck);
     await this._save(dir, st);
   }
 }
