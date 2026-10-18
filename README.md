@@ -37,7 +37,7 @@
 - **Import** of old `.txt` files (**İçe aktar**), **move** between plugins and marketplaces, rename, tags. Deleting moves files to `.pp/trash/`; there is no permanent delete.
 - **Package publishing** to `plugins/<package>/`, with a stated reason for every prompt that is skipped.
 - **Remote repositories:** add or edit a remote, check it, push (including pending tags), update by fast-forward only, and clone a marketplace from a Git URL.
-- **Two interface languages:** English (US) and Turkish, switchable in Settings. Commit messages and tag notes the app writes follow the interface language; file formats, frontmatter keys, tag names and the generated plugin files do not change with it.
+- **Two interface languages:** English (US) and Turkish, switchable with the **TR / EN** buttons in the top bar or in Settings. Commit messages and tag notes the app writes follow the interface language; file formats, frontmatter keys, tag names and the generated plugin files do not change with it.
 
 ## Quick start
 
