@@ -876,3 +876,238 @@ test('Uzak depo rozeti ve şeridi: çoğul başlık/metin iki dilde, etiket adı
   assert.equal(run('en', { ok: false }).title, 'Could not check the remote; check it manually');
   assert.equal(run('tr', behind3).band, trBand, 'tr yeniden aynı');
 });
+
+/** Summary: vm bağlamında üretilen değeri düz (aynı gerçeklikte) nesneye çevirir; deepEqual için. */
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+/** Summary: Tarayıcı kipi I18n'e bağlı Rules ile çeviri global'leri (Rules.LEVEL_LABEL ve kural iletileri dili izler). */
+function browserRulesGlobals() {
+  const g = uiGlobals({ browser: true });
+  const rulesCtx = vm.createContext({ I18n: g.I18n, FM });
+  vm.runInContext(fs.readFileSync(path.join(PUBLIC, 'rules.js'), 'utf8'), rulesCtx, { filename: 'rules.js' });
+  return { ...g, FM, Rules: rulesCtx.Rules };
+}
+
+/** Summary: Marketplace paneli işlevlerinin yüklü olduğu vm bağlamı, verilen arayüz dilinde. */
+function marketCtx(lang, { hasPpConfig = true } = {}) {
+  const g = browserRulesGlobals();
+  g.I18n.setLanguage(lang);
+  return load({ fns: ['turLabel', 'mkStateText', 'mkListHtml', 'mkCmdsHtml', 'mkPackagesHtml', 'marketHtml'], consts: ['esc', 'cmdLine', 'DURUM_OPTS'] }, {
+    ...g, activeName: () => 'mp', mpByName: () => ({ name: 'mp', hasPpConfig })
+  });
+}
+
+const MK_STATE = {
+  config: { owner: 'O', plugin: 'p', version: '1.0.0', description: '' }, marketplaceName: 'mp', export: { durumlar: ['kararlı'] },
+  marketplaceExists: true, marketplacePlugins: ['a', 'b'],
+  items: [{ source: 'a.md', baslik: XSS_INPUT, tur: 'ajan', paket: 'kod', target: 'plugins/kod/agents/a.md', issues: [], state: 'eski' }],
+  orphans: [{ target: 'plugins/x.md', likelySource: { source: 'b.md', reason: XSS_INPUT } }],
+  skipped: [{ source: 'b.md', baslik: 'B', reason: 'r' }], unpublishedCount: 1,
+  commands: { validate: 'v', add: 'a', alternatives: [], pinHint: XSS_INPUT, install: [] }
+};
+
+test('Marketplace paneli: durum seçenekleri, çoğullar, kopyala düğmesi ve "Kaynağı kalmayan dosyalar" başlığı iki dilde; veri değerleri ve kullanıcı girdisi korunur', () => {
+  const trCtx = marketCtx('tr');
+  const enCtx = marketCtx('en');
+  const trOut = trCtx.marketHtml(MK_STATE);
+  const enOut = enCtx.marketHtml(MK_STATE);
+  assert.ok(trOut.includes('value="kararlı" checked> Kararlı</label>') && trOut.includes('value="taslak" > Taslak</label>') && trOut.includes('value="arşiv" > Arşiv</label>') && trOut.includes('value="" > Durumu boş</label>'));
+  assert.ok(enOut.includes('value="kararlı" checked> Stable</label>') && enOut.includes('value="taslak" > Draft</label>') && enOut.includes('value="arşiv" > Archived</label>') && enOut.includes('value="" > No status</label>'));
+  assert.ok(trOut.includes('<h3>Kaynağı kalmayan dosyalar</h3>') && enOut.includes('<h3>Files without a source</h3>'));
+  assert.ok(trOut.includes('Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
+  assert.ok(enOut.includes('The source is probably <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
+  assert.ok(trOut.includes('<span class="pill">ajan</span>') && enOut.includes('<span class="pill">agent</span>'));
+  assert.ok(trOut.includes('<p class="hint">1 prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>'));
+  assert.ok(enOut.includes('<p class="hint">1 prompt is intentionally not published (no type selected).</p>'));
+  assert.ok(enCtx.mkListHtml({ ...MK_STATE, unpublishedCount: 3 }).includes('3 prompts are intentionally not published'));
+  assert.ok(trOut.includes('data-act="mk-update">Marketplace\'i güncelle</button>') && enOut.includes('data-act="mk-update">Update marketplace</button>'));
+  assert.ok(trOut.includes('"Marketplace\'i güncelle" bunları çöp kutusuna taşır.') && enOut.includes('"Update marketplace" moves them to the trash.'));
+  assert.ok(trOut.includes('<code>' + XSS_ESCAPED + '</code>') && enOut.includes('<code>' + XSS_ESCAPED + '</code>'));
+  assert.ok(trOut.includes('Henüz yayınlanmış paket yok. Paket sayfasından Yayınla.') && enOut.includes('There are no published packages yet. Publish from the package page.'));
+  assert.ok(trCtx.mkCmdsHtml(MK_STATE).includes('data-text="v">Kopyala</button>') && enCtx.mkCmdsHtml(MK_STATE).includes('data-text="v">Copy</button>'));
+  for (const rendered of [trOut, enOut]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+  const pkgs = [{ name: 'a<', version: '', changedCount: 1, blocking: 1, pendingPush: true }, { name: 'b', version: '2.0.0', changedCount: 2, blocking: 2, pendingPush: false }];
+  const trPkgs = trCtx.mkPackagesHtml(pkgs);
+  const enPkgs = enCtx.mkPackagesHtml(pkgs);
+  assert.ok(trPkgs.includes('<span class="pill">yayınlanmadı</span>') && trPkgs.includes('1 değişiklik · <span class="issue error">1 engelleyici sorun</span> · <span class="pill warn">Push bekliyor</span>') && trPkgs.includes('>Aç</button>'));
+  assert.ok(enPkgs.includes('<span class="pill">not yet published</span>') && enPkgs.includes('1 change · <span class="issue error">1 blocking issue</span> · <span class="pill warn">Push pending</span>') && enPkgs.includes('>Open</button>'));
+  assert.ok(enPkgs.includes('2 changes · <span class="issue error">2 blocking issues</span>') && trPkgs.includes('2 değişiklik · <span class="issue error">2 engelleyici sorun</span>'));
+  const states = (lang) => [{ marketplaceExists: false }, { marketplaceExists: true, marketplacePlugins: [] }, MK_STATE].map((st) => marketCtx(lang).mkStateText(st));
+  assert.deepEqual(states('tr'), ['Henüz yazılmadı', 'marketplace.json mevcut: paket yok', 'marketplace.json mevcut: a, b']);
+  assert.deepEqual(states('en'), ['Not written yet', 'marketplace.json exists: no packages', 'marketplace.json exists: a, b']);
+  const noCfg = marketCtx('en', { hasPpConfig: false }).marketHtml(MK_STATE);
+  assert.ok(noCfg.includes('has no Prompt Havuzu settings (pp.config.json). <button class="btn sm" data-act="mk-ppconfig" data-name="mp">Create settings file</button>'));
+  assert.ok(marketCtx('tr', { hasPpConfig: false }).marketHtml(MK_STATE).includes("Bu marketplace'te Prompt Havuzu ayarı (pp.config.json) yok. <button"));
+  assert.equal(trCtx.marketHtml(MK_STATE), trOut, 'tr yeniden aynı: DURUM_OPTS ve etiketler bayatlamaz');
+});
+
+/** Summary: "Marketplace'i güncelle" onay penceresini ve sonuç toast'ını verilen dilde çalıştırır; askChoice ve toast çağrılarını kaydeder. */
+async function mkUpdateRun(lang, mk, response) {
+  const g = browserRulesGlobals();
+  g.I18n.setLanguage(lang);
+  const env = { choices: [], toasts: [] };
+  const ctx = load({ fns: ['mkUpdate'] }, {
+    ...g, S: { mk }, askChoice: async (o) => { env.choices.push(o); return 'yes'; }, api: async () => response,
+    toast: (message, kind, ms) => env.toasts.push([message, kind, ms]), openMarket: async () => {}, afterWrite: async () => {}, fail(e) { throw e; }, $: () => null
+  });
+  await ctx.mkUpdate();
+  return env;
+}
+
+test('Marketplace güncelleme onayı: dosya sayıları, kaldırılacaklar listesi (6 ile kısaltılır) ve sonuç toast\'ları iki dilde', async () => {
+  const orphans = Array.from({ length: 8 }, (unused, i) => ({ target: 'p' + i }));
+  const mk = { items: [{ state: 'eski' }, { state: 'guncel' }], orphans };
+  const skippedResponse = { commit: true, skippedPackages: [{ name: 'a' }, { name: 'b' }] };
+  const trSkipped = await mkUpdateRun('tr', mk, skippedResponse);
+  const enSkipped = await mkUpdateRun('en', mk, skippedResponse);
+  assert.equal(trSkipped.choices[0].title, "Marketplace'i güncelle");
+  assert.equal(trSkipped.choices[0].text, '1 dosya yazılacak, 8 dosya kaldırılacak (çöp kutusuna). Katalog sürümü artmaz, etiket atılmaz, push edilmez. Kaldırılacaklar: p0, p1, p2, p3, p4, p5 …');
+  assert.deepEqual(plain(trSkipped.choices[0].choices.map((c) => c.label)), ['Vazgeç', 'Güncelle']);
+  assert.equal(enSkipped.choices[0].title, 'Update marketplace');
+  assert.equal(enSkipped.choices[0].text, 'Files to write: 1. Files to remove (moved to the trash): 8. The catalog version is not bumped, no tag is created, and nothing is pushed. To be removed: p0, p1, p2, p3, p4, p5 …');
+  assert.deepEqual(plain(enSkipped.choices[0].choices.map((c) => c.label)), ['Cancel', 'Update']);
+  assert.deepEqual(trSkipped.toasts, [['Marketplace güncellendi Engelleyici sorunu olan paketler atlandı: a, b.', 'error', 7000]]);
+  assert.deepEqual(enSkipped.toasts, [['Marketplace updated. Packages with blocking issues were skipped: a, b.', 'error', 7000]]);
+  const none = { items: [], orphans: [] };
+  const trNone = await mkUpdateRun('tr', none, { commit: false });
+  const enNone = await mkUpdateRun('en', none, { commit: false });
+  assert.equal(trNone.choices[0].text, '0 dosya yazılacak, 0 dosya kaldırılacak (çöp kutusuna). Katalog sürümü artmaz, etiket atılmaz, push edilmez.');
+  assert.equal(enNone.choices[0].text, 'Files to write: 0. Files to remove (moved to the trash): 0. The catalog version is not bumped, no tag is created, and nothing is pushed.');
+  assert.deepEqual([trNone.toasts[0], enNone.toasts[0]], [['Değişiklik yok', 'ok', 3000], ['No changes', 'ok', 3000]]);
+  assert.equal((await mkUpdateRun('en', none, { commit: true })).toasts[0][0], 'Marketplace updated');
+  assert.equal((await mkUpdateRun('tr', none, { commit: false, skippedPackages: [{ name: 'z' }] })).toasts[0][0], 'Değişiklik yok Engelleyici sorunu olan paketler atlandı: z.');
+});
+
+/** Summary: Paket sayfası işlevlerinin yüklü olduğu vm bağlamı (sahte DOM, kayıt tutan toast/api), verilen arayüz dilinde. */
+function pkCtx(lang, d, state = {}) {
+  const g = browserRulesGlobals();
+  g.I18n.setLanguage(lang);
+  const dom = stubDom();
+  const env = { dom, toasts: [], calls: [], response: null };
+  env.S = { pk: { d, msg: null, ...state } };
+  env.ctx = load({
+    fns: ['turLabel', 'pkChangeLabel', 'pkOptions', 'pkHtml', 'pkChosen', 'pkValidate', 'pkAsk', 'pkPublish', 'pkPushOnly', 'showFieldErr', 'errText'], consts: ['esc', 'PK_CHANGE_KEYS']
+  }, {
+    ...g, S: env.S, $: dom.$, $$: dom.$$, activeName: () => 'mp', fmtDate: (iso) => 'D:' + iso,
+    toast: (message, kind, ms) => env.toasts.push([message, kind || null, ms || null]), api: async (method, url, body) => { env.calls.push([method, url, body]); return env.response; },
+    pkLoad: async () => {}, afterWrite: async () => {}, loadHistory() {}, loadGit() {}, setInterval: () => 1, clearInterval() {}
+  });
+  return env;
+}
+
+const PK_DATA = {
+  name: 'kod', version: '1.0.0', lastTag: { name: 'paket/kod/v1.0.0', date: 'X' }, pendingPush: false, description: 'd', remote: 'origin', dirty: [], issues: [], baseVersion: '1.0.0',
+  proposal: { level: 'kucuk', tagOnly: false, reasons: [], noChange: false },
+  prompts: [
+    { source: 'a.md', baslik: XSS_INPUT, tur: 'komut', ad: 'a', oldVersiyon: '1.0.0', versiyon: '1.1.0', tagged: false, change: 'degisti', level: 'kucuk', issues: [] },
+    { source: 'b.md', baslik: 'B', tur: 'ajan', ad: 'b', versiyon: '', change: 'yeni', level: 'yama', issues: [] },
+    { source: 'c.md', baslik: 'C', tur: 'skill', ad: 'c', versiyon: '2.0.0', change: 'ayni', level: null, issues: [] },
+    { source: 'd.md', baslik: 'D', tur: 'komut', ad: 'd', versiyon: '', change: XSS_INPUT, level: 'buyuk', issues: [] }
+  ],
+  removed: [{ target: 'plugins/kod/x.md', level: 'buyuk' }], excluded: [], marketplaceVersion: { current: '1.0.3', proposal: '1.0.4' }, tags: [{ version: '1.0.0' }], exportedCount: 4
+};
+
+test('Paket sayfası: sürüm seçenekleri (Rules.LEVEL_LABEL), değişim etiketleri, durum satırı ve tablo iki dilde; bilinmeyen değer ham ve kaçışlı, etiketler bayatlamaz', () => {
+  const opts = (lang, d) => plain(pkCtx(lang, d).ctx.pkOptions(d).map((o) => o.label));
+  assert.deepEqual(opts('tr', PK_DATA), ['Büyük 2.0.0', 'Küçük 1.1.0 (önerilen)', 'Yama 1.0.1']);
+  assert.deepEqual(opts('en', PK_DATA), ['Major 2.0.0', 'Minor 1.1.0 (recommended)', 'Patch 1.0.1']);
+  const firstD = { ...PK_DATA, baseVersion: null };
+  const tagD = { ...PK_DATA, proposal: { ...PK_DATA.proposal, tagOnly: true } };
+  assert.deepEqual([opts('tr', firstD), opts('tr', tagD)], [['İlk sürüm 1.0.0 (önerilen)'], ['Mevcut 1.0.0 sürümünü etiketle (önerilen)']]);
+  assert.deepEqual([opts('en', firstD), opts('en', tagD)], [['First version 1.0.0 (recommended)'], ['Tag the existing version 1.0.0 (recommended)']]);
+  const trOut = pkCtx('tr', PK_DATA).ctx.pkHtml(PK_DATA);
+  const enOut = pkCtx('en', PK_DATA).ctx.pkHtml(PK_DATA);
+  assert.ok(trOut.includes('Etkin marketplace: <b>mp</b> · Sürüm: v1.0.0 · Son etiket: paket/kod/v1.0.0 (D:X)'));
+  assert.ok(enOut.includes('Active marketplace: <b>mp</b> · Version: v1.0.0 · Last tag: paket/kod/v1.0.0 (D:X)'));
+  const bare = { ...PK_DATA, version: '', lastTag: null, remote: '' };
+  assert.ok(pkCtx('tr', bare).ctx.pkHtml(bare).includes('Sürüm: yayınlanmadı · Son etiket: yok'));
+  assert.ok(pkCtx('en', bare).ctx.pkHtml(bare).includes('Version: not yet published · Last tag: none'));
+  assert.ok(pkCtx('tr', bare).ctx.pkHtml(bare).includes('Uzak depo yok, yerelde yayınlanacak.'));
+  assert.ok(pkCtx('en', bare).ctx.pkHtml(bare).includes('There is no remote; it will be published locally only.'));
+  assert.ok(trOut.includes('<span class="pill warn">Değişti</span></td><td>Küçük</td>') && trOut.includes('<span class="pill bad">Kaldırıldı</span></td><td>Büyük</td>'));
+  assert.ok(enOut.includes('<span class="pill warn">Changed</span></td><td>Minor</td>') && enOut.includes('<span class="pill bad">Removed</span></td><td>Major</td>'));
+  assert.ok(enOut.includes('<span class="pill warn">New</span></td><td>Patch</td>') && enOut.includes('<span class="pill ">Unchanged</span></td><td>—</td>'));
+  assert.ok(trOut.includes('<span class="pill warn">' + XSS_ESCAPED + '</span></td><td>Büyük</td>') && enOut.includes('<span class="pill warn">' + XSS_ESCAPED + '</span></td><td>Major</td>'));
+  assert.ok(trOut.includes('<th scope="col">Değişim</th><th scope="col">Seviye</th>') && enOut.includes('<th scope="col">Change</th><th scope="col">Level</th>'));
+  assert.ok(trOut.includes('<td>komut</td>') && enOut.includes('<td>command</td>') && enOut.includes('<td>agent</td>') && enOut.includes('<td>skill</td>'));
+  assert.ok(trOut.includes('<legend>Yeni sürüm</legend>') && enOut.includes('<legend>New version</legend>'));
+  assert.ok(trOut.includes('> Özel <input id="pkCustom"') && enOut.includes('> Custom <input id="pkCustom"'));
+  assert.ok(trOut.includes('<label>Katalog sürümü <input id="pkCat"') && enOut.includes('<label>Catalog version <input id="pkCat"'));
+  assert.ok(trOut.includes('Mevcut: 1.0.3. "Marketplace\'i güncelle" bunu artırmaz.') && enOut.includes('Current: 1.0.3. "Update marketplace" does not bump this.'));
+  assert.ok(trOut.includes('> Push et (origin)</label>') && enOut.includes('> Push (origin)</label>'));
+  assert.ok(trOut.includes('aria-describedby="pkWhy">Yayınla</button>') && enOut.includes('aria-describedby="pkWhy">Publish</button>'));
+  assert.ok(pkCtx('en', tagD).ctx.pkHtml(tagD).includes('aria-describedby="pkWhy">Tag version 1.0.0</button>') && pkCtx('tr', tagD).ctx.pkHtml(tagD).includes('>1.0.0 sürümünü etiketle</button>'));
+  for (const rendered of [trOut, enOut]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+  assert.equal(pkCtx('tr', PK_DATA).ctx.pkHtml(PK_DATA), trOut, 'tr yeniden aynı');
+});
+
+test('Paket yayını: anında doğrulama iletileri, onay metni (push var/yok), ilerleme, toast ve hata iletileri iki dilde', async () => {
+  const checkOut = (lang, d, { custom = '0.9.0', cat = '1.0.4' } = {}) => {
+    const env = pkCtx(lang, d);
+    env.dom.checks = [{ checked: true, dataset: { id: 'ozel' }, value: '' }];
+    env.dom.els['#pkCustom'].value = custom;
+    env.dom.els['#pkCat'].value = cat;
+    const ok = env.ctx.pkValidate();
+    return { ok, why: env.dom.els['#pkWhy'].textContent, ver: env.dom.els['#pkVerErr'].textContent, cat: env.dom.els['#pkCatErr'].textContent };
+  };
+  const bad = { ...PK_DATA, dirty: ['x.md'], issues: [{ msg: 'm' }], exportedCount: 0, proposal: { ...PK_DATA.proposal, noChange: true } };
+  const trBad = checkOut('tr', bad, { custom: '0.9.0', cat: '0.0.1' });
+  const enBad = checkOut('en', bad, { custom: '0.9.0', cat: '0.0.1' });
+  assert.equal(trBad.ver, 'Sürüm son yayından (1.0.0) büyük olmalı');
+  assert.equal(enBad.ver, 'The version must be greater than the last published version (1.0.0)');
+  assert.equal(trBad.cat, 'Katalog sürümü mevcut sürümden (1.0.3) küçük olamaz');
+  assert.equal(enBad.cat, 'The catalog version cannot be lower than the current version (1.0.3)');
+  assert.equal(trBad.why, 'Önce engelleyici sorunları gider. Önce kaydedilmemiş dosyaları commit et. Pakette yayınlanacak prompt yok. Sürüm son yayından (1.0.0) büyük olmalı Katalog sürümü mevcut sürümden (1.0.3) küçük olamaz');
+  assert.equal(enBad.why, 'Resolve the blocking issues first. Commit the unsaved files first. There are no prompts to publish in this package. The version must be greater than the last published version (1.0.0) The catalog version cannot be lower than the current version (1.0.3)');
+  assert.equal(checkOut('tr', PK_DATA, { custom: '1.1.0', cat: '1.0.4' }).ver, '');
+  const tagged = { ...PK_DATA, tags: [{ version: '1.2.0' }] };
+  assert.equal(checkOut('tr', tagged, { custom: '1.2.0' }).ver, 'Bu sürümün etiketi zaten var: paket/kod/v1.2.0');
+  assert.equal(checkOut('en', tagged, { custom: '1.2.0' }).ver, 'A tag for this version already exists: paket/kod/v1.2.0');
+  const noChange = { ...PK_DATA, proposal: { ...PK_DATA.proposal, noChange: true } };
+  assert.equal(checkOut('tr', noChange, { custom: '1.2.0' }).ok, true);
+  assert.equal(checkOut('en', { ...noChange, dirty: ['x'] }, { custom: '1.2.0' }).why, 'Commit the unsaved files first.');
+  const askOut = (lang, push) => {
+    const env = pkCtx(lang, PK_DATA);
+    env.dom.checks = [{ checked: true, dataset: { id: 'ozel' }, value: '' }];
+    env.dom.els['#pkCustom'].value = '1.1.0';
+    env.dom.els['#pkCat'].value = '1.0.4';
+    env.dom.els['#pkPush'].checked = push;
+    env.ctx.pkAsk();
+    return env.dom.els['#pkConfirm'].innerHTML;
+  };
+  assert.ok(askOut('tr', false).startsWith('<div class="issue warn" role="alert">kod 1.1.0 olarak yayınlanacak: 3 dosya yazılacak, 1 dosya kaldırılacak, katalog sürümü 1.0.4, commit + paket/kod/v1.1.0 etiketi.</div>'));
+  assert.ok(askOut('tr', true).includes('etiketi, origin&#39;e push.</div>'));
+  assert.ok(askOut('en', false).startsWith('<div class="issue warn" role="alert">Publishing kod as 1.1.0: files to write: 3, files to remove: 1, catalog version 1.0.4, commit + tag paket/kod/v1.1.0.</div>'));
+  assert.ok(askOut('en', true).includes('commit + tag paket/kod/v1.1.0, push to origin.</div>'));
+  assert.ok(askOut('tr', true).includes('id="pkOk">Onayla ve yayınla</button><button class="btn" data-act="pk-cancel">Vazgeç</button>'));
+  assert.ok(askOut('en', true).includes('id="pkOk">Confirm and publish</button><button class="btn" data-act="pk-cancel">Cancel</button>'));
+  const published = async (lang, response, error) => {
+    const env = pkCtx(lang, PK_DATA, { pending: { version: '1.1.0', marketplaceVersion: '1.0.4', push: true } });
+    env.response = response;
+    if (error) env.ctx.api = async () => { throw error; };
+    await env.ctx.pkPublish();
+    return { toasts: env.toasts, msg: env.S.pk && env.S.pk.msg, prog: env.dom.els['#pkProg'].textContent };
+  };
+  const trPushed = await published('tr', { version: '1.1.0', push: { ok: true } });
+  const enPushed = await published('en', { version: '1.1.0', push: { ok: true } });
+  assert.deepEqual([trPushed.toasts, enPushed.toasts], [[['kod 1.1.0 yayınlandı, push edildi', 'ok', 4000]], [['kod 1.1.0 published and pushed', 'ok', 4000]]]);
+  assert.deepEqual([trPushed.prog, enPushed.prog], ['Doğrulanıyor ve çıktı yazılıyor…', 'Validating and writing the output…']);
+  assert.deepEqual([(await published('tr', { version: '1.1.0' })).toasts[0][0], (await published('en', { version: '1.1.0' })).toasts[0][0]], ['kod 1.1.0 yayınlandı', 'kod 1.1.0 published']);
+  const pending = { version: '1.1.0', push: { ok: false, error: XSS_INPUT } };
+  assert.deepEqual(plain((await published('tr', pending)).msg), { kind: 'warn', text: 'Yerelde yayınlandı, push bekliyor: ' + XSS_INPUT, retry: true });
+  assert.deepEqual(plain((await published('en', pending)).msg), { kind: 'warn', text: 'Published locally, push pending: ' + XSS_INPUT, retry: true });
+  const needId = Object.assign(new Error('boom'), { data: { needIdentity: true } });
+  assert.equal((await published('tr', null, needId)).msg.text, 'boom (Git panelinden kimliği gir)');
+  assert.equal((await published('en', null, needId)).msg.text, 'boom (enter your identity in the Git panel)');
+  assert.equal((await published('en', null, new Error('boom'))).msg.text, 'boom');
+  const pushOnly = async (lang, response) => {
+    const env = pkCtx(lang, PK_DATA);
+    env.response = response;
+    await env.ctx.pkPushOnly();
+    return plain({ msg: env.S.pk.msg, toasts: env.toasts });
+  };
+  assert.deepEqual(await pushOnly('tr', { ok: true }), { msg: { kind: 'info', text: 'Push edildi.' }, toasts: [['Push edildi', null, null]] });
+  assert.deepEqual(await pushOnly('en', { ok: true }), { msg: { kind: 'info', text: 'Pushed.' }, toasts: [['Pushed', null, null]] });
+  assert.deepEqual((await pushOnly('en', { ok: false, error: 'x' })).msg, { kind: 'warn', text: 'Push failed: x', retry: true });
+  assert.deepEqual((await pushOnly('tr', { ok: false, error: 'x' })).msg, { kind: 'warn', text: 'Push başarısız: x', retry: true });
+});

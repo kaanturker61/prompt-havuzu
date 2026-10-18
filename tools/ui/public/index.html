@@ -2538,53 +2538,61 @@ async function gitCommit() {
 }
 
 /* -------------------------------------------------------------- marketplace */
-const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">Kopyala</button></div>`;
+const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">${esc(tx('ui.main.copy'))}</button></div>`;
 
-const DURUM_OPTS = [['kararlı', 'Kararlı'], ['taslak', 'Taslak'], ['arşiv', 'Arşiv'], ['', 'Durumu boş']];
+/** Summary: Dışa aktarma durumu seçenekleri: [kanonik durum değeri, görünen etiket anahtarı]. */
+const DURUM_OPTS = [['kararlı', 'ui.static.statusStable'], ['taslak', 'ui.static.statusDraft'], ['arşiv', 'ui.static.statusArchived'], ['', 'ui.mp.statusEmpty']];
 
 function mkListHtml(st) {
   const skipped = st.skipped || [];
-  const stPill = (s) => s === 'guncel' ? '<span class="pill ok">Çıktı güncel</span>' : s === 'eski' ? '<span class="pill warn">Kaynak değişti</span>' : '<span class="pill warn">Çıktı yok</span>';
+  const stPill = (s) => s === 'guncel' ? `<span class="pill ok">${esc(tx('ui.mp.stateCurrent'))}</span>` : s === 'eski' ? `<span class="pill warn">${esc(tx('ui.mp.stateStale'))}</span>` : `<span class="pill warn">${esc(tx('ui.mp.stateMissing'))}</span>`;
   let h = '';
   if (!st.items.length && !st.orphans.length && !skipped.length) {
-    h += '<div class="empty" style="border:1px solid var(--line2);border-radius:6px">Henüz dışa aktarılacak prompt yok. Bir promptu açıp "Claude Code yayın ayarları" bölümünden türünü seç (komut, ajan veya skill).</div>';
+    h += `<div class="empty" style="border:1px solid var(--line2);border-radius:6px">${th('ui.mp.emptyExport')}</div>`;
   }
   if (skipped.length) {
-    h += `<h3>Yayını engelleyen promptlar (${skipped.length})</h3><div class="mklist">${skipped.map((x) => `<div class="mkrow"><div>
+    h += `<h3>${esc(tx('ui.mp.blockedPrompts', { count: skipped.length }))}</h3><div class="mklist">${skipped.map((x) => `<div class="mkrow"><div>
       <button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik)}</button>
       <div class="hint mono">${esc(x.source)}</div>
       <div class="issue warn">${esc(x.reason)}</div></div><div></div><div></div></div>`).join('')}</div>`;
   }
   if (st.items.length) {
     h += '<div class="mklist">' + st.items.map((i) => `<div class="mkrow"><div>
-      <button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.baslik)}</button> <span class="pill">${esc(i.tur)}</span> <span class="pill">${esc(i.paket)}</span>
+      <button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.baslik)}</button> <span class="pill">${esc(turLabel(i.tur))}</span> <span class="pill">${esc(i.paket)}</span>
       <div class="hint mono">${esc(i.target)}</div>
       ${i.issues.map((x) => `<div class="issue ${x.level}">${esc(x.msg)}</div>`).join('')}</div>
       <div>${stPill(i.state)}</div><div></div></div>`).join('') + '</div>';
   }
-  if (st.unpublishedCount > 0) h += `<p class="hint">${st.unpublishedCount} prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>`;
+  if (st.unpublishedCount > 0) h += `<p class="hint">${esc(tx('ui.mp.unpublished', { count: st.unpublishedCount }))}</p>`;
   if (st.orphans.length) {
-    h += `<h3>Kaynağı kalmayan dosyalar</h3><p class="hint">Bu dosyaların havuzda karşılığı yok: kaynak silinmiş, taşınmış ya da adı değişmiş olabilir. "Marketplace'i güncelle" bunları çöp kutusuna taşır.</p><div class="mklist">${st.orphans.map((o) => `<div class="mkrow"><div><div class="mono">${esc(o.target)}</div>${o.likelySource ? `<div class="issue warn">Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="${esc(o.likelySource.source)}">${esc((skipped.find((x) => x.source === o.likelySource.source) || {}).baslik || o.likelySource.source)}</button>: ${esc(o.likelySource.reason)}</div>` : ''}</div><div></div><div></div></div>`).join('')}</div>`;
+    h += `<h3>${esc(tx('ui.mp.orphansTitle'))}</h3><p class="hint">${th('ui.mp.orphansHint')}</p><div class="mklist">${st.orphans.map((o) => `<div class="mkrow"><div><div class="mono">${esc(o.target)}</div>${o.likelySource ? `<div class="issue warn">${th('ui.mp.likelySource', { source: I18n.raw(`<button class="link" data-act="open-close" data-path="${esc(o.likelySource.source)}">${esc((skipped.find((x) => x.source === o.likelySource.source) || {}).baslik || o.likelySource.source)}</button>`), reason: o.likelySource.reason || '' })}</div>` : ''}</div><div></div><div></div></div>`).join('')}</div>`;
   }
   return h;
 }
 
 function mkCmdsHtml(st) {
   const c = st.commands;
-  const alt = (c.alternatives || []).length ? `<p class="hint">Alternatif (tam URL):</p>${c.alternatives.map(cmdLine).join('')}` : '';
-  const pin = c.pinHint ? `<p class="hint">Belirli bir dal ya da etikete sabitlemek için sonuna <code>#ref</code> ekle: <code>${esc(c.pinHint)}</code></p>` : '';
-  return `<p class="hint">Bir kez, bilgisayarında (terminalde):</p>${cmdLine(c.validate)}${cmdLine(c.add)}${alt}${pin}
+  const alt = (c.alternatives || []).length ? `<p class="hint">${esc(tx('ui.mp.alternativeUrl'))}</p>${c.alternatives.map(cmdLine).join('')}` : '';
+  const pin = c.pinHint ? `<p class="hint">${th('ui.mp.pinHint', { hint: c.pinHint })}</p>` : '';
+  return `<p class="hint">${esc(tx('ui.mp.onceInTerminal'))}</p>${cmdLine(c.validate)}${cmdLine(c.add)}${alt}${pin}
     ${c.addNote ? `<p class="hint">${esc(c.addNote)}</p>` : ''}
-    <p class="hint" style="margin-top:12px">Sonra her projede istediğin paketi kur (yalnızca yayınlanmış paketler):</p>${c.install.length ? c.install.map((i) => cmdLine(i.cmd)).join('') : '<p class="hint">Henüz yayınlanmış paket yok. Paket sayfasından Yayınla.</p>'}
-    <p class="hint" style="margin-top:12px">Claude Code oturumunda aynı işler <code>/plugin marketplace add …</code> ve <code>/plugin install …</code> ile de yapılır. Kurulan komutlar <code>/paket:ad</code> biçiminde çağrılır.</p>`;
+    <p class="hint" style="margin-top:12px">${esc(tx('ui.mp.installThen'))}</p>${c.install.length ? c.install.map((i) => cmdLine(i.cmd)).join('') : `<p class="hint">${esc(tx('ui.mp.noPublishedPackages'))}</p>`}
+    <p class="hint" style="margin-top:12px">${th('ui.mp.sessionHint')}</p>`;
 }
 
 function mkPackagesHtml(list) {
-  if (!list || !list.length) return '<p class="hint">Henüz paket yok. Ağaçta "Yeni plugin" ile bir klasör aç ve içine prompt koy.</p>';
-  return `<div class="mklist">${list.map((p) => `<div class="mkrow"><div><b>${esc(p.name)}</b> <span class="pill">${p.version ? 'v' + esc(p.version) : 'yayınlanmadı'}</span>
-      ${p.lastTag ? `<span class="hint">son etiket: ${esc(p.lastTag.name)}</span>` : ''}
-      <div class="hint">${p.changedCount} değişiklik${p.blocking ? ` · <span class="issue error">${p.blocking} engelleyici sorun</span>` : ''}${p.pendingPush ? ' · <span class="pill warn">Push bekliyor</span>' : ''}</div></div><div></div>
-      <div class="mkbtns"><button class="btn sm" data-act="open-package" data-name="${esc(p.name)}" data-from="panel">Aç</button></div></div>`).join('')}</div>`;
+  if (!list || !list.length) return `<p class="hint">${th('ui.mp.noPackages')}</p>`;
+  return `<div class="mklist">${list.map((p) => `<div class="mkrow"><div><b>${esc(p.name)}</b> <span class="pill">${p.version ? 'v' + esc(p.version) : esc(tx('ui.pkg.notPublished'))}</span>
+      ${p.lastTag ? `<span class="hint">${esc(tx('ui.mp.lastTag', { name: p.lastTag.name }))}</span>` : ''}
+      <div class="hint">${esc(tx('ui.mp.changedCount', { count: p.changedCount }))}${p.blocking ? ` · <span class="issue error">${esc(tx('ui.mp.blockingCount', { count: p.blocking }))}</span>` : ''}${p.pendingPush ? ` · <span class="pill warn">${esc(tx('ui.pkg.pushPending'))}</span>` : ''}</div></div><div></div>
+      <div class="mkbtns"><button class="btn sm" data-act="open-package" data-name="${esc(p.name)}" data-from="panel">${esc(tx('ui.mp.open'))}</button></div></div>`).join('')}</div>`;
+}
+
+/** Summary: Marketplace.json durum satırı (düz metin): yazılmamış, paketli ya da paketsiz. */
+function mkStateText(st) {
+  if (!st.marketplaceExists) return tx('ui.mp.notWritten');
+  const names = st.marketplacePlugins.join(', ');
+  return names ? tx('ui.mp.fileExists', { packages: names }) : tx('ui.mp.fileExistsNoPackages');
 }
 
 function marketHtml(st) {
@@ -2593,28 +2601,28 @@ function marketHtml(st) {
   const noCfg = mpn && mpn.hasPpConfig === false;
   const cfgIssues = (st.configIssues || []).map((x) => `<div class="issue ${esc(x.level)}" role="status">${esc(x.message)}</div>`).join('');
   const ex = st.export || { durumlar: ['kararlı', ''] };
-  return `${noCfg ? `<div class="issue warn" role="status">Bu marketplace'te Prompt Havuzu ayarı (pp.config.json) yok. <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">Ayar dosyası oluştur</button></div>` : ''}
-    <h3>Ayarlar</h3>${cfgIssues}
+  return `${noCfg ? `<div class="issue warn" role="status">${th('ui.mp.noPpConfig')} <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(tx('ui.common.createPpConfig'))}</button></div>` : ''}
+    <h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
     <form class="grid2" id="mkForm">
-      <label>Marketplace adı<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
-      <label>Sahip<input name="owner" value="${esc(c.owner)}" placeholder="Adın" autocomplete="off"></label>
-      <label>Klasörsüz promptlar için paket<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
-      <label>Katalog sürümü<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
-        <div id="mkVerHint" class="hint">Her paket yayınında bir yama artar; yayın ekranında değiştirebilirsin.</div>
+      <label>${esc(tx('ui.mp.fieldName'))}<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
+      <label>${esc(tx('ui.mp.fieldOwner'))}<input name="owner" value="${esc(c.owner)}" placeholder="${esc(tx('ui.mp.ownerPlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.mp.fieldLoosePackage'))}<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
+      <label>${esc(tx('ui.mp.catalogVersion'))}<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
+        <div id="mkVerHint" class="hint">${esc(tx('ui.mp.catalogVersionHint'))}</div>
         <div id="mkVerErr" class="issue error" role="alert" hidden></div></label>
-      <label class="span2">Açıklama<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
-      <fieldset class="span2" aria-describedby="mkExpErr"><legend>Dışa aktarılacak durumlar</legend>
-        <div class="inline">${DURUM_OPTS.map(([v, t]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${t}</label>`).join(' ')}</div>
+      <label class="span2">${esc(tx('ui.fields.description'))}<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
+      <fieldset class="span2" aria-describedby="mkExpErr"><legend>${esc(tx('ui.mp.exportStatuses'))}</legend>
+        <div class="inline">${DURUM_OPTS.map(([v, k]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${esc(tx(k))}</label>`).join(' ')}</div>
         <div id="mkExpErr" class="issue error" role="alert" hidden></div></fieldset>
-      <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">Marketplace dosyalarını yaz</button>
-        <span class="hint" id="mkState">${st.marketplaceExists ? 'marketplace.json mevcut: ' + esc(st.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı'}</span></div>
+      <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">${esc(tx('ui.mp.writeFiles'))}</button>
+        <span class="hint" id="mkState">${esc(mkStateText(st))}</span></div>
     </form>
-    <h3>Paketler</h3>
-    <div id="mkPkgs"><p class="hint">Yükleniyor…</p></div>
-    <div class="inline" style="margin:12px 0 8px"><span class="hint">Yayınlanan sürüm numarası paketin Yayınla düğmesiyle artar. Push edilirse yeni kurulumlar bu içeriği mevcut sürüm numarasıyla alır; paketi Yayınla önerilir. Bu işlem katalog sürümünü artırmaz.</span><span class="grow"></span><button class="btn" data-act="mk-update">Marketplace'i güncelle</button></div>
-    <h3>Dışa aktarma durumu</h3>
+    <h3>${esc(tx('ui.mp.packages'))}</h3>
+    <div id="mkPkgs"><p class="hint">${esc(tx('ui.common.loading'))}</p></div>
+    <div class="inline" style="margin:12px 0 8px"><span class="hint">${esc(tx('ui.mp.updateHint'))}</span><span class="grow"></span><button class="btn" data-act="mk-update">${th('ui.mp.update')}</button></div>
+    <h3>${esc(tx('ui.mp.exportStatus'))}</h3>
     <div id="mkList">${mkListHtml(st)}</div>
-    <h3>Projelerde kullanım</h3><div id="mkCmds">${mkCmdsHtml(st)}</div>`;
+    <h3>${esc(tx('ui.mp.usage'))}</h3><div id="mkCmds">${mkCmdsHtml(st)}</div>`;
 }
 
 async function loadMkPackages() {
@@ -2623,7 +2631,7 @@ async function loadMkPackages() {
 }
 
 async function openMarket() {
-  openModal({ title: 'Marketplace: ' + activeName(), wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true });
+  openModal({ title: tx('ui.mp.title', { name: activeName() }), wide: true, html: `<p class="hint">${esc(tx('ui.common.loading'))}</p>`, noFocus: true });
   try { S.mk = await get('/api/marketplace/status'); $('#mBody').innerHTML = marketHtml(S.mk); loadMkPackages(); } catch (e) { closeModal(); fail(e); }
 }
 
@@ -2632,7 +2640,7 @@ async function mkReload() {
     S.mk = await get('/api/marketplace/status');
     const l = $('#mkList'); if (l) l.innerHTML = mkListHtml(S.mk);
     const c = $('#mkCmds'); if (c) c.innerHTML = mkCmdsHtml(S.mk);
-    const s = $('#mkState'); if (s) s.textContent = S.mk.marketplaceExists ? 'marketplace.json mevcut: ' + (S.mk.marketplacePlugins.join(', ') || 'paket yok') : 'Henüz yazılmadı';
+    const s = $('#mkState'); if (s) s.textContent = mkStateText(S.mk);
     loadMkPackages();
   } catch (e) { fail(e); }
   afterWrite();
@@ -2643,14 +2651,15 @@ async function mkUpdate() {
   const st = S.mk; if (!st) return;
   const writes = st.items.filter((i) => i.state !== 'guncel').length;
   const removes = st.orphans.length;
-  const txt = `${writes} dosya yazılacak, ${removes} dosya kaldırılacak (çöp kutusuna). Katalog sürümü artmaz, etiket atılmaz, push edilmez.`
-    + (removes ? ' Kaldırılacaklar: ' + st.orphans.slice(0, 6).map((o) => o.target).join(', ') + (removes > 6 ? ' …' : '') : '');
-  const a = await askChoice({ title: "Marketplace'i güncelle", text: txt, choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Güncelle', kind: 'primary' }] });
+  const list = st.orphans.slice(0, 6).map((o) => o.target).join(', ') + (removes > 6 ? ' …' : '');
+  const txt = removes ? tx('ui.mp.updateTextWithList', { writes, removes, list }) : tx('ui.mp.updateText', { writes, removes });
+  const a = await askChoice({ title: tx('ui.mp.update'), text: txt, choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.remote.bandUpdate'), kind: 'primary' }] });
   if (a !== 'yes') { openMarket(); return; }
   try {
     const r = await api('POST', '/api/marketplace/update', {});
-    const sk = (r.skippedPackages || []).length ? ' Engelleyici sorunu olan paketler atlandı: ' + r.skippedPackages.map((x) => x.name).join(', ') + '.' : '';
-    toast((r.commit ? 'Marketplace güncellendi' : 'Değişiklik yok') + sk, sk ? 'error' : 'ok', sk ? 7000 : 3000);
+    const sk = (r.skippedPackages || []).length ? { names: r.skippedPackages.map((x) => x.name).join(', ') } : null;
+    const msg = sk ? (r.commit ? tx('ui.mp.updatedSkipped', sk) : tx('ui.mp.noChangeSkipped', sk)) : (r.commit ? tx('ui.mp.updated') : tx('ui.mp.noChange'));
+    toast(msg, sk ? 'error' : 'ok', sk ? 7000 : 3000);
   } catch (e) { fail(e); }
   await openMarket();
   const b = $('#mBody [data-act="mk-update"]'); if (b) b.focus();
@@ -2658,12 +2667,19 @@ async function mkUpdate() {
 }
 
 /* ------------------------------------------------------------ paket sayfası */
-const CHANGE_LABEL = { yeni: 'Yeni', degisti: 'Değişti', ayni: 'Değişmedi' };
-const LEVEL_NAME = { buyuk: 'Büyük', kucuk: 'Küçük', yama: 'Yama' };
+/** Summary: Paket sayfasındaki değişim kodu (yeni|degisti|ayni) -> görünen etiket sözlük anahtarı. */
+const PK_CHANGE_KEYS = { yeni: 'ui.pkg.changeNew', degisti: 'ui.pkg.changeChanged', ayni: 'ui.pkg.changeSame' };
+
+/** Summary: Paket sayfasındaki değişim kodunun görünen etiketi; bilinmeyen kod ham döner. */
+function pkChangeLabel(code) {
+  if (!Object.prototype.hasOwnProperty.call(PK_CHANGE_KEYS, code)) return code == null ? '' : String(code);
+  const k = PK_CHANGE_KEYS[code];
+  return tx(k);
+}
 
 async function openPackage(name, from) {
   S.pkReturn = from || 'tree';
-  openModal({ title: 'Paket: ' + name, wide: true, html: '<p class="hint">Yükleniyor…</p>', noFocus: true, onClose: pkClosed });
+  openModal({ title: tx('ui.pkg.title', { name }), wide: true, html: `<p class="hint">${esc(tx('ui.common.loading'))}</p>`, noFocus: true, onClose: pkClosed });
   S.pk = { name, msg: null };
   await pkLoad();
 }
@@ -2698,9 +2714,13 @@ async function pkLoad() {
 // Seçilebilir sürüm seçenekleri: [{ id, label, value }]
 function pkOptions(d) {
   const p = d.proposal; const base = d.baseVersion;
-  if (!base) return [{ id: 'ilk', label: 'İlk sürüm ' + Rules.DEFAULT_VERSION + ' (önerilen)', value: Rules.DEFAULT_VERSION }];
-  if (p.tagOnly) return [{ id: 'etiket', label: 'Mevcut ' + base + ' sürümünü etiketle (önerilen)', value: base }];
-  return Rules.VERSION_LEVELS.map((lv) => ({ id: lv, label: LEVEL_NAME[lv] + ' ' + Rules.bumpVersion(base, lv) + (p.level === lv ? ' (önerilen)' : ''), value: Rules.bumpVersion(base, lv) }));
+  if (!base) return [{ id: 'ilk', label: tx('ui.pkg.optFirst', { version: Rules.DEFAULT_VERSION }), value: Rules.DEFAULT_VERSION }];
+  if (p.tagOnly) return [{ id: 'etiket', label: tx('ui.pkg.optTagExisting', { version: base }), value: base }];
+  return Rules.VERSION_LEVELS.map((lv) => {
+    const next = Rules.bumpVersion(base, lv);
+    const params = { level: Rules.LEVEL_LABEL[lv], version: String(next) };
+    return { id: lv, label: p.level === lv ? tx('ui.pkg.optLevelRecommended', params) : tx('ui.pkg.optLevel', params), value: next };
+  });
 }
 
 function pkHtml(d) {
@@ -2710,33 +2730,33 @@ function pkHtml(d) {
   const dirty = d.dirty || [];
   const blockers = d.issues || [];
   const hasRemote = !!d.remote;
-  const msg = pk.msg ? `<div class="issue ${pk.msg.kind}" role="alert">${esc(pk.msg.text)}${pk.msg.retry ? ' <button class="btn sm" data-act="pk-push">Tekrar dene</button>' : ''}</div>` : '';
-  const rows = d.prompts.map((p) => `<tr><td><button class="link" data-act="open-close" data-path="${esc(p.source)}">${esc(p.baslik || p.source)}</button></td><td>${esc(p.tur)}</td><td><code>/${esc(d.name)}:${esc(p.ad)}</code></td>
-      <td>${esc(p.oldVersiyon || '')}${p.oldVersiyon || p.versiyon ? ' → ' : ''}${esc(p.versiyon || '—')}${p.tagged === false ? ' <span class="pill warn">Etiketsiz</span>' : ''}</td>
-      <td><span class="pill ${p.change === 'ayni' ? '' : 'warn'}">${CHANGE_LABEL[p.change]}</span></td><td>${p.level ? esc(LEVEL_NAME[p.level]) : '—'}</td></tr>`
+  const msg = pk.msg ? `<div class="issue ${pk.msg.kind}" role="alert">${esc(pk.msg.text)}${pk.msg.retry ? ` <button class="btn sm" data-act="pk-push">${esc(tx('ui.pkg.retry'))}</button>` : ''}</div>` : '';
+  const rows = d.prompts.map((p) => `<tr><td><button class="link" data-act="open-close" data-path="${esc(p.source)}">${esc(p.baslik || p.source)}</button></td><td>${esc(turLabel(p.tur))}</td><td><code>/${esc(d.name)}:${esc(p.ad)}</code></td>
+      <td>${esc(p.oldVersiyon || '')}${p.oldVersiyon || p.versiyon ? ' → ' : ''}${esc(p.versiyon || '—')}${p.tagged === false ? ` <span class="pill warn">${esc(tx('ui.pkg.untagged'))}</span>` : ''}</td>
+      <td><span class="pill ${p.change === 'ayni' ? '' : 'warn'}">${esc(pkChangeLabel(p.change))}</span></td><td>${p.level ? esc(Rules.LEVEL_LABEL[p.level]) : '—'}</td></tr>`
     + p.issues.filter((i) => i.code === 'surumArtirilmamis').map((i) => `<tr><td colspan="6" class="issue warn">${esc(i.msg)}</td></tr>`).join('')).join('')
-    + d.removed.map((r) => `<tr><td colspan="3" class="mono">${esc(r.target)}</td><td>—</td><td><span class="pill bad">Kaldırıldı</span></td><td>${esc(LEVEL_NAME[r.level])}</td></tr>`).join('');
-  return `<h2 id="pkHead" tabindex="-1" style="margin:0 0 6px">Paket: ${esc(d.name)}</h2>
-    <p class="hint" style="margin:0 0 8px">Etkin marketplace: <b>${esc(activeName())}</b> · Sürüm: ${d.version ? 'v' + esc(d.version) : 'yayınlanmadı'} · Son etiket: ${d.lastTag ? esc(d.lastTag.name) + ' (' + esc(fmtDate(d.lastTag.date)) + ')' : 'yok'}
-      ${d.pendingPush ? ' <span class="pill warn">Push bekliyor</span> <button class="btn sm" data-act="pk-push">Push et</button>' : ''}</p>
+    + d.removed.map((r) => `<tr><td colspan="3" class="mono">${esc(r.target)}</td><td>—</td><td><span class="pill bad">${esc(tx('ui.pkg.removed'))}</span></td><td>${esc(Rules.LEVEL_LABEL[r.level])}</td></tr>`).join('');
+  return `<h2 id="pkHead" tabindex="-1" style="margin:0 0 6px">${esc(tx('ui.pkg.title', { name: d.name }))}</h2>
+    <p class="hint" style="margin:0 0 8px">${th('ui.pkg.info', { mp: activeName(), version: d.version ? 'v' + d.version : tx('ui.pkg.notPublished'), tag: d.lastTag ? d.lastTag.name + ' (' + fmtDate(d.lastTag.date) + ')' : tx('ui.common.none') })}
+      ${d.pendingPush ? ` <span class="pill warn">${esc(tx('ui.pkg.pushPending'))}</span> <button class="btn sm" data-act="pk-push">${esc(tx('ui.remote.push'))}</button>` : ''}</p>
     ${msg}
-    <div class="inline" style="margin-bottom:10px"><label class="grow pkdesc">Açıklama<input id="pkDesc" value="${esc(d.description)}" autocomplete="off"></label><button class="btn sm" data-act="pk-desc">Kaydet</button></div>
-    ${blockers.length ? `<div class="issue error" role="alert"><b>Yayını engelleyen sorunlar (${blockers.length})</b><ul>${blockers.map((i) => `<li>${i.source ? `<button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.source)}</button>: ` : ''}${esc(i.msg)}${i.code === 'paketUyusmuyor' && i.source ? ` <button class="btn sm" data-act="pk-esitle" data-path="${esc(i.source)}">Alanı klasöre eşitle</button>` : ''}</li>`).join('')}</ul></div>` : ''}
-    <table class="ptable"><caption>Paketteki promptlar</caption><thead><tr><th scope="col">Prompt</th><th scope="col">Tür</th><th scope="col">Ad</th><th scope="col">Versiyon</th><th scope="col">Değişim</th><th scope="col">Seviye</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Pakette dışa aktarılacak prompt yok.</td></tr>'}</tbody></table>
-    <details style="margin:10px 0"><summary>Dışa aktarılmayanlar (${d.excluded.length})</summary><ul>${d.excluded.map((x) => `<li><button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik || x.source)}</button> <span class="hint">${esc(x.reason)}</span></li>`).join('') || '<li class="hint">Yok</li>'}</ul></details>
-    <fieldset class="pkrel"><legend>Yeni sürüm</legend>
+    <div class="inline" style="margin-bottom:10px"><label class="grow pkdesc">${esc(tx('ui.fields.description'))}<input id="pkDesc" value="${esc(d.description)}" autocomplete="off"></label><button class="btn sm" data-act="pk-desc">${esc(tx('ui.file.save'))}</button></div>
+    ${blockers.length ? `<div class="issue error" role="alert"><b>${esc(tx('ui.pkg.blockers', { count: blockers.length }))}</b><ul>${blockers.map((i) => `<li>${i.source ? `<button class="link" data-act="open-close" data-path="${esc(i.source)}">${esc(i.source)}</button>: ` : ''}${esc(i.msg)}${i.code === 'paketUyusmuyor' && i.source ? ` <button class="btn sm" data-act="pk-esitle" data-path="${esc(i.source)}">${esc(tx('ui.edit.syncFieldToFolder'))}</button>` : ''}</li>`).join('')}</ul></div>` : ''}
+    <table class="ptable"><caption>${esc(tx('ui.pkg.promptsCaption'))}</caption><thead><tr><th scope="col">${esc(tx('ui.pkg.colPrompt'))}</th><th scope="col">${esc(tx('ui.fields.type'))}</th><th scope="col">${esc(tx('ui.fields.name'))}</th><th scope="col">${esc(tx('ui.fields.version'))}</th><th scope="col">${esc(tx('ui.pkg.colChange'))}</th><th scope="col">${esc(tx('ui.bump.level'))}</th></tr></thead><tbody>${rows || `<tr><td colspan="6">${esc(tx('ui.pkg.noPrompts'))}</td></tr>`}</tbody></table>
+    <details style="margin:10px 0"><summary>${esc(tx('ui.pkg.excluded', { count: d.excluded.length }))}</summary><ul>${d.excluded.map((x) => `<li><button class="link" data-act="open-close" data-path="${esc(x.source)}">${esc(x.baslik || x.source)}</button> <span class="hint">${esc(x.reason)}</span></li>`).join('') || `<li class="hint">${esc(tx('ui.pkg.excludedNone'))}</li>`}</ul></details>
+    <fieldset class="pkrel"><legend>${esc(tx('ui.bump.title'))}</legend>
       <div class="stack">
         ${opts.map((o) => `<label class="inline"><input type="radio" name="pkLevel" value="${esc(o.value)}" data-id="${esc(o.id)}" ${o.id === sel ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}
-        <label class="inline"><input type="radio" name="pkLevel" value="" data-id="ozel" ${!opts.some((o) => o.id === sel) ? 'checked' : ''}> Özel <input id="pkCustom" placeholder="1.2.3" autocomplete="off" aria-describedby="pkVerErr" style="width:110px"></label>
+        <label class="inline"><input type="radio" name="pkLevel" value="" data-id="ozel" ${!opts.some((o) => o.id === sel) ? 'checked' : ''}> ${esc(tx('ui.pkg.custom'))} <input id="pkCustom" placeholder="1.2.3" autocomplete="off" aria-describedby="pkVerErr" style="width:110px"></label>
         <div id="pkVerErr" class="issue error" role="alert" hidden></div>
         <div class="hint">${esc(d.proposal.reasons.join(' · '))}</div>
-        <label>Katalog sürümü <input id="pkCat" value="${esc(d.marketplaceVersion.proposal || d.marketplaceVersion.current)}" autocomplete="off" aria-describedby="pkCatErr" style="width:110px"></label>
-        <div class="hint">Mevcut: ${esc(d.marketplaceVersion.current)}. "Marketplace'i güncelle" bunu artırmaz.</div>
+        <label>${esc(tx('ui.mp.catalogVersion'))} <input id="pkCat" value="${esc(d.marketplaceVersion.proposal || d.marketplaceVersion.current)}" autocomplete="off" aria-describedby="pkCatErr" style="width:110px"></label>
+        <div class="hint">${th('ui.pkg.catalogHint', { current: d.marketplaceVersion.current || '' })}</div>
         <div id="pkCatErr" class="issue error" role="alert" hidden></div>
-        <label class="inline"><input type="checkbox" id="pkPush" ${hasRemote ? 'checked' : 'disabled'} aria-describedby="pkPushWhy"> Push et${hasRemote ? ' (' + esc(d.remote) + ')' : ''}</label>
-        <div class="hint" id="pkPushWhy">${hasRemote ? '' : 'Uzak depo yok, yerelde yayınlanacak.'}</div>
-        ${dirty.length ? `<div class="issue warn" role="alert">Önce kaydet (commit): ${dirty.slice(0, 5).map(esc).join(', ')}${dirty.length > 5 ? ' …' : ''} <button class="btn sm" data-act="pk-git">Git panelini aç</button></div>` : ''}
-        <div class="foot-left"><button class="btn primary" id="pkGo" data-act="pk-publish" aria-describedby="pkWhy">${d.proposal.tagOnly ? esc(d.baseVersion) + ' sürümünü etiketle' : 'Yayınla'}</button><span class="hint" id="pkWhy"></span></div>
+        <label class="inline"><input type="checkbox" id="pkPush" ${hasRemote ? 'checked' : 'disabled'} aria-describedby="pkPushWhy"> ${esc(tx('ui.remote.push'))}${hasRemote ? ' (' + esc(d.remote) + ')' : ''}</label>
+        <div class="hint" id="pkPushWhy">${hasRemote ? '' : esc(tx('ui.pkg.noRemoteWhy'))}</div>
+        ${dirty.length ? `<div class="issue warn" role="alert">${esc(tx('ui.pkg.dirtyFirst', { files: dirty.slice(0, 5).join(', ') + (dirty.length > 5 ? ' …' : '') }))} <button class="btn sm" data-act="pk-git">${esc(tx('ui.common.openGitPanel'))}</button></div>` : ''}
+        <div class="foot-left"><button class="btn primary" id="pkGo" data-act="pk-publish" aria-describedby="pkWhy">${d.proposal.tagOnly ? esc(tx('ui.pkg.tagVersion', { version: d.baseVersion || '' })) : esc(tx('ui.pkg.publish'))}</button><span class="hint" id="pkWhy"></span></div>
         <div id="pkConfirm" aria-live="assertive"></div>
         <div id="pkProg" aria-live="polite" class="hint"></div>
       </div></fieldset>`;
@@ -2759,19 +2779,19 @@ function pkValidate() {
     verErr = Rules.checkVersion(ch.value) || '';
     if (!verErr && d.baseVersion) {
       const cmp = Rules.compareVersions(ch.value, d.baseVersion);
-      if (cmp < 0 || (cmp === 0 && !d.proposal.tagOnly)) verErr = 'Sürüm son yayından (' + d.baseVersion + ') büyük olmalı';
+      if (cmp < 0 || (cmp === 0 && !d.proposal.tagOnly)) verErr = tx('ui.pkg.errNotGreater', { base: d.baseVersion });
     }
-    if (!verErr && d.tags.some((t) => t.version === ch.value)) verErr = 'Bu sürümün etiketi zaten var: paket/' + d.name + '/v' + ch.value;
+    if (!verErr && d.tags.some((t) => t.version === ch.value)) verErr = tx('ui.pkg.errTagExists', { tag: 'paket/' + d.name + '/v' + ch.value });
   }
   const cat = ($('#pkCat').value || '').trim();
   let catErr = Rules.checkVersion(cat) || '';
-  if (!catErr && Rules.compareVersions(cat, Rules.coerceVersion(d.marketplaceVersion.current).version || '0.0.0') < 0) catErr = 'Katalog sürümü mevcut sürümden (' + d.marketplaceVersion.current + ') küçük olamaz';
+  if (!catErr && Rules.compareVersions(cat, Rules.coerceVersion(d.marketplaceVersion.current).version || '0.0.0') < 0) catErr = tx('ui.pkg.errCatalogLower', { current: d.marketplaceVersion.current });
   showFieldErr('pkVerErr', verErr); showFieldErr('pkCatErr', catErr);
   const cu = $('#pkCustom'); if (cu) { if (verErr && ch.custom) cu.setAttribute('aria-invalid', 'true'); else cu.removeAttribute('aria-invalid'); }
-  if ((d.issues || []).length) why.push('Önce engelleyici sorunları gider.');
-  if ((d.dirty || []).length) why.push('Önce kaydedilmemiş dosyaları commit et.');
-  if (!d.exportedCount) why.push('Pakette yayınlanacak prompt yok.');
-  if (d.proposal.noChange && !ch.custom) why.push('Son yayından beri değişiklik yok.');
+  if ((d.issues || []).length) why.push(tx('ui.pkg.whyBlockers'));
+  if ((d.dirty || []).length) why.push(tx('ui.pkg.whyDirty'));
+  if (!d.exportedCount) why.push(tx('ui.pkg.whyEmpty'));
+  if (d.proposal.noChange && !ch.custom) why.push(tx('ui.pkg.whyNoChange'));
   if (verErr) why.push(verErr);
   if (catErr) why.push(catErr);
   $('#pkGo').disabled = why.length > 0;
@@ -2784,9 +2804,10 @@ function pkAsk() {
   const pk = S.pk; const d = pk && pk.d; if (!d || !pkValidate()) return;
   const ch = pkChosen(); const cat = $('#pkCat').value.trim(); const push = !!$('#pkPush').checked && !$('#pkPush').disabled;
   const w = d.prompts.filter((p) => p.change !== 'ayni').length; const rm = d.removed.length;
-  const text = `${d.name} ${ch.value} olarak yayınlanacak: ${w} dosya yazılacak, ${rm} dosya kaldırılacak, katalog sürümü ${cat}, commit + paket/${d.name}/v${ch.value} etiketi${push ? ', ' + d.remote + "'e push" : ''}.`;
+  const params = { name: d.name, version: ch.value, writes: w, removes: rm, catalog: cat, tag: 'paket/' + d.name + '/v' + ch.value, remote: d.remote || '' };
+  const text = push ? tx('ui.pkg.confirmTextPush', params) : tx('ui.pkg.confirmText', params);
   pk.pending = { version: ch.value, marketplaceVersion: cat, push };
-  $('#pkConfirm').innerHTML = `<div class="issue warn" role="alert">${esc(text)}</div><div class="foot-left"><button class="btn primary" data-act="pk-confirm" id="pkOk">Onayla ve yayınla</button><button class="btn" data-act="pk-cancel">Vazgeç</button></div>`;
+  $('#pkConfirm').innerHTML = `<div class="issue warn" role="alert">${esc(text)}</div><div class="foot-left"><button class="btn primary" data-act="pk-confirm" id="pkOk">${esc(tx('ui.pkg.confirmGo'))}</button><button class="btn" data-act="pk-cancel">${esc(tx('ui.common.cancel'))}</button></div>`;
   $('#pkOk').focus();
 }
 
@@ -2795,19 +2816,19 @@ async function pkPublish() {
   const body = { name: d.name, ...pk.pending };
   $('#pkConfirm').innerHTML = '';
   const go = $('#pkGo'); if (go) go.disabled = true;
-  const steps = ['Doğrulanıyor ve çıktı yazılıyor…', 'Commit ve etiket atılıyor…'].concat(body.push ? ['Push ediliyor…'] : []);
+  const steps = [tx('ui.pkg.stepWrite'), tx('ui.pkg.stepCommit')].concat(body.push ? [tx('ui.pkg.stepPush')] : []);
   let i = 0;
   const prog = $('#pkProg'); if (prog) prog.textContent = steps[0];
   const tick = setInterval(() => { i = Math.min(i + 1, steps.length - 1); const p2 = $('#pkProg'); if (p2) p2.textContent = steps[i]; }, 1500);
   try {
     const r = await api('POST', '/api/package/publish', body);
     clearInterval(tick);
-    toast(d.name + ' ' + r.version + ' yayınlandı' + (r.push && r.push.ok ? ', push edildi' : ''), 'ok', 4000);
-    if (S.pk) S.pk.msg = r.push && !r.push.ok ? { kind: 'warn', text: 'Yerelde yayınlandı, push bekliyor: ' + r.push.error, retry: true } : null;
+    toast(r.push && r.push.ok ? tx('ui.pkg.publishedPushed', { name: d.name, version: r.version }) : tx('ui.pkg.published', { name: d.name, version: r.version }), 'ok', 4000);
+    if (S.pk) S.pk.msg = r.push && !r.push.ok ? { kind: 'warn', text: tx('ui.pkg.localPublishedPushPending', { error: r.push.error || '' }), retry: true } : null;
     afterWrite(); if (S.cur && S.cur.tab === 'hist') loadHistory();
   } catch (e) {
     clearInterval(tick);
-    if (S.pk) S.pk.msg = { kind: 'error', text: errText(e) + (e.data && e.data.needIdentity ? ' (Git panelinden kimliği gir)' : '') };
+    if (S.pk) S.pk.msg = { kind: 'error', text: e.data && e.data.needIdentity ? tx('ui.pkg.errorNeedIdentity', { error: errText(e) }) : errText(e) };
   }
   if (S.pk) { S.pk.pending = null; S.pk.noFocus = false; await pkLoad(); }
 }
@@ -2816,8 +2837,8 @@ async function pkPushOnly() {
   const pk = S.pk; if (!pk) return;
   try {
     const r = await api('POST', '/api/git/push', {});
-    pk.msg = r.ok ? { kind: 'info', text: 'Push edildi.' } : { kind: 'warn', text: 'Push başarısız: ' + r.error, retry: true };
-    if (r.ok) toast('Push edildi');
+    pk.msg = r.ok ? { kind: 'info', text: tx('ui.pkg.pushedMsg') } : { kind: 'warn', text: tx('ui.pkg.pushFailed', { error: r.error || '' }), retry: true };
+    if (r.ok) toast(tx('ui.remote.pushed'));
   } catch (e) { pk.msg = { kind: 'error', text: e.message }; }
   pk.noFocus = false; await pkLoad(); loadGit();
 }
@@ -2829,7 +2850,7 @@ async function pkAlignField(path) {
     const cl = Rules.classifyPromptPath(path, libDirOf());
     FM.set(p, 'paket', cl.paket);
     await api('PUT', '/api/file', { path, raw: FM.stringify(p), baseMtime: r.mtime });
-    toast('Paket alanı klasöre eşitlendi. Commit etmeyi unutma.');
+    toast(tx('ui.pkg.fieldSynced'));
   } catch (e) { fail(e); }
   afterWrite();
   if (S.pk) { S.pk.noFocus = true; await pkLoad(); }

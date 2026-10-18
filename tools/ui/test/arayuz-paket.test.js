@@ -29,6 +29,7 @@ test('index.html LF satır sonlu; eski prompt bazlı yayın eylemleri kaldırıl
 test('paket sayfası düzeni: radyo/onay satırı yan yana, açıklama alanı esnek', () => {
   assert.match(html, /\.pkrel \.stack label\.inline \{ display: flex;/);
   assert.match(html, /\.pkrel \.stack input\[type=radio\] \{ width: auto;/);
-  assert.match(html, /<label class="grow pkdesc">Açıklama<input id="pkDesc"/);
+  assert.match(html, /<label class="grow pkdesc">\$\{esc\(tx\('ui\.fields\.description'\)\)\}<input id="pkDesc"/);
+  assert.equal(require('../public/lang/tr.js')['ui.fields.description'], 'Açıklama');
   assert.match(html, /\.pkdesc input \{ flex: 1;/);
 });
