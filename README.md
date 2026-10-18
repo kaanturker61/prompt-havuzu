@@ -15,7 +15,7 @@
 
 **Prompt havuzu** ("prompt pool" in Turkish) is a local web app that keeps your prompts as plain Markdown files, gives each collection its own git repository, and publishes the ones you choose as a [Claude Code](https://claude.com/claude-code) plugin marketplace. It runs on your machine, needs only Node.js and git, and has no runtime dependencies.
 
-> The interface is in Turkish. This README gives the English meaning of each Turkish label the first time it appears.
+> The interface is available in English (US) and Turkish. By default it follows your browser language; change it in **Ayarlar** (Settings) under **Dil / Language**. This README names each control by its Turkish label, with the English label in parentheses the first time it appears.
 
 ## Why
 
@@ -37,6 +37,7 @@
 - **Import** of old `.txt` files (**İçe aktar**), **move** between plugins and marketplaces, rename, tags. Deleting moves files to `.pp/trash/`; there is no permanent delete.
 - **Package publishing** to `plugins/<package>/`, with a stated reason for every prompt that is skipped.
 - **Remote repositories:** add or edit a remote, check it, push (including pending tags), update by fast-forward only, and clone a marketplace from a Git URL.
+- **Two interface languages:** English (US) and Turkish, switchable in Settings. Commit messages and tag notes the app writes follow the interface language; file formats, frontmatter keys, tag names and the generated plugin files do not change with it.
 
 ## Quick start
 
@@ -66,7 +67,7 @@ On first run the app shows a setup screen (**Kuruluma devam et**, continue setup
 - The tree has three levels: **Marketplace**, **Plugin**, **Prompt**. Clicking a node makes that marketplace the **active** one. The editor, Git panel, versions, import and publishing act on the active marketplace; the tree, search and filters cover all of them.
 - Special nodes: **Klasörsüz promptlar** (loose prompts directly in `prompts/`), **Gelen kutusu** (inbox, `prompts/gelen-kutusu`, never published) and **Teknik dosyalar** (technical files such as `plugins/`, `.claude-plugin/` and `pp.config.json`).
 - Plugin names cannot start with reserved prefixes such as `claude-` or `anthropic-`.
-- Folders without a git repository are listed separately and can be initialised with **Git'i başlat** (Initialise git).
+- Folders without a git repository are listed separately and can be initialized with **Git'i başlat** (Initialize git).
 - Moving a prompt to another marketplace leaves its history and tags in the source repository; the target sees a new, uncommitted file.
 
 </details>
@@ -146,7 +147,7 @@ Review the staged changes with this focus: {{focus}}
 
 ## Configuration
 
-User settings (`libraryRoot`, `activeMarketplace`, `remoteCheck`) live in a JSON file:
+User settings (`libraryRoot`, `activeMarketplace`, `remoteCheck`, `language`) live in a JSON file:
 
 | OS | Path |
 |---|---|
@@ -160,7 +161,7 @@ User settings (`libraryRoot`, `activeMarketplace`, `remoteCheck`) live in a JSON
 | `--port <n>` or `PORT=<n>` | Port, default `4317`; the next 10 ports are tried if it is taken |
 | `--open` | Open the browser on start |
 
-The old `--root` flag and `PROMPT_ROOT` variable were removed; choose the library root in **Ayarlar**. That dialog also has "Uzak depoyu kontrol et" (check the remote): on startup (at most once per hour) or manually only.
+The old `--root` flag and `PROMPT_ROOT` variable were removed; choose the library root in **Ayarlar**. That dialog also has "Uzak depoyu kontrol et" (check the remote): on startup (at most once per hour) or manually only. The `language` setting is `auto` (follow the browser language: Turkish for `tr*`, English otherwise), `tr` or `en`; changing it reloads the page.
 
 Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (new marketplaces use `prompts`), `marketplace` (`name`, `owner`, `plugin`, `description`, `version`), `packages`, and `export` (`durumlar`, `haricKlasorler`).
 
