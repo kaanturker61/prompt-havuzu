@@ -56,7 +56,7 @@ class PromptIndex {
     } else if (isMd) {
       item.isMd = false;
       item.tooBig = true;
-      item.check = { code: 'dosyaBuyuk', level: 'warn', reason: Rules.MSG.dosyaBuyuk };
+      item.check = { code: 'dosyaBuyuk', level: 'warn', get reason() { return Rules.MSG.dosyaBuyuk; } };
     }
     cache.set(rel, item);
     return item;

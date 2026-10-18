@@ -43,6 +43,9 @@ const { OpLock } = require('./lib/op-lock');
 const { StateStore } = require('./lib/state-store');
 const { REMOTE_CHECKS, LANGUAGES } = require('./lib/config-store');
 
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
 /* ------------------------------------------------------------------ ayarlar */
 
 function parseArgs(argv) {
@@ -151,16 +154,17 @@ function guardOutputDirs(rels) {
 }
 
 // Ham fs/spawn hatasını (errno) Türkçe, yolsuz bir iletiye çevirir. HTTP durumu taşıyan hatalara dokunmaz (null döner).
+/** Summary: errno kodu -> [HTTP durumu, sözlük anahtarı]; metin değil anahtar tutulur, ileti çağrı anındaki dilde üretilir. */
 const FS_ERR = {
-  ENAMETOOLONG: [400, 'Ad ya da yol çok uzun'], ENOENT: [500, 'Dosya ya da klasör bulunamadı'], EACCES: [500, 'Erişim izni yok'],
-  EPERM: [500, 'İşlem için izin yok'], EBUSY: [500, 'Dosya başka bir işlem tarafından kullanılıyor'], ENOSPC: [500, 'Diskte yer kalmadı'],
-  EEXIST: [500, 'Dosya ya da klasör zaten var'], ENOTDIR: [500, 'Yolun bir bölümü klasör değil'], EISDIR: [500, 'Bu yol bir klasör'],
-  ENOTEMPTY: [500, 'Klasör boş değil'], EROFS: [500, 'Dosya sistemi salt okunur'], EMFILE: [500, 'Çok fazla açık dosya']
+  ENAMETOOLONG: [400, 'err.fs.nameTooLong'], ENOENT: [500, 'err.fs.notFound'], EACCES: [500, 'err.fs.accessDenied'],
+  EPERM: [500, 'err.fs.permissionDenied'], EBUSY: [500, 'err.fs.busy'], ENOSPC: [500, 'err.fs.noSpace'],
+  EEXIST: [500, 'err.fs.exists'], ENOTDIR: [500, 'err.fs.notDirectory'], EISDIR: [500, 'err.fs.isDirectory'],
+  ENOTEMPTY: [500, 'err.fs.notEmpty'], EROFS: [500, 'err.fs.readOnly'], EMFILE: [500, 'err.fs.tooManyOpen']
 };
 function mapRawError(e) {
   if (!e || e.status || !e.syscall || !e.code) return null;
-  const [status, text] = FS_ERR[e.code] || [500, String(e.syscall).startsWith('spawn') ? 'Komut çalıştırılamadı' : 'Dosya sistemi hatası'];
-  return { status, message: `${text} (${e.code})` };
+  const [status, key] = FS_ERR[e.code] || [500, String(e.syscall).startsWith('spawn') ? 'err.fs.spawnFailed' : 'err.fs.generic'];
+  return { status, message: tx(key, { code: e.code }) };
 }
 
 // Git hatasını arayüze Türkçe özet + arındırılmış ayrıntıyla verir: { error, data: { gitCode, gitDetail } }.
@@ -284,7 +288,7 @@ async function marketplaceStatus() {
       add: `claude plugin marketplace add ${quoteArg(ac.primary)}`,
       addInSession: `/plugin marketplace add ${quoteArg(ac.primary)}`,
       alternatives: ac.alternatives.map((a) => `claude plugin marketplace add ${quoteArg(a)}`),
-      pinHint: `${ac.primary}#<dal-veya-etiket>`,
+      pinHint: `${ac.primary}#${tx('srv.marketplace.pinRef')}`,
       addNote: null
     };
   } else {
@@ -292,7 +296,7 @@ async function marketplaceStatus() {
       add: `claude plugin marketplace add ${quoteArg(root())}`,
       addInSession: `/plugin marketplace add ${quoteArg(root())}`,
       alternatives: [], pinHint: null,
-      addNote: 'Yerel yol: plugin\'ler yerinde yüklenir, sürüm takibi yapılmaz'
+      addNote: tx('srv.marketplace.addNoteLocal')
     };
   }
   commands.validate = `claude plugin validate ${quoteArg(root())}`;
@@ -320,7 +324,7 @@ async function marketplaceStatus() {
 
 function expandDir(d) {
   d = String(d || '').trim().replace(/^["']|["']$/g, '');
-  if (!d) throw httpErr(400, 'Klasör yolu gerekli');
+  if (!d) throw httpErr(400, tx('err.import.dirRequired'));
   if (d === '~' || d.startsWith('~/') || d.startsWith('~\\')) d = path.join(os.homedir(), d.slice(1));
   return path.resolve(d);
 }
@@ -330,7 +334,7 @@ async function scanTxt(dirAbs, recursive) {
   async function rec(abs, depth) {
     let ents;
     try { ents = await fsp.readdir(abs, { withFileTypes: true }); } catch (e) {
-      if (depth === 0) throw httpErr(400, 'Klasör okunamadı: ' + e.message);
+      if (depth === 0) throw httpErr(400, tx('err.import.dirUnreadable', { reason: e.message }));
       return;
     }
     for (const e of ents) {
@@ -354,7 +358,7 @@ async function scanTxt(dirAbs, recursive) {
 
 function titleFromName(name) {
   const t = name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return t.charAt(0).toLocaleUpperCase('tr') + t.slice(1);
+  return t.charAt(0).toLocaleUpperCase(I18n.current() === 'tr' ? 'tr' : 'en-US') + t.slice(1);
 }
 
 async function importFiles(dirAbs, files, targetRel) {
@@ -363,12 +367,12 @@ async function importFiles(dirAbs, files, targetRel) {
   for (const f of files) {
     const abs = path.resolve(String(f));
     const back = path.relative(dirAbs, abs);
-    if (back.startsWith('..') || path.isAbsolute(back)) { skipped.push({ file: f, reason: 'Seçilen klasörün dışında' }); continue; }
-    if (!/\.txt$/i.test(abs)) { skipped.push({ file: f, reason: '.txt değil' }); continue; }
+    if (back.startsWith('..') || path.isAbsolute(back)) { skipped.push({ file: f, reason: tx('srv.import.outside') }); continue; }
+    if (!/\.txt$/i.test(abs)) { skipped.push({ file: f, reason: tx('srv.import.notTxt') }); continue; }
     let buf; let st;
-    try { buf = await fsp.readFile(abs); st = await fsp.stat(abs); } catch (e) { skipped.push({ file: f, reason: 'Okunamadı' }); continue; }
+    try { buf = await fsp.readFile(abs); st = await fsp.stat(abs); } catch (e) { skipped.push({ file: f, reason: tx('srv.import.unreadable') }); continue; }
     const text = decode(buf).replace(/^﻿/, '').replace(/\r\n/g, '\n').trim();
-    if (!text) { skipped.push({ file: f, reason: 'Boş dosya' }); continue; }
+    if (!text) { skipped.push({ file: f, reason: tx('srv.import.empty') }); continue; }
     const base = path.basename(abs);
     const p = FM.parse('');
     FM.set(p, 'baslik', titleFromName(base));
@@ -376,7 +380,7 @@ async function importFiles(dirAbs, files, targetRel) {
     FM.set(p, 'olusturma', st.mtime.toISOString().slice(0, 10));
     p.body = '\n' + text + '\n';
     const stem = FM.slug(base.replace(/\.[^.]+$/, ''));
-    if (Rules.isDeviceName(stem + '.md')) { skipped.push({ file: f, reason: 'Windows aygıt adı: ' + stem }); continue; }
+    if (Rules.isDeviceName(stem + '.md')) { skipped.push({ file: f, reason: tx('srv.import.deviceName', { name: stem }) }); continue; }
     const rel = await uniquePath(target.rel + '/' + stem + '.md');
     try { checkNewPath(root(), rel); } catch (e) { skipped.push({ file: f, reason: e.message }); continue; }
     await atomicWrite(path.join(root(), rel), FM.stringify(p), { mkdir: true });
@@ -393,7 +397,8 @@ const route = (method, p, fn, opts) => routes.set(method + ' ' + p, { fn, open: 
 
 function setupRequired(state) {
   const first = state.issues.find((i) => i.level === 'error');
-  return httpErr(409, 'Kurulum tamamlanmadı: ' + (first ? first.message : 'bilinmeyen sorun'), { setupRequired: true, setup: state });
+  const message = first ? tx('err.setup.required', { reason: first.message }) : tx('err.setup.requiredUnknown');
+  return httpErr(409, message, { setupRequired: true, setup: state });
 }
 
 // Library kökü kullanılamıyorsa veya git yoksa true (yeni marketplace rotalarını engeller).
@@ -435,8 +440,8 @@ async function settingsView() {
 route('GET', '/api/settings', async () => settingsView(), { open: true });
 
 route('PUT', '/api/settings', async ({ body }) => {
-  if (body.remoteCheck !== undefined && !REMOTE_CHECKS.includes(body.remoteCheck)) throw httpErr(400, 'Geçersiz değer', { field: 'remoteCheck' });
-  if (body.language !== undefined && !LANGUAGES.includes(body.language)) throw httpErr(400, I18n.tx('err.settings.invalidValue'), { field: 'language' });
+  if (body.remoteCheck !== undefined && !REMOTE_CHECKS.includes(body.remoteCheck)) throw httpErr(400, tx('err.settings.invalidValue'), { field: 'remoteCheck' });
+  if (body.language !== undefined && !LANGUAGES.includes(body.language)) throw httpErr(400, tx('err.settings.invalidValue'), { field: 'language' });
   const prefs = {
     ...(body.remoteCheck !== undefined ? { remoteCheck: body.remoteCheck } : {}),
     ...(body.language !== undefined ? { language: body.language } : {})
@@ -444,30 +449,30 @@ route('PUT', '/api/settings', async ({ body }) => {
   // Yalnızca uzak depo kontrol ayarı gelirse library kökü doğrulaması atlanır.
   if (Object.keys(prefs).length && (body.libraryRoot === undefined || body.libraryRoot === null || body.libraryRoot === '')) {
     const { config } = await configStore.load();
-    try { await configStore.save({ ...config, ...prefs }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    try { await configStore.save({ ...config, ...prefs }); } catch (e) { throw httpErr(500, tx('err.settings.writeFailed', { reason: e.message })); }
     return settingsView();
   }
   let d = String(body.libraryRoot == null ? '' : body.libraryRoot).trim().replace(/^["']|["']$/g, '');
-  if (!d) throw httpErr(400, 'Library kökü gerekli');
+  if (!d) throw httpErr(400, tx('err.settings.rootRequired'));
   if (d === '~' || d.startsWith('~/') || d.startsWith('~\\')) d = path.join(os.homedir(), d.slice(1));
-  if (!path.isAbsolute(d)) throw httpErr(400, 'Mutlak bir klasör yolu gir');
+  if (!path.isAbsolute(d)) throw httpErr(400, tx('err.settings.absolutePath'));
   d = path.resolve(d);
   if (paths.samePath(d, TOOL_DIR) || paths.isInside(d, TOOL_DIR)) {
-    throw httpErr(400, 'Library kökü araç reposunun içinde olamaz: ' + d, { code: 'kokAracReposunda' });
+    throw httpErr(400, tx('err.settings.rootInToolRepo', { path: d }), { code: 'kokAracReposunda' });
   }
   const st = await fsp.stat(d).catch(() => null);
   if (!st) {
-    if (!body.create) throw httpErr(404, 'Klasör bulunamadı: ' + d, { notFound: true });
-    try { await fsp.mkdir(d, { recursive: true }); } catch (e) { throw httpErr(500, 'Klasör oluşturulamadı: ' + e.message); }
+    if (!body.create) throw httpErr(404, tx('err.settings.folderNotFound', { path: d }), { notFound: true });
+    try { await fsp.mkdir(d, { recursive: true }); } catch (e) { throw httpErr(500, tx('err.settings.mkdirFailed', { reason: e.message })); }
   } else if (!st.isDirectory()) {
-    throw httpErr(400, 'Bu yol bir klasör değil: ' + d);
+    throw httpErr(400, tx('err.settings.notDirectory', { path: d }));
   }
   const { config } = await configStore.load();
   const next = { ...config, libraryRoot: d, ...prefs };
   // Kayıtlı marketplace yeni kökte yoksa boşalt.
   if (next.activeMarketplace && !(await registry.folderOf(d, next.activeMarketplace))) next.activeMarketplace = '';
   const saveCfg = async (c) => {
-    try { await configStore.save(c); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    try { await configStore.save(c); } catch (e) { throw httpErr(500, tx('err.settings.writeFailed', { reason: e.message })); }
   };
   await saveCfg(next);
   // Seçili marketplace yoksa ve kökte tam olarak bir geçerli marketplace varsa onu seç.
@@ -495,7 +500,7 @@ route('POST', '/api/marketplaces', async ({ body }) => {
   const made = await factory.create(st.libraryRoot, { name: body.name, description: body.description, owner: body.owner });
   if (body.activate !== false) {
     const { config } = await configStore.load();
-    try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, tx('err.settings.writeFailed', { reason: e.message })); }
   }
   setup.invalidate();
   catalog.invalidate();
@@ -515,7 +520,7 @@ route('POST', '/api/marketplaces/clone', async ({ body }) => {
   }
   if (body.activate !== false) {
     const { config } = await configStore.load();
-    try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+    try { await configStore.save({ ...config, activeMarketplace: made.name }); } catch (e) { throw httpErr(500, tx('err.settings.writeFailed', { reason: e.message })); }
   }
   setup.invalidate();
   catalog.invalidate();
@@ -528,10 +533,10 @@ route('POST', '/api/marketplaces/pp-config', async ({ body }) => {
   const st = await requireRootOk();
   const name = String(body.name || '');
   const dir = await registry.folderOf(st.libraryRoot, name);
-  if (!dir) throw httpErr(404, 'Klasör bulunamadı: ' + name);
-  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, 'Araç reposu marketplace olarak kullanılamaz');
+  if (!dir) throw httpErr(404, tx('mp.err.folderNotFound', { name }));
+  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, tx('err.marketplace.toolRepoUnusable'));
   const file = ppConfig.configFileAt(dir);
-  if (await exists(file)) throw httpErr(409, 'Bu marketplace\'te pp.config.json zaten var');
+  if (await exists(file)) throw httpErr(409, tx('err.marketplace.ppConfigExists'));
   let mj = {};
   try { mj = JSON.parse(await fsp.readFile(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8')); } catch (e) { /* manifest yok */ }
   const slug = FM.slug(str(mj.name) || name);
@@ -549,10 +554,10 @@ route('POST', '/api/marketplaces/activate', async ({ body }) => {
   const name = String(body.name || '');
   const view = await marketplacesView();
   const hit = view.items.find((i) => i.name === name) || view.ignored.find((i) => i.name === name);
-  if (!hit) throw httpErr(404, 'Marketplace bulunamadı: ' + name);
-  if (hit.reasonCode === 'aracReposu') throw httpErr(400, 'Araç reposu marketplace olarak seçilemez');
+  if (!hit) throw httpErr(404, tx('err.marketplace.notFound', { name }));
+  if (hit.reasonCode === 'aracReposu') throw httpErr(400, tx('err.marketplace.toolRepoNotSelectable'));
   const { config } = await configStore.load();
-  try { await configStore.save({ ...config, activeMarketplace: name }); } catch (e) { throw httpErr(500, 'Ayar dosyası yazılamadı: ' + e.message); }
+  try { await configStore.save({ ...config, activeMarketplace: name }); } catch (e) { throw httpErr(500, tx('err.settings.writeFailed', { reason: e.message })); }
   setup.invalidate();
   catalog.invalidate();
   return { ok: true, setup: await setup.evaluate(), info: await infoView() };
@@ -562,8 +567,8 @@ route('POST', '/api/marketplaces/git-init', async ({ body }) => {
   const st = await requireRootOk();
   const name = String(body.name || '');
   const dir = await registry.folderOf(st.libraryRoot, name);
-  if (!dir) throw httpErr(404, 'Klasör bulunamadı: ' + name);
-  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, 'Araç reposu marketplace olarak kullanılamaz');
+  if (!dir) throw httpErr(404, tx('mp.err.folderNotFound', { name }));
+  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, tx('err.marketplace.toolRepoUnusable'));
   const created = await factory.initExisting(dir);
   setup.invalidate();
   catalog.invalidate();
@@ -601,8 +606,8 @@ route('GET', '/api/search', async ({ q }) => {
 route('GET', '/api/file', async ({ q }) => {
   const { abs, rel } = safePath(q.get('path'));
   const st = await fsp.stat(abs).catch(() => null);
-  if (!st || !st.isFile()) throw httpErr(404, 'Dosya bulunamadı');
-  if (st.size > 5000000) throw httpErr(413, 'Dosya çok büyük');
+  if (!st || !st.isFile()) throw httpErr(404, tx('err.file.notFound'));
+  if (st.size > 5000000) throw httpErr(413, tx('err.file.tooLarge'));
   const cfg = await loadConfig();
   const raw = decode(await fsp.readFile(abs));
   const isMd = /\.(md|markdown)$/i.test(rel);
@@ -631,12 +636,12 @@ route('GET', '/api/file', async ({ q }) => {
 
 route('PUT', '/api/file', async ({ body }) => {
   const { abs, rel } = safePath(body.path);
-  if (!isEditable(rel)) throw httpErr(400, 'Bu dosya türü düzenlenemez');
-  if (typeof body.raw !== 'string') throw httpErr(400, 'İçerik gerekli');
+  if (!isEditable(rel)) throw httpErr(400, tx('err.file.notEditable'));
+  if (typeof body.raw !== 'string') throw httpErr(400, tx('err.file.contentRequired'));
   const st = await fsp.stat(abs).catch(() => null);
-  if (!st) throw httpErr(404, 'Dosya bulunamadı. Silinmiş veya taşınmış olabilir');
+  if (!st) throw httpErr(404, tx('err.file.notFoundMoved'));
   if (body.baseMtime && Math.abs(Math.round(st.mtimeMs) - body.baseMtime) > 1) {
-    throw httpErr(409, 'Dosya sen açtıktan sonra diskte değişti', { conflict: true, mtime: Math.round(st.mtimeMs) });
+    throw httpErr(409, tx('err.file.diskChanged'), { conflict: true, mtime: Math.round(st.mtimeMs) });
   }
   await atomicWrite(abs, body.raw);
   const ns = await fsp.stat(abs);
@@ -651,7 +656,7 @@ route('PUT', '/api/file', async ({ body }) => {
     } catch (e) {
       await gitService.unstage(root(), [rel]).catch(() => {});
       let commitError;
-      if (e instanceof GitError && e.isIdentityError) commitError = { error: 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', needIdentity: true };
+      if (e instanceof GitError && e.isIdentityError) commitError = { error: tx('err.git.needIdentity'), needIdentity: true };
       else { const f = gitFail(e); commitError = { error: f.error, ...f.data }; }
       commitInfo = { commit: null, commitError };
     }
@@ -661,28 +666,29 @@ route('PUT', '/api/file', async ({ body }) => {
 
 route('POST', '/api/file', async ({ body }) => {
   let { rel } = safePath(body.path);
-  if (!isEditable(rel)) throw httpErr(400, 'Bu dosya türü oluşturulamaz');
+  if (!isEditable(rel)) throw httpErr(400, tx('err.file.notCreatable'));
   if (body.unique) rel = await uniquePath(rel);
-  else if (await exists(path.join(root(), rel))) throw httpErr(409, 'Bu adda bir dosya zaten var');
+  else if (await exists(path.join(root(), rel))) throw httpErr(409, tx('err.file.exists'));
   checkNewPath(root(), rel); // aygıt adı, 200 bayt sınırı, yasak karakter (yalnızca yeni oluşan bileşenler)
   await atomicWrite(path.join(root(), rel), String(body.raw || ''), { mkdir: true });
   const st = await fsp.stat(path.join(root(), rel));
   return { ok: true, path: rel, mtime: Math.round(st.mtimeMs) };
 });
 
-const PROTECTED_MSG = 'Bu yol marketplace yapısının parçası; silinemez veya taşınamaz';
+/** Summary: Korunan yol iletisi; çağrıldığı andaki dilde üretilir. */
+const protectedMsg = () => tx('err.file.protected');
 
 route('DELETE', '/api/file', async ({ q }) => {
   const { abs, rel } = safePath(q.get('path'));
-  if (Rules.isProtectedPath(rel, (await loadConfig()).libraryDir)) throw httpErr(403, PROTECTED_MSG, { code: 'korunanYol' });
-  if (!(await exists(abs))) throw httpErr(404, 'Bulunamadı');
+  if (Rules.isProtectedPath(rel, (await loadConfig()).libraryDir)) throw httpErr(403, protectedMsg(), { code: 'korunanYol' });
+  if (!(await exists(abs))) throw httpErr(404, tx('err.file.deleteNotFound'));
   return { ok: true, trash: await toTrash(rel, abs) };
 });
 
 // Kullanımdan kalktı: arayüz artık klasör açmak için /api/package kullanır. Geriye uyum için korunur.
 route('POST', '/api/mkdir', async ({ body }) => {
   const { abs, rel } = safePath(body.path);
-  if (await exists(abs)) throw httpErr(409, 'Bu klasör zaten var');
+  if (await exists(abs)) throw httpErr(409, tx('err.dir.exists'));
   checkNewPath(root(), rel);
   await fsp.mkdir(abs, { recursive: true });
   await atomicWrite(path.join(abs, '.gitkeep'), '');
@@ -691,10 +697,10 @@ route('POST', '/api/mkdir', async ({ body }) => {
 
 route('POST', '/api/rename', async ({ body }) => {
   const from = safePath(body.from); const to = safePath(body.to);
-  if (Rules.isProtectedPath(from.rel, (await loadConfig()).libraryDir)) throw httpErr(403, PROTECTED_MSG, { code: 'korunanYol' });
-  if (!(await exists(from.abs))) throw httpErr(404, 'Kaynak bulunamadı');
-  if (await exists(to.abs)) throw httpErr(409, 'Hedef zaten var');
-  if (to.rel.startsWith(from.rel + '/')) throw httpErr(400, 'Klasör kendi içine taşınamaz');
+  if (Rules.isProtectedPath(from.rel, (await loadConfig()).libraryDir)) throw httpErr(403, protectedMsg(), { code: 'korunanYol' });
+  if (!(await exists(from.abs))) throw httpErr(404, tx('err.rename.sourceNotFound'));
+  if (await exists(to.abs)) throw httpErr(409, tx('err.rename.targetExists'));
+  if (to.rel.startsWith(from.rel + '/')) throw httpErr(400, tx('err.rename.intoSelf'));
   checkNewPath(root(), to.rel);
   await fsp.mkdir(path.dirname(to.abs), { recursive: true });
   await fsp.rename(from.abs, to.abs);
@@ -764,7 +770,7 @@ route('GET', '/api/package', async ({ q }) => {
   const cfg = await loadConfig();
   const built = await publishPlan(cfg);
   const d = await publisher.details(root(), cfg, built, name);
-  if (!d) throw httpErr(404, 'Paket bulunamadı: ' + name);
+  if (!d) throw httpErr(404, tx('err.package.notFound', { name }));
   const listed = new Set((await manifests.listed()).map((l) => l.name));
   const remotes = await gitService.remotes(root()).catch(() => []);
   return {
@@ -793,27 +799,27 @@ route('POST', '/api/prompts/transfer', async ({ body }) => {
   const cfg = await loadConfigStrict();
   const { abs, rel } = safePath(body.path);
   const cl = Rules.classifyPromptPath(rel, cfg.libraryDir);
-  if (!/\.(md|markdown)$/i.test(rel) || cl.kind === 'disarida') throw httpErr(400, 'Yalnızca prompt dosyaları taşınabilir');
+  if (!/\.(md|markdown)$/i.test(rel) || cl.kind === 'disarida') throw httpErr(400, tx('err.transfer.onlyPrompts'));
   const sst = await fsp.stat(abs).catch(() => null);
-  if (!sst || !sst.isFile()) throw httpErr(404, 'Dosya bulunamadı');
+  if (!sst || !sst.isFile()) throw httpErr(404, tx('err.file.notFound'));
   const toMp = String(body.toMp || '');
-  if (!toMp) throw httpErr(400, 'Hedef marketplace gerekli');
-  if (toMp === st.activeMarketplace) throw httpErr(400, "Hedef marketplace kaynakla aynı. Aynı marketplace içinde taşımak için yeniden adlandırma kullan");
+  if (!toMp) throw httpErr(400, tx('err.transfer.targetRequired'));
+  if (toMp === st.activeMarketplace) throw httpErr(400, tx('err.transfer.sameMarketplace'));
   const { items } = await catalog.marketplaces(st.libraryRoot, st.activeMarketplace);
   const target = items.find((m) => m.name === toMp);
-  if (!target) throw httpErr(404, 'Marketplace bulunamadı: ' + toMp);
-  if (!target.valid) throw httpErr(400, 'Hedef marketplace geçerli bir git deposu değil: ' + toMp);
-  if (!target.hasPpConfig) throw httpErr(400, 'Hedefte Prompt Havuzu ayarı (pp.config.json) yok. Önce hedef marketplace için ayar dosyasını oluştur.', { code: 'hedefPpConfigYok' });
+  if (!target) throw httpErr(404, tx('err.marketplace.notFound', { name: toMp }));
+  if (!target.valid) throw httpErr(400, tx('err.transfer.targetInvalid', { name: toMp }));
+  if (!target.hasPpConfig) throw httpErr(400, tx('err.transfer.targetNoPpConfig'), { code: 'hedefPpConfigYok' });
   const toPlugin = String(body.toPlugin || '');
-  if (!toPlugin) throw httpErr(400, 'Hedef plugin gerekli');
-  if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, 'Geçersiz plugin adı');
+  if (!toPlugin) throw httpErr(400, tx('err.transfer.pluginRequired'));
+  if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, tx('err.transfer.invalidPlugin'));
   await ppConfig.assertHealthy(target.path); // hedefin ayarı da bozuksa yanlış (varsayılan) klasöre yazılmaz
   const tLib = target.cfg.libraryDir;
   const tDir = path.join(target.path, tLib, toPlugin);
   // Hedef plugin klasörü (bağlantı çözülerek) hedef marketplace'in dışına çıkıyorsa yazılmaz.
-  if (!paths.isInside(tDir, target.path)) throw httpErr(400, 'Hedef plugin klasörü hedef marketplace dışına çıkıyor');
+  if (!paths.isInside(tDir, target.path)) throw httpErr(400, tx('err.transfer.pluginOutside'));
   const dst = await fsp.stat(tDir).catch(() => null);
-  if (!dst || !dst.isDirectory()) throw httpErr(404, 'Hedefte plugin bulunamadı: ' + toPlugin);
+  if (!dst || !dst.isDirectory()) throw httpErr(404, tx('err.transfer.pluginNotFound', { name: toPlugin }));
 
   const buf = await fsp.readFile(abs);
   let data = buf;
@@ -841,8 +847,8 @@ route('POST', '/api/prompts/transfer', async ({ body }) => {
     undo.clear();
     return { ok: true, from: { mp: st.activeMarketplace, path: rel }, to: { mp: toMp, path: toRel }, trash };
   } catch (e) {
-    try { await undo.rollback(); } catch (agg) { throw httpErr(500, 'Taşıma başarısız ve geri alma tamamlanamadı: ' + e.message + '. Hedefteki ' + toRel + ' dosyasını kontrol et.'); }
-    throw httpErr(500, 'Taşınamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.');
+    try { await undo.rollback(); } catch (agg) { throw httpErr(500, tx('err.transfer.rollbackFailed', { reason: e.message, path: toRel })); }
+    throw httpErr(500, tx('err.transfer.failed', { reason: e.message }));
   }
 });
 
@@ -852,7 +858,7 @@ route('GET', '/api/git/status', async () => gitService.status(root()));
 
 route('POST', '/api/git/identity', async ({ body }) => {
   const name = String(body.name || '').trim(); const email = String(body.email || '').trim();
-  if (!name || !email) throw httpErr(400, 'Ad ve e-posta gerekli');
+  if (!name || !email) throw httpErr(400, tx('err.git.identityRequired'));
   await gitService.setConfig(root(), 'user.name', name);
   await gitService.setConfig(root(), 'user.email', email);
   return { ok: true };
@@ -860,15 +866,15 @@ route('POST', '/api/git/identity', async ({ body }) => {
 
 route('POST', '/api/git/commit', async ({ body }) => {
   const message = String(body.message || '').trim();
-  if (!message) throw httpErr(400, 'Commit mesajı gerekli');
+  if (!message) throw httpErr(400, tx('err.git.messageRequired'));
   const paths = (Array.isArray(body.paths) ? body.paths : []).map((p) => safePath(p).rel);
-  if (!paths.length) throw httpErr(400, 'Commit için en az bir dosya seç');
+  if (!paths.length) throw httpErr(400, tx('err.git.pickFile'));
   let head;
   try {
     head = await gitService.commitPaths(root(), message, paths);
   } catch (e) {
     if (e instanceof GitError && e.isIdentityError) {
-      throw httpErr(400, 'Git, commit yazarını bilmiyor. Ad ve e-posta gir.', { needIdentity: true });
+      throw httpErr(400, tx('err.git.needIdentity'), { needIdentity: true });
     }
     const f = gitFail(e);
     throw httpErr(400, f.error, f.data);
@@ -887,23 +893,23 @@ route('GET', '/api/git/log', async ({ q }) => {
 
 route('GET', '/api/git/show', async ({ q }) => {
   const hash = q.get('hash') || '';
-  if (!HASH_RE.test(hash)) throw httpErr(400, 'Geçersiz commit');
+  if (!HASH_RE.test(hash)) throw httpErr(400, tx('git.invalidCommit'));
   const { rel } = safePath(q.get('path'));
   let out;
-  try { out = await gitService.showFile(root(), hash, rel); } catch (e) { throw httpErr(404, 'Bu sürümde dosya yok'); }
+  try { out = await gitService.showFile(root(), hash, rel); } catch (e) { throw httpErr(404, tx('err.git.noFileInVersion')); }
   return { raw: out };
 });
 
 route('GET', '/api/git/diff', async ({ q }) => {
   const p = q.get('path');
   const hash = q.get('hash') || '';
-  const cap = (s) => (s.length > 300000 ? s.slice(0, 300000) + '\n… (kısaltıldı)' : s);
+  const cap = (s) => (s.length > 300000 ? s.slice(0, 300000) + '\n' + tx('srv.git.diffTruncated') : s);
   if (q.get('working')) {
     const { rel } = safePath(p);
     const r = await gitService.diffWorking(root(), rel);
     return r.untracked ? r : { diff: cap(r.diff) };
   }
-  if (!HASH_RE.test(hash)) throw httpErr(400, 'Geçersiz commit');
+  if (!HASH_RE.test(hash)) throw httpErr(400, tx('git.invalidCommit'));
   if (p) {
     const { rel } = safePath(p);
     return { diff: cap(await gitService.showCommit(root(), hash, { path: rel })) };
@@ -954,7 +960,7 @@ route('GET', '/api/history/show', async ({ q }) => {
 
 route('GET', '/api/history/changes', async ({ q }) => {
   const group = q.get('group') || 'file';
-  if (group !== 'file' && group !== 'version') throw httpErr(400, 'Geçersiz gruplama');
+  if (group !== 'file' && group !== 'version') throw httpErr(400, tx('err.history.invalidGroup'));
   const mp = setup.current.activeMarketplace;
   const cfg = await loadConfig();
   try {
@@ -964,7 +970,7 @@ route('GET', '/api/history/changes', async ({ q }) => {
     }
     const raw = q.get('limit');
     const limit = raw === null || raw === '' ? 300 : Number(raw);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 3000) throw httpErr(400, 'Geçersiz limit');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 3000) throw httpErr(400, tx('git.invalidLimit'));
     return { mp, ...(await history.changesByFile(root(), { limit, exists: (r) => exists(path.join(root(), r)) })) };
   } catch (e) { throw histErr(e); }
 });
@@ -976,7 +982,7 @@ async function promptPath(p, { strict = false } = {}) {
   const { abs, rel } = safePath(p);
   const cfg = strict ? await loadConfigStrict() : await loadConfig();
   if (!/.(md|markdown)$/i.test(rel) || !rel.startsWith(cfg.libraryDir + '/')) {
-    throw httpErr(400, 'Sürüm yalnızca prompt dosyaları için oluşturulur');
+    throw httpErr(400, tx('err.version.notPrompt'));
   }
   return { abs, rel, cfg };
 }
@@ -984,7 +990,7 @@ async function promptPath(p, { strict = false } = {}) {
 route('GET', '/api/version', async ({ q }) => {
   const { abs, rel, cfg } = await promptPath(q.get('path'));
   const st = await fsp.stat(abs).catch(() => null);
-  if (!st || !st.isFile()) throw httpErr(404, 'Dosya bulunamadı');
+  if (!st || !st.isFile()) throw httpErr(404, tx('err.file.notFound'));
   try { return await versions.info(root(), cfg.libraryDir, rel, abs); } catch (e) { throw vErr(e); }
 });
 
@@ -1007,7 +1013,7 @@ route('POST', '/api/import/scan', async ({ body }) => {
 
 route('POST', '/api/import/run', async ({ body }) => {
   const dir = expandDir(body.dir);
-  if (!Array.isArray(body.files) || !body.files.length) throw httpErr(400, 'Dosya seçilmedi');
+  if (!Array.isArray(body.files) || !body.files.length) throw httpErr(400, tx('err.import.noFiles'));
   const cfg = await loadConfigStrict();
   return importFiles(dir, body.files, body.target || cfg.libraryDir + '/' + Rules.INBOX_DIR);
 });
@@ -1034,7 +1040,7 @@ route('POST', '/api/marketplace/init', async ({ body }) => {
   guardOutputDirs(); // .claude-plugin/ bağlantı yoluyla kök dışına yazamasın
   if (m.export !== undefined) {
     const ex = m.export || {};
-    if (!Array.isArray(ex.durumlar) || !ex.durumlar.length) throw httpErr(400, 'En az bir durum seçilmeli', { field: 'export' });
+    if (!Array.isArray(ex.durumlar) || !ex.durumlar.length) throw httpErr(400, tx('err.marketplace.statusRequired'), { field: 'export' });
     cfg.export = {
       durumlar: ex.durumlar.map((x) => String(x == null ? '' : x).trim()),
       haricKlasorler: Array.isArray(ex.haricKlasorler) ? ex.haricKlasorler.map((x) => String(x).trim()).filter(Boolean) : cfg.export.haricKlasorler
@@ -1067,7 +1073,7 @@ route('POST', '/api/marketplace/publish', async ({ body }) => {
       if (plan.bySource.has(src)) continue;
       const x = plan.bySkipped.get(src);
       skipped.push(x ? { source: src, code: x.code, reason: x.reason }
-        : { source: src, code: 'kaynakYok', reason: 'Kaynak dosya bulunamadı veya prompt klasörünün dışında' });
+        : { source: src, code: 'kaynakYok', reason: tx('srv.publish.sourceMissing') });
     }
   }
   for (const p of want) {
@@ -1085,8 +1091,8 @@ route('POST', '/api/marketplace/publish', async ({ body }) => {
 // Kullanımdan kalktı (bkz. yukarıdaki not).
 route('POST', '/api/marketplace/unpublish', async ({ body }) => {
   const { abs, rel } = safePath(body.target);
-  if (!/^plugins\//.test(rel)) throw httpErr(400, 'Yalnızca plugins/ altı kaldırılabilir');
-  if (!(await exists(abs))) throw httpErr(404, 'Dosya yok');
+  if (!/^plugins\//.test(rel)) throw httpErr(400, tx('err.unpublish.onlyPlugins'));
+  if (!(await exists(abs))) throw httpErr(404, tx('err.unpublish.fileMissing'));
   const cfg = await loadConfigStrict(); // bozuk ayarda hiçbir şey taşınmadan 409
   guardOutputDirs();
   const trash = await toTrash(rel, abs);
@@ -1115,14 +1121,14 @@ async function readBody(req) {
   const chunks = []; let n = 0;
   for await (const c of req) {
     n += c.length;
-    if (n > 8000000) throw httpErr(413, 'İstek çok büyük');
+    if (n > 8000000) throw httpErr(413, tx('err.http.bodyTooLarge'));
     chunks.push(c);
   }
   if (!n) return {};
   let parsed;
-  try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { throw httpErr(400, 'Geçersiz JSON'); }
+  try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { throw httpErr(400, tx('err.http.invalidJson')); }
   // Rotalar body.x okur; null, dizi, metin ve sayı gövdeleri TypeError (500) yerine 400 olur.
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw httpErr(400, 'İstek gövdesi bir JSON nesnesi olmalı');
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw httpErr(400, tx('err.http.bodyNotObject'));
   return parsed;
 }
 
@@ -1135,21 +1141,21 @@ const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 's
 async function handleRequest(req, res) {
   try {
     const host = String(req.headers.host || '').toLowerCase();
-    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return send(res, 403, { error: 'Geçersiz host' });
+    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) return send(res, 403, { error: tx('err.http.invalidHost') });
     const url = new URL(req.url, 'http://' + host);
 
     if (url.pathname.startsWith('/api/')) {
       if (req.method !== 'GET') {
-        if (req.headers['x-pp'] !== '1') return send(res, 403, { error: 'Eksik istek başlığı' });
+        if (req.headers['x-pp'] !== '1') return send(res, 403, { error: tx('err.http.missingHeader') });
         const origin = req.headers.origin;
         if (origin) {
           let oh = '';
           try { oh = new URL(origin).host.toLowerCase(); } catch (e) { /* geçersiz */ }
-          if (oh !== host) return send(res, 403, { error: 'Geçersiz kaynak' });
+          if (oh !== host) return send(res, 403, { error: tx('err.http.invalidOrigin') });
         }
       }
       const entry = routes.get(req.method + ' ' + url.pathname);
-      if (!entry) return send(res, 404, { error: I18n.tx('err.api.notFound') });
+      if (!entry) return send(res, 404, { error: tx('err.api.notFound') });
       if (!entry.open) {
         const st = await setup.refreshIfStale();
         if (!st.ok) throw setupRequired(st);
@@ -1159,7 +1165,7 @@ async function handleRequest(req, res) {
           let name = '';
           try { name = decodeURIComponent(String(want)); } catch (e) { /* geçersiz kodlama: uyuşmaz */ }
           if (name !== st.activeMarketplace) {
-            throw httpErr(409, 'Etkin marketplace değişti (şu an: ' + st.activeMarketplace + "). Ağaçtan yeniden seç.", { code: 'etkinDegil', active: st.activeMarketplace });
+            throw httpErr(409, tx('err.http.activeChanged', { active: st.activeMarketplace }), { code: 'etkinDegil', active: st.activeMarketplace });
           }
         }
       }
@@ -1167,11 +1173,11 @@ async function handleRequest(req, res) {
       return send(res, 200, await entry.fn({ q: url.searchParams, body, req }));
     }
 
-    if (req.method !== 'GET') return send(res, 405, 'Method not allowed');
+    if (req.method !== 'GET') return send(res, 405, tx('err.http.methodNotAllowed'));
     const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-    if (!STATIC_FILES.has(name)) return send(res, 404, 'Bulunamadı');
+    if (!STATIC_FILES.has(name)) return send(res, 404, tx('err.static.notFound'));
     let data;
-    try { data = await fsp.readFile(path.join(PUBLIC, name)); } catch (e) { return send(res, 404, 'Bulunamadı: ' + name); }
+    try { data = await fsp.readFile(path.join(PUBLIC, name)); } catch (e) { return send(res, 404, tx('err.static.fileNotFound', { name })); }
     return send(res, 200, data, { 'Content-Type': MIME[path.extname(name)] || 'text/plain', 'Content-Security-Policy': CSP });
   } catch (e) {
     // Ham fs hataları (ENOENT vb.) mutlak sunucu yolu taşır: Türkçe, yolsuz iletiye çevrilir; tam hata günlüğe yazılır.
@@ -1179,7 +1185,7 @@ async function handleRequest(req, res) {
     if (raw) { console.error(e); return send(res, raw.status, { error: raw.message }); }
     const status = e.status || 500;
     if (status === 500) console.error(e);
-    send(res, status, { error: e.message || 'Hata', ...(e.data || {}) });
+    send(res, status, { error: e.message || tx('err.http.generic'), ...(e.data || {}) });
   }
 }
 

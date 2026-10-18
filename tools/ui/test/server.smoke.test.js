@@ -446,7 +446,7 @@ test('sunucu: i18n çekirdeği ve sözlükler servis edilir, izin listesi dış�
       assert.equal(r.status, 404, p);
       assert.equal(r.text, 'Bulunamadı', p);
     }
-    assert.equal((await rawGet(srv.base, '/lib/git-service.js', { 'X-PP-Lang': 'en' })).text, 'Bulunamadı', 'statik 404 iletisine dokunulmadı');
+    assert.equal((await rawGet(srv.base, '/lib/git-service.js', { 'X-PP-Lang': 'en' })).text, 'Not found', 'statik 404 iletisi istek dilinde');
   } finally {
     await srv.stop();
     rmrf(tmp);
@@ -476,7 +476,7 @@ test('sunucu: X-PP-Lang ile API 404 iletisi dile göre; başlıksız ve geçersi
 
     r = await srv.call('PUT', '/api/settings', {}, { headers: { 'X-PP': '0', 'X-PP-Lang': 'en' } });
     assert.equal(r.status, 403);
-    assert.deepEqual(r.data, { error: 'Eksik istek başlığı' }, 'kanarya dışındaki iletilere dokunulmadı');
+    assert.deepEqual(r.data, { error: 'Missing request header' }, 'başlık hatası istek dilinde');
 
     const results = await Promise.all(Array.from({ length: 24 }, (_, n) => get(n % 2 ? 'en' : 'tr')));
     results.forEach((x, n) => assert.equal(x.data.error, n % 2 ? 'Not found' : 'Bulunamadı', 'istek ' + n));
