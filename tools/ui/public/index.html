@@ -1158,7 +1158,7 @@ function closeSide() { document.body.classList.remove('side-open'); }
 
 /* --------------------------------------------------------------------- ana alan */
 function chipsHtml(key, list, ph) {
-  return `<div class="chips" data-chips="${key}">${list.map((t) => `<span class="chip">${esc(t)}<button type="button" data-act="chip-x" data-key="${key}" data-val="${esc(t)}" aria-label="${esc(t)} değerini kaldır">×</button></span>`).join('')}<input class="chip-in" data-chip-in="${key}" list="dl-${key}" placeholder="${esc(ph)}" autocomplete="off" aria-label="${esc(ph)}"></div>`;
+  return `<div class="chips" data-chips="${key}">${list.map((t) => `<span class="chip">${esc(t)}<button type="button" data-act="chip-x" data-key="${key}" data-val="${esc(t)}" aria-label="${esc(tx('ui.edit.chipRemove', { value: t }))}">×</button></span>`).join('')}<input class="chip-in" data-chip-in="${key}" list="dl-${key}" placeholder="${esc(ph)}" autocomplete="off" aria-label="${esc(ph)}"></div>`;
 }
 
 function curCheck() {
@@ -1178,13 +1178,13 @@ const curNotice = () => { const k = curCheck(); return k && k.level === 'warn' ?
 function pubPill() {
   const c = S.cur; const m = FM.meta(c.parsed); const tur = normTur(m.tur);
   const chk = curCheck();
-  if (chk && chk.level === 'warn') return '<span class="pill warn">Yayınlanmayacak</span>';
-  if (!tur) return '<span class="pill">Yayın dışı</span>';
+  if (chk && chk.level === 'warn') return `<span class="pill warn">${esc(tx('ui.edit.pillWontPublish'))}</span>`;
+  if (!tur) return `<span class="pill">${esc(tx('ui.static.notPublished'))}</span>`;
   const p = c.publish;
-  if (!p) return '<span class="pill warn">Kaydedince yayınlanabilir</span>';
-  if (p.state === 'guncel') return '<span class="pill ok">Yayında, güncel</span>';
-  if (p.state === 'eski') return '<span class="pill warn">Yayında, kaynak değişti</span>';
-  return '<span class="pill warn">Henüz yayınlanmadı</span>';
+  if (!p) return `<span class="pill warn">${esc(tx('ui.edit.pillPublishOnSave'))}</span>`;
+  if (p.state === 'guncel') return `<span class="pill ok">${esc(tx('ui.edit.pillPublishedCurrent'))}</span>`;
+  if (p.state === 'eski') return `<span class="pill warn">${esc(tx('ui.edit.pillPublishedStale'))}</span>`;
+  return `<span class="pill warn">${esc(tx('ui.edit.pillNotYetPublished'))}</span>`;
 }
 
 function editPaneHtml() {
@@ -1197,51 +1197,51 @@ function editPaneHtml() {
   const pubOpen = ls.get('pp.pubOpen', false) || !!tur || !!(chk && chk.level === 'warn');
   const rawTur = str(m.tur).trim();
   const durumVal = fold(str(m.durum));
-  const dOpt = [['taslak', 'Taslak'], ['kararlı', 'Kararlı'], ['arşiv', 'Arşiv']];
+  const dOpt = [['taslak', tx('ui.static.statusDraft')], ['kararlı', tx('ui.static.statusStable')], ['arşiv', tx('ui.static.statusArchived')]];
   const known = dOpt.some((d) => fold(d[0]) === durumVal);
   const mk = S.info.config.marketplace;
   const usage = c.publish ? (c.publish.tur === 'ajan'
-    ? `Ajan adı: <code>${esc(c.publish.ad)}</code>`
-    : `Claude Code'da çağır: <code>/${esc(c.publish.paket)}:${esc(c.publish.ad)}</code>`) : '';
+    ? th('ui.edit.usageAgent', { name: c.publish.ad })
+    : th('ui.edit.usageCommand', { paket: c.publish.paket, name: c.publish.ad })) : '';
   // Aynı anahtar birden fazla yazılmışsa sonuncusu geçerlidir; yayını engellemez, yalnızca uyarır.
   const dup = FM.duplicateKeys(c.parsed);
   const dupWarn = dup.length ? `<div id="fmWarn" class="issue warn" role="status">${esc(Rules.MSG.anahtarTekrar(dup))}</div>` : '';
   return `${dupWarn}
   <div class="meta">
-    <label>Etiketler</label>${chipsHtml('etiketler', toList(m.etiketler), 'Etiket ekle, Enter')}
-    <label for="fDurum2">Durum</label>
+    <label>${esc(tx('ui.fields.tags'))}</label>${chipsHtml('etiketler', toList(m.etiketler), tx('ui.edit.tagsPlaceholder'))}
+    <label for="fDurum2">${esc(tx('ui.fields.status'))}</label>
     <select id="fDurum2" data-f="durum">
-      <option value="">Belirsiz</option>
-      ${dOpt.map((d) => `<option value="${d[0]}" ${fold(d[0]) === durumVal ? 'selected' : ''}>${d[1]}</option>`).join('')}
+      <option value="">${esc(tx('ui.edit.statusUnknown'))}</option>
+      ${dOpt.map((d) => `<option value="${d[0]}" ${fold(d[0]) === durumVal ? 'selected' : ''}>${esc(d[1])}</option>`).join('')}
       ${durumVal && !known ? `<option value="${esc(str(m.durum))}" selected>${esc(str(m.durum))}</option>` : ''}
     </select>
-    <label for="fVer">Sürüm</label>
-    <div><div class="inline"><input id="fVer" data-f="versiyon" value="${esc(str(m.versiyon))}" placeholder="Henüz sürüm yok (+1 ile 1.0.0)" aria-describedby="verHint"><button type="button" class="btn sm" id="btnBump" data-act="bump" title="Yeni sürüm oluştur: versiyon artar, commit ve tag atılır" ${S.git && S.git.isRepo ? '' : 'disabled'}>+1</button><span id="verWarn" class="pill warn" role="status" hidden></span></div>
+    <label for="fVer">${esc(tx('ui.edit.version'))}</label>
+    <div><div class="inline"><input id="fVer" data-f="versiyon" value="${esc(str(m.versiyon))}" placeholder="${esc(tx('ui.edit.versionPlaceholder'))}" aria-describedby="verHint"><button type="button" class="btn sm" id="btnBump" data-act="bump" title="${esc(tx('ui.edit.bumpTitle'))}" ${S.git && S.git.isRepo ? '' : 'disabled'}>+1</button><span id="verWarn" class="pill warn" role="status" hidden></span></div>
     <div id="verHint" class="hint" hidden></div></div>
-    <label>Projeler</label>${chipsHtml('projeler', toList(m.projeler), 'Hangi projelerde kullanılıyor?')}
+    <label>${esc(tx('ui.fields.projects'))}</label>${chipsHtml('projeler', toList(m.projeler), tx('ui.edit.projectsPlaceholder'))}
   </div>
   <details class="pub" id="pubBox" ${pubOpen ? 'open' : ''}>
-    <summary><b>Claude Code yayın ayarları</b><span id="pubPill">${pubPill()}</span></summary>
+    <summary><b>${esc(tx('ui.edit.publishSettings'))}</b><span id="pubPill">${pubPill()}</span></summary>
     <div id="pubWarn" class="issue ${nt && nt.level === 'warn' ? 'warn' : 'info'}" role="status" aria-live="polite" ${nt ? '' : 'hidden'}>${nt ? esc(nt.reason) : ''}</div>
     <div class="meta">
-      <label for="pTur">Tür</label>
+      <label for="pTur">${esc(tx('ui.fields.type'))}</label>
       <select id="pTur" data-f="tur">
-        <option value="">Yayın dışı</option>
-        ${rawTur && !tur ? `<option value="${esc(rawTur)}" selected>⚠ "${esc(rawTur)}" (tanınmadı)</option>` : ''}
-        <option value="komut" ${tur === 'komut' ? 'selected' : ''}>Komut (slash command)</option>
-        <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>Ajan (subagent)</option>
-        <option value="skill" ${tur === 'skill' ? 'selected' : ''}>Skill</option>
+        <option value="">${esc(tx('ui.static.notPublished'))}</option>
+        ${rawTur && !tur ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        <option value="komut" ${tur === 'komut' ? 'selected' : ''}>${esc(tx('ui.edit.turCommandOption'))}</option>
+        <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>${esc(tx('ui.edit.turAgentOption'))}</option>
+        <option value="skill" ${tur === 'skill' ? 'selected' : ''}>${esc(tx('ui.static.typeSkill'))}</option>
       </select>
-      <label for="pPaket">Paket</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">Paket: ${esc(pkgCl.paket)} (klasörden)</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="Varsayılan: ${esc(mk.plugin)}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
-      <label for="pAd">Ad</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
-      <label for="pAcik">Açıklama</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?">
-      <label for="pArg">Argüman ipucu</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="[dosya yolu]">
-      <label for="pArac">İzinli araçlar</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
-      <label for="pModel">Model</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
+      <label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
+      <label for="pAd">${esc(tx('ui.fields.name'))}</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
+      <label for="pAcik">${esc(tx('ui.fields.description'))}</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="${esc(tx('ui.edit.descriptionPlaceholder'))}">
+      <label for="pArg">${esc(tx('ui.fields.argumentHint'))}</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="${esc(tx('ui.edit.argumentHintPlaceholder'))}">
+      <label for="pArac">${esc(tx('ui.fields.allowedTools'))}</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
+      <label for="pModel">${esc(tx('ui.fields.model'))}</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
     </div>
-    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">Paket sayfasını aç</button><span class="hint" id="pubUsage">${usage}</span></div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${usage}</span></div>
   </details>
-  <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="Prompt metni" placeholder="Prompt metnini buraya yaz. {{degisken}} biçiminde yer tutucular kullanabilirsin.">${esc(shownBody)}</textarea></div>
+  <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="${esc(tx('ui.edit.bodyLabel'))}" placeholder="${esc(tx('ui.edit.bodyPlaceholder', { example: '{{' + tx('ui.edit.exampleVar') + '}}' }))}">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
 }
 
@@ -1249,53 +1249,53 @@ function bodyInfoText() {
   const c = S.cur; const b = c.parsed.body.slice(c.lead.length);
   const words = (b.trim().match(/\S+/g) || []).length;
   const vars = FM.placeholders(b);
-  return `<span>${words} kelime, ${b.length} karakter</span>${vars.length ? `<span>Değişkenler: ${vars.map((v) => '<code>' + esc(v) + '</code>').join(' ')}</span>` : ''}<span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>Kaydedilmemiş değişiklik var</span>`;
+  return `<span>${esc(tx('ui.edit.bodyInfo', { count: words, chars: tx('ui.edit.charCount', { count: b.length }) }))}</span>${vars.length ? `<span>${th('ui.edit.variables', { list: I18n.raw(vars.map((v) => '<code>' + esc(v) + '</code>').join(' ')) })}</span>` : ''}<span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>${esc(tx('ui.edit.dirtyNote'))}</span>`;
 }
 
 function rawPaneHtml() {
   const c = S.cur;
-  return `<textarea id="fRaw" spellcheck="false" aria-label="Dosya içeriği">${esc(FM.stringify(c.parsed).replace(/\r\n/g, '\n'))}</textarea>
-  <div class="bodyinfo"><span>Tüm dosya, frontmatter dahil. Biçimi bozmadan düzenle.</span><span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>Kaydedilmemiş değişiklik var</span></div>`;
+  return `<textarea id="fRaw" spellcheck="false" aria-label="${esc(tx('ui.edit.rawLabel'))}">${esc(FM.stringify(c.parsed).replace(/\r\n/g, '\n'))}</textarea>
+  <div class="bodyinfo"><span>${esc(tx('ui.edit.rawHint'))}</span><span id="dirtyNote" ${c.dirty ? '' : 'hidden'}>${esc(tx('ui.edit.dirtyNote'))}</span></div>`;
 }
 
-const HIST_STALE = () => { const c = S.cur; return `<p class="issue warn">Bu dosya ${esc(c.mp)} marketplace'ine ait ama etkin marketplace ${esc(activeName() || 'yok')}. Geçmişi görmek için dosyayı ağaçtan yeniden aç.</p>`; };
+const HIST_STALE = () => { const c = S.cur; return `<p class="issue warn">${th('ui.hist.stale', { mp: c.mp, active: activeName() || tx('ui.common.none') })}</p>`; };
 
 function histModeBar(h) {
   if (!h.ver) return '';
   const b = (m, t) => `<button type="button" data-act="hist-mode" data-mode="${m}" aria-pressed="${h.mode === m}">${t}</button>`;
-  return `<div class="seg" role="group" aria-label="Geçmiş görünümü">${b('ver', 'Sürümler')}${b('commit', "Commit'ler")}</div>`;
+  return `<div class="seg" role="group" aria-label="${esc(tx('ui.hist.viewLabel'))}">${b('ver', th('ui.hist.modeVersions'))}${b('commit', th('ui.hist.modeCommits'))}</div>`;
 }
 
 function histCommitHtml(h) {
   const cm = h.commit;
-  if (!cm) return '<p class="hint">Geçmiş yükleniyor…</p>';
+  if (!cm) return `<p class="hint">${esc(tx('ui.hist.loading'))}</p>`;
   const items = [];
   const li = (hash, cls, inner) => `<li role="button" tabindex="0" data-act="hist-select" data-hash="${hash}" class="${cls}">${inner}</li>`;
-  if (cm.working && (cm.working.diff || cm.working.untracked)) items.push(li('working', cm.sel === 'working' ? 'on' : '', `<div class="s">Commit edilmemiş değişiklikler</div><div class="hint">${cm.working.untracked ? 'Dosya henüz git\'e eklenmedi' : 'Son commit ile fark'}</div>`));
+  if (cm.working && (cm.working.diff || cm.working.untracked)) items.push(li('working', cm.sel === 'working' ? 'on' : '', `<div class="s">${esc(tx('ui.hist.uncommittedChanges'))}</div><div class="hint">${cm.working.untracked ? th('ui.hist.untrackedHint') : esc(tx('ui.hist.diffFromLast'))}</div>`));
   for (const k of cm.commits) items.push(li(k.hash, cm.sel === k.hash ? 'on' : '', `<div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div>`));
-  if (!items.length) return '<p class="hint">Bu dosya için henüz commit yok. Kaydederken commit mesajı yazarsan commit edilir.</p>';
-  return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">Bir kayıt seç.</pre></div></div>`;
+  if (!items.length) return `<p class="hint">${esc(tx('ui.hist.noCommits'))}</p>`;
+  return `<div class="hist"><ul class="commits">${items.join('')}</ul><div><div class="diffhead" id="diffHead"></div><pre class="diff" id="diffBox">${esc(tx('ui.hist.pickEntry'))}</pre></div></div>`;
 }
 
-const verLabel = (ref, version) => (ref === 'HEAD' ? 'Son commit' : 'v' + version);
+const verLabel = (ref, version) => (ref === 'HEAD' ? tx('ui.hist.lastCommit') : 'v' + version);
 const verByTag = (v, tag) => v.data.versions.find((x) => x.tag === tag);
 
 function histVerHtml(h) {
   const v = h.ver; const d = v.data;
-  if (!d.tracked) return `<p class="hint">Bu dosya henüz commit edilmedi. Sürüm geçmişi ilk commit'ten sonra oluşur.</p><p class="hint">Dosya taşındıysa, eski ve yeni yolu birlikte commit edersen geçmiş bağlanır.</p>`;
-  if (!d.versions.length) return `<p class="hint">Bu prompt için henüz sürüm yok. Sürüm, Düzenle sekmesindeki +1 düğmesiyle oluşturulur.</p><p><button class="btn" data-act="hist-mode" data-mode="commit">Commit'leri göster</button></p>${d.ignoredTags ? `<p class="issue info">${d.ignoredTags} tag sürüm biçimine uymadığı için atlandı.</p>` : ''}`;
-  const opts = [`<option value="HEAD">Son commit</option>`].concat(d.versions.map((x) => `<option value="${esc(x.tag)}">v${esc(x.version)}${x.renamed ? ' (eski ad)' : ''}</option>`)).join('');
-  const tl = '<ol class="commits timeline" id="verTL" aria-label="Sürüm zaman çizelgesi"></ol>';
+  if (!d.tracked) return `<p class="hint">${th('ui.hist.notCommitted')}</p><p class="hint">${esc(tx('ui.hist.movedHint'))}</p>`;
+  if (!d.versions.length) return `<p class="hint">${esc(tx('ui.hist.noVersions'))}</p><p><button class="btn" data-act="hist-mode" data-mode="commit">${th('ui.hist.showCommits')}</button></p>${d.ignoredTags ? `<p class="issue info">${esc(tx('ui.hist.ignoredTags', { count: d.ignoredTags }))}</p>` : ''}`;
+  const opts = [`<option value="HEAD">${esc(tx('ui.hist.lastCommit'))}</option>`].concat(d.versions.map((x) => `<option value="${esc(x.tag)}">${esc(x.renamed ? tx('ui.hist.versionRenamedOption', { version: x.version }) : 'v' + x.version)}</option>`)).join('');
+  const tl = `<ol class="commits timeline" id="verTL" aria-label="${esc(tx('ui.hist.timelineLabel'))}"></ol>`;
   return `<div class="hist">${tl}<div>
-    <div class="vbar"><label>Eski <select id="verA">${opts}</select></label> <span aria-hidden="true">→</span> <label>Yeni <select id="verB">${opts}</select></label></div>
+    <div class="vbar"><label>${esc(tx('ui.hist.older'))} <select id="verA">${opts}</select></label> <span aria-hidden="true">→</span> <label>${esc(tx('ui.hist.newer'))} <select id="verB">${opts}</select></label></div>
     <div id="verMain" aria-live="polite"></div></div></div>`;
 }
 
 function histPaneHtml() {
   const h = S.cur.hist;
-  if (!h || h.loading) return '<p class="hint">Geçmiş yükleniyor…</p>';
+  if (!h || h.loading) return `<p class="hint">${esc(tx('ui.hist.loading'))}</p>`;
   if (h.stale) return HIST_STALE();
-  if (h.noRepo) return '<p>Geçmiş kaydı için havuzun bir git deposu olması gerekir.</p><p><button class="btn primary" data-act="git">Git panelini aç</button></p>';
+  if (h.noRepo) return `<p>${esc(tx('ui.hist.noRepo'))}</p><p><button class="btn primary" data-act="git">${esc(tx('ui.common.openGitPanel'))}</button></p>`;
   if (h.error) return `<p class="issue error">${esc(h.error)}</p>`;
   return histModeBar(h) + (h.mode === 'ver' ? histVerHtml(h) : histCommitHtml(h));
 }
@@ -1315,29 +1315,29 @@ function crumbsHtml(c) {
   const sep = '<span class="sep">›</span>';
   let rest;
   if (cl.kind === 'paket') rest = [esc(cl.klasor)].concat(parts.slice(libDirOf(c.mp).split('/').length + 1).map(esc));
-  else if (cl.kind === 'gelenKutusu') rest = ['Gelen kutusu'].concat(parts.slice(libDirOf(c.mp).split('/').length + 1).map(esc));
-  else if (cl.kind === 'klasorsuz') rest = ['Klasörsüz', esc(parts[parts.length - 1])];
+  else if (cl.kind === 'gelenKutusu') rest = [esc(tx('ui.tree.inbox'))].concat(parts.slice(libDirOf(c.mp).split('/').length + 1).map(esc));
+  else if (cl.kind === 'klasorsuz') rest = [esc(tx('ui.search.whereLoose')), esc(parts[parts.length - 1])];
   else rest = parts.map(esc);
   if (cl.kind === 'paket' || cl.kind === 'gelenKutusu') { /* klasör adından sonraki parçalar zaten eklendi */ }
-  return `<button type="button" class="link" data-act="reveal" title="Ağaçta göster">${esc(c.mp)}</button>` + sep + rest.join(sep);
+  return `<button type="button" class="link" data-act="reveal" title="${esc(tx('ui.main.revealInTree'))}">${esc(c.mp)}</button>` + sep + rest.join(sep);
 }
 
 function renderMainInner() {
   const main = $('#main');
   const c = S.cur;
   if (!c) { main.innerHTML = startHtml(); return; }
-  const tabs = c.isPrompt ? [['edit', 'Düzenle'], ['raw', 'Ham metin'], ['hist', 'Geçmiş']] : [['raw', 'Düzenle'], ['hist', 'Geçmiş']];
+  const tabs = c.isPrompt ? [['edit', tx('ui.main.tabEdit')], ['raw', tx('ui.main.tabRaw')], ['hist', tx('ui.main.tabHistory')]] : [['raw', tx('ui.main.tabEdit')], ['hist', tx('ui.main.tabHistory')]];
   const crumbs = crumbsHtml(c);
   const m = FM.meta(c.parsed);
   const title = c.isPrompt
-    ? `<input class="title" data-f="baslik" value="${esc(str(m.baslik))}" placeholder="${esc(stem(c.path))}" aria-label="Başlık">`
+    ? `<input class="title" data-f="baslik" value="${esc(str(m.baslik))}" placeholder="${esc(stem(c.path))}" aria-label="${esc(tx('ui.fields.title'))}">`
     : `<h1 class="title static">${esc(base(c.path))}</h1>`;
   const stale = c.mp !== activeName();
-  const staleBanner = stale ? `<div class="banner" role="alert">Bu dosya <b>${esc(c.mp)}</b> marketplace'ine ait ama etkin marketplace şu an <b>${esc(activeName() || 'yok')}</b>. Kaydetmek için dosyayı ağaçtan yeniden aç.</div>` : '';
+  const staleBanner = stale ? `<div class="banner" role="alert">${th('ui.main.staleBanner', { mp: c.mp, active: activeName() || tx('ui.common.none') })}</div>` : '';
   const banner = c.generatedFrom
-    ? `<div class="banner">Bu dosya <b>${esc(c.generatedFrom)}</b> kaynağından otomatik üretildi. Burada yaptığın değişiklik bir sonraki yayında ezilir.<button class="btn sm" data-act="open" data-path="${esc(c.generatedFrom)}">Kaynağa git</button></div>` : '';
-  const ext = c.external ? '<div class="banner">Bu dosya, sen açtıktan sonra diskte değişti. Kaydedersen ne yapmak istediğini soracağım.</div>' : '';
-  const restore = c.restoredFrom ? `<div class="banner"><span class="restorebar">Editörde ${esc(c.restoredFrom.what)} içeriği var (kaydedilmedi). Kaydedersen dosya bu içerikle değişir.<button class="btn sm" data-act="ver-restore-cancel">Geri al</button></span></div>` : '';
+    ? `<div class="banner">${th('ui.main.generatedBanner', { source: c.generatedFrom })}<button class="btn sm" data-act="open" data-path="${esc(c.generatedFrom)}">${esc(tx('ui.main.goToSource'))}</button></div>` : '';
+  const ext = c.external ? `<div class="banner">${esc(tx('ui.main.externalChanged'))}</div>` : '';
+  const restore = c.restoredFrom ? `<div class="banner"><span class="restorebar">${c.restoredFrom.source === 'version' ? th('ui.main.restoredVersion', { version: c.restoredFrom.version }) : th('ui.main.restoredCommit', { short: c.restoredFrom.short })}<button class="btn sm" data-act="ver-restore-cancel">${esc(tx('ui.main.undoRestore'))}</button></span></div>` : '';
   let pane = '';
   if (c.tab === 'edit' && c.isPrompt) pane = editPaneHtml();
   else if (c.tab === 'hist') pane = histPaneHtml();
@@ -1345,15 +1345,15 @@ function renderMainInner() {
   main.innerHTML = `<section class="card">
     <div class="crumbs">${crumbs}</div>
     <div class="titlebar">${title}
-      <div class="tbtns">${c.isMd ? '<button class="btn" data-act="copy" title="Prompt metnini panoya kopyala">Kopyala</button>' : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty || (uncommitted(c.path) && c.commitMsg.trim()) ? '' : 'disabled'} title="Ctrl+S">${esc(saveLabel())}</button></div>
+      <div class="tbtns">${c.isMd ? `<button class="btn" data-act="copy" title="${esc(tx('ui.main.copyTitle'))}">${esc(tx('ui.main.copy'))}</button>` : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty || (uncommitted(c.path) && c.commitMsg.trim()) ? '' : 'disabled'} title="Ctrl+S">${esc(saveLabel())}</button></div>
     </div>
     <div class="commitbar" id="commitBar" ${S.git && S.git.isRepo ? '' : 'hidden'}>
-      <label for="commitMsg" class="hint">Commit mesajı (${esc(c.mp)})</label>
-      <input id="commitMsg" value="${esc(c.commitMsg)}" placeholder="Ne değişti, neden? (boşsa yalnızca kaydedilir)" autocomplete="off">
-      <span id="commitPill" class="pill warn" ${uncommitted(c.path) && !c.dirty ? '' : 'hidden'}>Commit bekliyor</span>
+      <label for="commitMsg" class="hint">${esc(tx('ui.main.commitMessageLabel', { mp: c.mp }))}</label>
+      <input id="commitMsg" value="${esc(c.commitMsg)}" placeholder="${esc(tx('ui.main.commitPlaceholder'))}" autocomplete="off">
+      <span id="commitPill" class="pill warn" ${uncommitted(c.path) && !c.dirty ? '' : 'hidden'}>${esc(tx('ui.main.commitPending'))}</span>
     </div>
     ${staleBanner}${banner}${ext}${restore}
-    <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
+    <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${esc(t[1])}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
   if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
@@ -1364,10 +1364,10 @@ function renderMainInner() {
 function startHtml() {
   const n = S.facets.total;
   const recent = S.recent.length
-    ? `<h2>Son değişenler</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div></div>`).join('')}</div>` : '';
-  return `<div class="start"><h1>${n ? 'Bir prompt seç' : 'Havuz henüz boş'}</h1>
-    <p>${n ? `Havuzunda ${n} prompt var. Soldaki listeden veya arama kutusundan birini aç. Sık kopyaladıklarını etiketle, değiştirdiklerini git ile kaydet.` : 'Eski .txt dosyalarını içe aktararak başlayabilir ya da sıfırdan yeni bir prompt yazabilirsin.'}</p>
-    <div class="btns"><button class="btn primary" data-act="new-prompt">Yeni prompt</button><button class="btn" data-act="import">.txt dosyalarını içe aktar</button></div>${recent}</div>`;
+    ? `<h2>${esc(tx('ui.main.recent'))}</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div></div>`).join('')}</div>` : '';
+  return `<div class="start"><h1>${esc(n ? tx('ui.main.startPick') : tx('ui.main.startEmpty'))}</h1>
+    <p>${esc(n ? tx('ui.main.startIntro', { count: n }) : tx('ui.main.startEmptyHint'))}</p>
+    <div class="btns"><button class="btn primary" data-act="new-prompt">${esc(tx('ui.static.newPrompt'))}</button><button class="btn" data-act="import">${esc(tx('ui.main.importTxt'))}</button></div>${recent}</div>`;
 }
 
 /* ---------------------------------------------------------------- düzenleme */
@@ -1390,8 +1390,8 @@ function paintVerHint() {
   const raw = str(FM.meta(c.parsed).versiyon).trim();
   const v = Rules.coerceVersion(raw);
   let t = '';
-  if (v === null) t = 'Sürüm yorumlanamadı. X.Y.Z biçiminde yaz (örnek: 1.0.0).';
-  else if (v.legacy) t = 'Eski biçim: "' + raw + '", ' + v.version + ' olarak yorumlanır.';
+  if (v === null) t = tx('ui.edit.versionUnreadable');
+  else if (v.legacy) t = tx('ui.edit.versionLegacy', { raw, version: v.version });
   h.hidden = !t; h.textContent = t;
 }
 
@@ -1409,7 +1409,7 @@ function paintVerWarn() {
   const u = c.ver && c.ver.uyari;
   w.hidden = !u;
   if (u) {
-    w.textContent = 'v' + c.ver.sonSurum.version + '\'dan beri değişti';
+    w.textContent = tx('ui.edit.changedSince', { version: c.ver.sonSurum.version });
     w.title = u.message; w.setAttribute('aria-label', u.message);
   }
 }
@@ -1421,7 +1421,7 @@ function paintPaketHint() {
   const alan = str(FM.meta(c.parsed).paket).trim();
   const bad = cl.kind === 'paket' && !!alan && FM.slug(alan) !== cl.paket;
   h.hidden = !bad;
-  h.innerHTML = bad ? esc(Rules.MSG.paketUyusmuyor(cl.klasor, alan)) + ' <button type="button" class="btn sm" data-act="paket-esitle">Alanı klasöre eşitle</button> <button type="button" class="btn sm" data-act="m-move" data-path="' + esc(c.path) + '">Dosyayı taşı</button>' : '';
+  h.innerHTML = bad ? esc(Rules.MSG.paketUyusmuyor(cl.klasor, alan)) + ' <button type="button" class="btn sm" data-act="paket-esitle">' + esc(tx('ui.edit.syncFieldToFolder')) + '</button> <button type="button" class="btn sm" data-act="m-move" data-path="' + esc(c.path) + '">' + esc(tx('ui.edit.moveFile')) + '</button>' : '';
 }
 
 function refreshPubWarn() {
@@ -1436,7 +1436,7 @@ function refreshPubWarn() {
 
 function refreshChips(key) {
   const c = S.cur; const el = $('[data-chips="' + key + '"]'); if (!el) return;
-  const ph = key === 'etiketler' ? 'Etiket ekle, Enter' : 'Hangi projelerde kullanılıyor?';
+  const ph = key === 'etiketler' ? tx('ui.edit.tagsPlaceholder') : tx('ui.edit.projectsPlaceholder');
   const wrap = document.createElement('div');
   wrap.innerHTML = chipsHtml(key, toList(FM.meta(c.parsed)[key]), ph);
   // Odaktaki eski giriş kaldırılırken tarayıcı senkron focusout tetikler; giriş hâlâ doluysa işleyici addChips'i
@@ -1470,9 +1470,9 @@ async function confirmTurRemoval(c, force) {
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
   if (c.isPrompt && before && !Rules.normTur(FM.meta(c.parsed).tur) && !c.turClearedExplicitly && !force) {
     const a = await askChoice({
-      title: 'Prompt yayından çıkacak',
-      text: `Bu kayıtla "tur: ${before}" alanı kaldırılıyor ve prompt artık yayınlanmayacak.` + (c.publish ? ` Yayındaki ${c.publish.target} dosyası kaynaksız kalacak.` : ''),
-      choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'restore', label: `"tur: ${before}" geri koy ve kaydet` }, { id: 'go', label: 'Yine de kaydet', kind: 'danger' }]
+      title: tx('ui.edit.unpublishTitle'),
+      text: c.publish ? tx('ui.edit.unpublishTextPublished', { value: before, target: c.publish.target }) : tx('ui.edit.unpublishText', { value: before }),
+      choices: [{ id: 'cancel', label: tx('ui.common.cancel') }, { id: 'restore', label: tx('ui.edit.restoreTurAndSave', { value: before }) }, { id: 'go', label: tx('ui.edit.saveAnyway'), kind: 'danger' }]
     });
     if (a === 'cancel' || !a) return false;
     if (a === 'restore') {
@@ -1490,12 +1490,12 @@ function askIdentity() {
     const idn = (S.git && S.git.identity) || {};
     const opener = document.activeElement;
     openModal({
-      title: 'Git kimliği',
-      html: `<form class="stack" id="idForm"><p>Git, commit yazarını bilmiyor. Bu marketplace için ad ve e-posta gir.</p>
-        <label>Ad Soyad<input id="idName" value="${esc(idn.name || '')}" autocomplete="name"></label>
-        <label>E-posta<input id="idMail" type="email" value="${esc(idn.email || '')}" autocomplete="email"></label>
+      title: tx('ui.identity.title'),
+      html: `<form class="stack" id="idForm"><p>${esc(tx('ui.identity.text'))}</p>
+        <label>${esc(tx('ui.identity.name'))}<input id="idName" value="${esc(idn.name || '')}" autocomplete="name"></label>
+        <label>${esc(tx('ui.identity.email'))}<input id="idMail" type="email" value="${esc(idn.email || '')}" autocomplete="email"></label>
         <div id="idErr" class="issue error" role="alert" hidden></div>
-        <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div></form>`,
+        <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.file.save'))}</button></div></form>`,
       onMount: (b) => {
         $('#idForm', b).addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -1520,7 +1520,7 @@ async function commitOnly() {
   try {
     const r = await api('POST', '/api/git/commit', { message, paths: [c.path] });
     c.commitMsg = ''; const i = $('#commitMsg'); if (i) i.value = '';
-    toast('Commit edildi (' + r.commit + ')');
+    toast(tx('ui.save.committed', { hash: r.commit }));
     updateDirty();
     afterWrite();
     return true;
@@ -1550,22 +1550,23 @@ async function openBump() {
   const first = !!cv && !base;
   const sug = cv ? { buyuk: Rules.bumpVersion(base, 'buyuk'), kucuk: Rules.bumpVersion(base, 'kucuk'), yama: Rules.bumpVersion(base, 'yama') } : null;
   const note0 = [c.commitMsg.trim(), v.notOnerisi].filter(Boolean).join('\n\n');
-  const desc = { yama: 'düzeltme, küçük metin değişikliği', kucuk: 'geriye uyumlu yeni davranış', buyuk: 'davranış veya kullanım biçimi değişti' };
+  const desc = { yama: tx('ui.bump.descPatch'), kucuk: tx('ui.bump.descMinor'), buyuk: tx('ui.bump.descMajor') };
   const levels = first
-    ? `<p><b>İlk sürüm: ${esc(Rules.DEFAULT_VERSION)}</b></p>`
-    : `<fieldset class="bumpopts"><legend>Seviye</legend>${['yama', 'kucuk', 'buyuk'].map((l, i) => `<label><input type="radio" name="bumpLevel" value="${l}" ${i === 0 ? 'checked autofocus' : ''} ${sug ? '' : 'disabled'}> ${Rules.LEVEL_LABEL[l]}${sug ? ': ' + esc(sug[l]) : ''} (${desc[l]})</label>`).join('')}</fieldset>`;
-  const hintTxt = cv === null ? '<p class="issue error">Sürüm yorumlanamadı. X.Y.Z biçiminde yaz (örnek: 1.0.0).</p>' : '';
+    ? `<p><b>${esc(tx('ui.bump.firstVersion', { version: Rules.DEFAULT_VERSION }))}</b></p>`
+    : `<fieldset class="bumpopts"><legend>${esc(tx('ui.bump.level'))}</legend>${['yama', 'kucuk', 'buyuk'].map((l, i) => `<label><input type="radio" name="bumpLevel" value="${l}" ${i === 0 ? 'checked autofocus' : ''} ${sug ? '' : 'disabled'}> ${esc(sug ? tx('ui.bump.levelOption', { level: Rules.LEVEL_LABEL[l], version: sug[l], desc: desc[l] }) : tx('ui.bump.levelOptionNoVersion', { level: Rules.LEVEL_LABEL[l], desc: desc[l] }))}</label>`).join('')}</fieldset>`;
+  const hintTxt = cv === null ? `<p class="issue error">${esc(tx('ui.edit.versionUnreadable'))}</p>` : '';
+  const current = curRaw || tx('ui.common.none');
   const html = `<form class="stack" id="bumpForm">
-    <p>Şu anki sürüm: <b>${esc(curRaw || 'yok')}</b>. ${last ? 'Son sürüm: <b>v' + esc(last.version) + '</b> (' + esc(fmtDate(last.date)) + ')' : 'Henüz sürüm yok'}</p>
+    <p>${last ? th('ui.bump.currentWithLast', { current, version: last.version, date: fmtDate(last.date) }) : th('ui.bump.currentNoLast', { current })}</p>
     ${levels}${hintTxt}
-    <label>Sürüm notu<textarea id="bumpNote" rows="5" required ${first ? 'autofocus' : ''}>${esc(note0)}</textarea></label>
-    <p class="hint">Tag: <code id="bumpTag"></code></p>
-    ${c.dirty ? '<p class="issue warn">Kaydedilmemiş değişiklikler de bu sürüme dahil edilecek.</p>' : ''}
-    ${v.degisti === false ? '<p class="hint">Son sürümden beri içerik değişmedi; yalnızca sürüm numarası artacak.</p>' : ''}
+    <label>${esc(tx('ui.bump.note'))}<textarea id="bumpNote" rows="5" required ${first ? 'autofocus' : ''}>${esc(note0)}</textarea></label>
+    <p class="hint">${esc(tx('ui.bump.tagLabel'))} <code id="bumpTag"></code></p>
+    ${c.dirty ? `<p class="issue warn">${esc(tx('ui.bump.unsavedIncluded'))}</p>` : ''}
+    ${v.degisti === false ? `<p class="hint">${esc(tx('ui.bump.unchanged'))}</p>` : ''}
     <div id="bumpErr" class="issue error" role="alert" hidden></div>
-    <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary" id="bumpOk">Sürümü oluştur</button></div></form>`;
+    <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary" id="bumpOk">${esc(tx('ui.bump.create'))}</button></div></form>`;
   openModal({
-    title: 'Yeni sürüm', html,
+    title: tx('ui.bump.title'), html,
     onClose: () => { if (opener && opener.isConnected && opener.focus) opener.focus(); },
     onMount: (b) => {
       const level = () => { const r = $('input[name="bumpLevel"]:checked', b); return r ? r.value : 'yama'; };
@@ -1584,7 +1585,7 @@ async function openBump() {
           const r = await api('POST', '/api/version/bump', body);
           c.parsed = FM.parse(r.raw); c.savedRaw = r.raw; c.mtime = r.mtime; c.lead = leadOf(c.parsed); c.dirty = false; c.commitMsg = '';
           closeModal(); renderMain();
-          toast('Sürüm ' + r.version + ' oluşturuldu (' + r.tag + ')');
+          toast(tx('ui.bump.created', { version: r.version, tag: r.tag }));
           afterWrite();
           return;
         } catch (e) {
@@ -1592,14 +1593,14 @@ async function openBump() {
           if (d.needIdentity) { if (await askIdentity()) return send(force, pick); return; }
           if (e.status === 409 && d.conflict) {
             const a = await askChoice({
-              title: 'Dosya diskte değişmiş', text: 'Bu dosya sen açtıktan sonra başka bir yerde değiştirilmiş. Ne yapalım?',
-              choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'reload', label: 'Diskteki sürümü yükle' }, { id: 'force', label: 'Diskteki sürümün üstüne yaz', kind: 'danger' }]
+              title: tx('ui.conflict.title'), text: tx('ui.conflict.textBump'),
+              choices: [{ id: 'cancel', label: tx('ui.common.cancel') }, { id: 'reload', label: tx('ui.conflict.reload') }, { id: 'force', label: tx('ui.conflict.overwrite'), kind: 'danger' }]
             });
             if (a === 'force') return send(true, pick);
             if (a === 'reload') { c.dirty = false; closeModal(); await openFile(c.path, { reload: true, tab: c.tab }); }
             return;
           }
-          if (d.rollbackFailed) showErr(errText(e), { act: 'git', label: 'Git panelini aç' });
+          if (d.rollbackFailed) showErr(errText(e), { act: 'git', label: tx('ui.common.openGitPanel') });
           else showErr(errText(e));
           const ok = $('#bumpOk'); if (ok) ok.disabled = false;
         }
@@ -1608,7 +1609,7 @@ async function openBump() {
         ev.preventDefault();
         const note = $('#bumpNote', b).value.trim();
         const er = $('#bumpErr', b);
-        if (!note) { er.textContent = 'Sürüm notu boş olamaz'; er.hidden = false; $('#bumpNote', b).focus(); return; }
+        if (!note) { er.textContent = tx('ui.bump.noteEmpty'); er.hidden = false; $('#bumpNote', b).focus(); return; }
         er.hidden = true;
         if (c.dirty && !(await confirmTurRemoval(c, false))) return;
         $('#bumpOk', b).disabled = true;
@@ -1634,12 +1635,12 @@ async function save(force) {
     c.turClearedExplicitly = false;
     let needId = false;
     if (r.commit) {
-      toast('Kaydedildi ve commit edildi (' + r.commit + ')');
+      toast(tx('ui.save.savedAndCommitted', { hash: r.commit }));
       c.commitMsg = ''; const i = $('#commitMsg'); if (i) i.value = '';
-    } else if (r.commitSkipped) toast('Kaydedildi. Commit edilecek değişiklik yoktu.');
-    else if (r.commitError && r.commitError.needIdentity) { toast('Kaydedildi'); needId = true; }
-    else if (r.commitError) toast('Kaydedildi ama commit atılamadı: ' + errText(r.commitError), 'error');
-    else toast(S.git && S.git.isRepo ? 'Kaydedildi (commit edilmedi)' : 'Kaydedildi');
+    } else if (r.commitSkipped) toast(tx('ui.save.savedNothingToCommit'));
+    else if (r.commitError && r.commitError.needIdentity) { toast(tx('ui.save.saved')); needId = true; }
+    else if (r.commitError) toast(tx('ui.save.savedCommitFailed', { reason: errText(r.commitError) }), 'error');
+    else toast(S.git && S.git.isRepo ? tx('ui.save.savedNoCommit') : tx('ui.save.saved'));
     if (c.isPrompt && !before) {
       const chk = Rules.publishCheck({ meta: FM.meta(c.parsed), hasFm: c.parsed.hasFm, fmBroken: Rules.isFmBroken(raw, c.parsed.hasFm) });
       if (chk && (chk.code === 'turYok' || chk.code === 'turGecersiz')) toast(chk.reason, 'warn', 7000);
@@ -1651,8 +1652,8 @@ async function save(force) {
   } catch (e) {
     if (e.status === 409 && e.data && e.data.conflict) {
       const a = await askChoice({
-        title: 'Dosya diskte değişmiş', text: 'Bu dosya sen açtıktan sonra başka bir yerde (örneğin Claude Code veya editör) değiştirilmiş. Ne yapalım?',
-        choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'reload', label: 'Diskteki sürümü yükle', kind: '' }, { id: 'force', label: 'Diskteki sürümün üstüne yaz', kind: 'danger' }]
+        title: tx('ui.conflict.title'), text: tx('ui.conflict.textSave'),
+        choices: [{ id: 'cancel', label: tx('ui.common.cancel') }, { id: 'reload', label: tx('ui.conflict.reload'), kind: '' }, { id: 'force', label: tx('ui.conflict.overwrite'), kind: 'danger' }]
       });
       if (a === 'force') return save(true);
       if (a === 'reload') { c.dirty = false; await openFile(c.path, { reload: true, tab: c.tab }); }
@@ -1671,7 +1672,7 @@ async function afterWrite() {
   const c = S.cur;
   if (c && c.isPrompt) {
     loadVersion();
-    try { const r = await get('/api/file?' + qs({ path: c.path })); if (gen !== S.gen || S.cur !== c) return; c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? `Ajan adı: <code>${esc(r.publish.ad)}</code>` : `Claude Code'da çağır: <code>/${esc(r.publish.paket)}:${esc(r.publish.ad)}</code>`; } catch (e) { /* sessiz */ }
+    try { const r = await get('/api/file?' + qs({ path: c.path })); if (gen !== S.gen || S.cur !== c) return; c.publish = r.publish; c.generatedFrom = r.generatedFrom; const pp = $('#pubPill'); if (pp) pp.innerHTML = pubPill(); const u = $('#pubUsage'); if (u && r.publish) u.innerHTML = r.publish.tur === 'ajan' ? th('ui.edit.usageAgent', { name: r.publish.ad }) : th('ui.edit.usageCommand', { paket: r.publish.paket, name: r.publish.ad }); } catch (e) { /* sessiz */ }
   }
 }
 
@@ -1681,22 +1682,22 @@ async function copyBody() {
   syncFromDom();
   const body = c.parsed.body.replace(/^\n+/, '').replace(/\s+$/, '') + '\n';
   const vars = FM.placeholders(body);
-  if (!vars.length) { const ok = await copyText(body); toast(ok ? 'Panoya kopyalandı (' + body.length + ' karakter)' : 'Kopyalanamadı, metni elle seç', ok ? 'ok' : 'error'); return; }
+  if (!vars.length) { const ok = await copyText(body); toast(ok ? tx('ui.copy.copiedChars', { count: body.length }) : tx('ui.copy.failedManual'), ok ? 'ok' : 'error'); return; }
   const mem = ls.get('pp.vars', {});
   openModal({
-    title: 'Değişkenleri doldur',
-    html: `<form class="stack" id="varForm"><p class="hint">Bu promptta ${vars.length} değişken var. Boş bıraktıkların <code>{{ad}}</code> olarak kalır. Değerler bir sonraki sefer için hatırlanır.</p>
+    title: tx('ui.copy.title'),
+    html: `<form class="stack" id="varForm"><p class="hint">${th('ui.copy.hint', { count: vars.length, example: '{{' + tx('ui.copy.exampleVar') + '}}' })}</p>
       ${vars.map((v, i) => `<label>${esc(v)}<input data-var="${esc(v)}" value="${esc(mem[v] || '')}" ${i === 0 ? 'autofocus' : ''} autocomplete="off"></label>`).join('')}
-      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button type="button" class="btn" data-act="copy-raw-vars">Değişkenleri doldurmadan kopyala</button><button class="btn primary">Doldur ve kopyala</button></div></form>`,
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button type="button" class="btn" data-act="copy-raw-vars">${esc(tx('ui.copy.copyRaw'))}</button><button class="btn primary">${esc(tx('ui.copy.fillAndCopy'))}</button></div></form>`,
     onMount: (b) => {
       const collect = () => { const o = {}; $$('[data-var]', b).forEach((i) => { o[i.dataset.var] = i.value; }); return o; };
       $('#varForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const vals = collect(); ls.set('pp.vars', { ...mem, ...vals });
         const ok = await copyText(FM.fill(body, vals));
-        closeModal(); toast(ok ? 'Panoya kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error');
+        closeModal(); toast(ok ? tx('ui.copy.copied') : tx('ui.copy.failed'), ok ? 'ok' : 'error');
       });
-      $('[data-act="copy-raw-vars"]', b).addEventListener('click', async (e) => { e.stopPropagation(); const ok = await copyText(body); closeModal(); toast(ok ? 'Panoya kopyalandı' : 'Kopyalanamadı', ok ? 'ok' : 'error'); });
+      $('[data-act="copy-raw-vars"]', b).addEventListener('click', async (e) => { e.stopPropagation(); const ok = await copyText(body); closeModal(); toast(ok ? tx('ui.copy.copied') : tx('ui.copy.failed'), ok ? 'ok' : 'error'); });
     }
   });
 }
@@ -1772,73 +1773,81 @@ function diffHtml(d) {
   }).join('');
 }
 
-const FIELD_LABEL = { baslik: 'Başlık', etiketler: 'Etiketler', projeler: 'Projeler', durum: 'Durum', versiyon: 'Versiyon', olusturma: 'Oluşturma', tur: 'Tür', paket: 'Paket', komut_adi: 'Ad', aciklama: 'Açıklama', arguman_ipucu: 'Argüman ipucu', izinli_araclar: 'İzinli araçlar', model: 'Model' };
+/** Summary: Frontmatter anahtarı -> görünen etiket sözlük anahtarı. */
+const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package', komut_adi: 'ui.fields.name', aciklama: 'ui.fields.description', arguman_ipucu: 'ui.fields.argumentHint', izinli_araclar: 'ui.fields.allowedTools', model: 'ui.fields.model' };
+
+/** Summary: Frontmatter anahtarının görünen etiketi; bilinmeyen anahtar için boş döner. */
+function fieldLabel(key) {
+  if (!Object.prototype.hasOwnProperty.call(FIELD_LABEL_KEYS, key)) return '';
+  const k = FIELD_LABEL_KEYS[key];
+  return tx(k);
+}
 
 function verTimelineHtml(v) {
-  return v.data.versions.map((x, i) => `<li><button type="button" class="tl" data-act="ver-pick" data-tag="${esc(x.tag)}" aria-current="${x.tag === v.sel}"><div class="s"><b>v${esc(x.version)}</b>${i === 0 ? ' <span class="pill ok">Son sürüm</span>' : ''}${x.renamed ? ` <span class="pill">Eski ad: ${esc(base(x.pathAtTag))}</span>` : ''}${x.annotated ? '' : ' <span class="pill">Notsuz</span>'}</div><div class="hint">${esc(fmtDate(x.date))}</div>${x.subject ? `<div>${esc(x.subject)}</div>` : ''}</button></li>`).join('');
+  return v.data.versions.map((x, i) => `<li><button type="button" class="tl" data-act="ver-pick" data-tag="${esc(x.tag)}" aria-current="${x.tag === v.sel}"><div class="s"><b>v${esc(x.version)}</b>${i === 0 ? ` <span class="pill ok">${esc(tx('ui.ver.latest'))}</span>` : ''}${x.renamed ? ` <span class="pill">${esc(tx('ui.ver.oldName', { name: base(x.pathAtTag) }))}</span>` : ''}${x.annotated ? '' : ` <span class="pill">${esc(tx('ui.ver.pillNoNote'))}</span>`}</div><div class="hint">${esc(fmtDate(x.date))}</div>${x.subject ? `<div>${esc(x.subject)}</div>` : ''}</button></li>`).join('');
 }
 
 function verCardHtml(v, x) {
   const i = v.data.versions.indexOf(x);
   const prev = v.data.versions[i + 1];
   return `<div class="vcard"><div><code>${esc(x.tag)}</code> <span class="hint">${esc(fmtDate(x.date))}</span></div>
-    <div class="hint">${x.tagger ? 'Sürümü oluşturan: ' + esc(x.tagger) + ', ' : ''}commit ${esc(x.short)}</div>
-    ${x.note ? `<div class="note">${esc(x.note)}</div>` : '<div class="hint">Bu sürümde not yok.</div>'}
-    <div class="btns"><button class="btn sm" data-act="ver-view" data-tag="${esc(x.tag)}">Görüntüle</button><button class="btn sm" data-act="ver-load" data-tag="${esc(x.tag)}">Bu sürümü editöre al</button>${prev ? `<button class="btn sm" data-act="ver-prev" data-tag="${esc(x.tag)}">Bir öncekiyle karşılaştır</button>` : ''}</div></div>`;
+    <div class="hint">${esc(x.tagger ? tx('ui.ver.byTagger', { tagger: x.tagger, short: x.short }) : tx('ui.ver.commitOnly', { short: x.short }))}</div>
+    ${x.note ? `<div class="note">${esc(x.note)}</div>` : `<div class="hint">${esc(tx('ui.ver.noNoteHint'))}</div>`}
+    <div class="btns"><button class="btn sm" data-act="ver-view" data-tag="${esc(x.tag)}">${esc(tx('ui.ver.view'))}</button><button class="btn sm" data-act="ver-load" data-tag="${esc(x.tag)}">${esc(tx('ui.ver.loadIntoEditor'))}</button>${prev ? `<button class="btn sm" data-act="ver-prev" data-tag="${esc(x.tag)}">${esc(tx('ui.ver.compareWithPrevious'))}</button>` : ''}</div></div>`;
 }
 
 function verViewHtml(v) {
   const w = v.view;
-  if (w.loading) return '<p class="hint">Sürüm yükleniyor…</p>';
-  if (w.error) return `<p class="issue error">${esc(w.error)}</p><p><button class="btn sm" data-act="ver-view-close">Kapat</button></p>`;
-  return `<div class="diffhead"><span><b>v${esc(w.version)}</b> <span class="hint">(${esc(fmtDate(w.date))}), salt okunur</span></span><button class="btn sm" data-act="ver-load" data-tag="${esc(w.tag)}">Bu sürümü editöre al</button><button class="btn sm" data-act="ver-view-close">Kapat</button></div>
-    <pre class="diff" aria-label="Sürümün içeriği">${w.raw.replace(/\r\n/g, '\n').split('\n').map((l) => `<span class="dl">${esc(l) || ' '}</span>`).join('')}</pre>`;
+  if (w.loading) return `<p class="hint">${esc(tx('ui.ver.loading'))}</p>`;
+  if (w.error) return `<p class="issue error">${esc(w.error)}</p><p><button class="btn sm" data-act="ver-view-close">${esc(tx('ui.static.close'))}</button></p>`;
+  return `<div class="diffhead"><span><b>v${esc(w.version)}</b> <span class="hint">${esc(tx('ui.ver.readOnly', { date: fmtDate(w.date) }))}</span></span><button class="btn sm" data-act="ver-load" data-tag="${esc(w.tag)}">${esc(tx('ui.ver.loadIntoEditor'))}</button><button class="btn sm" data-act="ver-view-close">${esc(tx('ui.static.close'))}</button></div>
+    <pre class="diff" aria-label="${esc(tx('ui.ver.contentLabel'))}">${w.raw.replace(/\r\n/g, '\n').split('\n').map((l) => `<span class="dl">${esc(l) || ' '}</span>`).join('')}</pre>`;
 }
 
 function fieldCellsHtml(f) {
   if (f.list) {
-    const a = f.from.map((x) => (f.removed.includes(x) ? `<del class="chip"><span class="sr">silinen: </span>−${esc(x)}</del>` : `<span class="chip">${esc(x)}</span>`)).join('');
-    const b = f.to.map((x) => (f.added.includes(x) ? `<ins class="chip"><span class="sr">eklenen: </span>+${esc(x)}</ins>` : `<span class="chip">${esc(x)}</span>`)).join('');
-    return [a || '—', (b || '—') + (f.kind === 'sira' ? '<div class="hint">Yalnızca sıra değişti</div>' : '')];
+    const a = f.from.map((x) => (f.removed.includes(x) ? `<del class="chip"><span class="sr">${esc(tx('ui.hist.srRemoved'))} </span>−${esc(x)}</del>` : `<span class="chip">${esc(x)}</span>`)).join('');
+    const b = f.to.map((x) => (f.added.includes(x) ? `<ins class="chip"><span class="sr">${esc(tx('ui.hist.srAdded'))} </span>+${esc(x)}</ins>` : `<span class="chip">${esc(x)}</span>`)).join('');
+    return [a || '—', (b || '—') + (f.kind === 'sira' ? `<div class="hint">${esc(tx('ui.hist.orderOnly'))}</div>` : '')];
   }
   return [f.from == null ? '—' : `<del>${esc(f.from)}</del>`, f.to == null ? '—' : `<ins>${esc(f.to)}</ins>`];
 }
 
 function wordDiffHtml(hunks) {
-  const tok = (t) => (t.t === '=' ? esc(t.s) : t.t === '-' ? `<del class="wd"><span class="sr">silinen: </span>${esc(t.s)}</del>` : `<ins class="wd"><span class="sr">eklenen: </span>${esc(t.s)}</ins>`);
-  return hunks.map((h) => `<span class="dl hunk">@@ satır ${h.newStart} @@</span>` + h.lines.map((ln) => `<span class="dl">${ln.map(tok).join('') || ' '}</span>`).join('')).join('');
+  const tok = (t) => (t.t === '=' ? esc(t.s) : t.t === '-' ? `<del class="wd"><span class="sr">${esc(tx('ui.hist.srRemoved'))} </span>${esc(t.s)}</del>` : `<ins class="wd"><span class="sr">${esc(tx('ui.hist.srAdded'))} </span>${esc(t.s)}</ins>`);
+  return hunks.map((h) => `<span class="dl hunk">${esc(tx('ui.hist.hunk', { line: h.newStart }))}</span>` + h.lines.map((ln) => `<span class="dl">${ln.map(tok).join('') || ' '}</span>`).join('')).join('');
 }
 
 function verCompareHtml(v) {
   if (!v.a || !v.b) return '';
-  if (v.a === v.b) return '<p class="hint">Karşılaştırılacak önceki sürüm yok (ilk sürüm) ya da iki seçim aynı. Farklı iki sürüm seç.</p>';
+  if (v.a === v.b) return `<p class="hint">${esc(tx('ui.ver.nothingToCompare'))}</p>`;
   const s = v.cmp;
-  if (!s || s.loading) return '<p class="hint">Fark yükleniyor…</p>';
-  if (s.error) return `<p class="issue ${s.code === 'ayniSurum' ? 'info' : 'error'}">${esc(s.code === 'ayniSurum' ? 'Karşılaştırılacak fark yok: seçilen iki sürüm aynı içeriğe işaret ediyor.' : s.error)}</p>`;
+  if (!s || s.loading) return `<p class="hint">${esc(tx('ui.ver.diffLoading'))}</p>`;
+  if (s.error) return `<p class="issue ${s.code === 'ayniSurum' ? 'info' : 'error'}">${esc(s.code === 'ayniSurum' ? tx('ui.ver.sameContent') : s.error)}</p>`;
   const c = s.data;
   const la = verLabel(c.a.ref, c.a.version); const lb = verLabel(c.b.ref, c.b.version);
   let h = '';
-  if (v.data.versions.length === 1 && v.b === 'HEAD') h += '<p class="hint">Karşılaştırmak için ikinci bir sürüm yok; tek sürüm son commit ile karşılaştırılıyor.</p>';
-  if (c.renamed) h += `<p class="hint">Dosya bu aralıkta yeniden adlandırıldı: ${esc(c.a.pathAtRef)} → ${esc(c.b.pathAtRef)}</p>`;
+  if (v.data.versions.length === 1 && v.b === 'HEAD') h += `<p class="hint">${esc(tx('ui.ver.singleVersion'))}</p>`;
+  if (c.renamed) h += `<p class="hint">${esc(tx('ui.ver.renamedInRange', { from: c.a.pathAtRef, to: c.b.pathAtRef }))}</p>`;
   if (c.fmBroken.a || c.fmBroken.b) {
-    if (c.fmBroken.a) h += `<p class="issue warn">${esc(la)} sürümünde frontmatter kapanmamış; alanlar karşılaştırılamadı.</p>`;
-    if (c.fmBroken.b) h += `<p class="issue warn">${esc(lb)} sürümünde frontmatter kapanmamış; alanlar karşılaştırılamadı.</p>`;
-  } else if (!c.fields.length) h += '<p class="hint">Frontmatter alanlarında değişiklik yok.</p>';
+    if (c.fmBroken.a) h += `<p class="issue warn">${esc(tx('ui.ver.fmBroken', { label: la }))}</p>`;
+    if (c.fmBroken.b) h += `<p class="issue warn">${esc(tx('ui.ver.fmBroken', { label: lb }))}</p>`;
+  } else if (!c.fields.length) h += `<p class="hint">${esc(tx('ui.ver.noFieldChanges'))}</p>`;
   else {
-    h += `<table class="fdiff"><caption>Frontmatter alanları</caption><thead><tr><th scope="col">Alan</th><th scope="col">${esc(la)}</th><th scope="col">${esc(lb)}</th></tr></thead><tbody>${c.fields.map((f) => { const [x, y] = fieldCellsHtml(f); return `<tr><th scope="row">${FIELD_LABEL[f.key] ? esc(FIELD_LABEL[f.key]) : `<code>${esc(f.key)}</code>`}</th><td>${x}</td><td>${y}</td></tr>`; }).join('')}</tbody></table>`;
+    h += `<table class="fdiff"><caption>${esc(tx('ui.ver.fieldsCaption'))}</caption><thead><tr><th scope="col">${esc(tx('ui.ver.fieldColumn'))}</th><th scope="col">${esc(la)}</th><th scope="col">${esc(lb)}</th></tr></thead><tbody>${c.fields.map((f) => { const [x, y] = fieldCellsHtml(f); return `<tr><th scope="row">${fieldLabel(f.key) ? esc(fieldLabel(f.key)) : `<code>${esc(f.key)}</code>`}</th><td>${x}</td><td>${y}</td></tr>`; }).join('')}</tbody></table>`;
   }
-  h += c.body.same ? '<p class="hint">Gövdede değişiklik yok.</p>' : `<pre class="diff wdiff" aria-label="Gövde farkı">${wordDiffHtml(c.body.hunks)}</pre>`;
-  if (c.body.truncated) h += '<p class="hint">Fark çok büyük, kısaltıldı.</p>';
+  h += c.body.same ? `<p class="hint">${esc(tx('ui.ver.noBodyChanges'))}</p>` : `<pre class="diff wdiff" aria-label="${esc(tx('ui.ver.bodyDiffLabel'))}">${wordDiffHtml(c.body.hunks)}</pre>`;
+  if (c.body.truncated) h += `<p class="hint">${esc(tx('ui.ver.truncated'))}</p>`;
   if (c.commits.length) {
-    h += `<details><summary>Bu aralıktaki commit'ler (${c.commits.length}${c.commitsTruncated ? '+' : ''})</summary><ul class="commits" style="max-height:30vh">${c.commits.map((k) => `<li role="button" tabindex="0" data-act="ver-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path || '')}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="verCDiff" hidden></pre></details>`;
+    h += `<details><summary>${th('ui.ver.rangeCommits', { total: c.commits.length + (c.commitsTruncated ? '+' : '') })}</summary><ul class="commits" style="max-height:30vh">${c.commits.map((k) => `<li role="button" tabindex="0" data-act="ver-commit" data-hash="${esc(k.hash)}" data-path="${esc(k.path || '')}"><div class="s">${esc(k.subject)}</div><div class="hint">${esc(fmtDate(k.date))}, ${esc(k.short)}</div></li>`).join('')}</ul><pre class="diff" id="verCDiff" hidden></pre></details>`;
   }
-  return h + '<p class="hint">Kaydedilmemiş ve commit edilmemiş değişiklikler karşılaştırmaya dahil değildir.</p>';
+  return h + `<p class="hint">${esc(tx('ui.ver.excludesUncommitted'))}</p>`;
 }
 
 function verMainHtml(v) {
   if (v.view) return verViewHtml(v);
   const x = v.sel && verByTag(v, v.sel);
-  return (x ? verCardHtml(v, x) : '') + `<div id="verCmp" tabindex="-1" aria-label="Sürüm karşılaştırması">${verCompareHtml(v)}</div>`;
+  return (x ? verCardHtml(v, x) : '') + `<div id="verCmp" tabindex="-1" aria-label="${esc(tx('ui.ver.compareLabel'))}">${verCompareHtml(v)}</div>`;
 }
 
 function paintVer() {
@@ -1901,7 +1910,7 @@ async function loadVersionIntoEditor(tag) {
   let r = v.view && v.view.tag === tag && v.view.raw != null ? v.view : null;
   if (!r) { try { r = await get('/api/history/show?' + qs({ path: c.path, tag })); } catch (e) { fail(e); return; } }
   if (S.cur !== c) return;
-  await loadRawIntoEditor(r.raw, { what: 'v' + r.version + ' sürümünün', msg: 'v' + r.version + ' sürümüne geri dönüldü' });
+  await loadRawIntoEditor(r.raw, { source: 'version', version: r.version });
 }
 
 async function paintHist() {
@@ -1913,15 +1922,15 @@ async function paintHist() {
   const cm = h.commit; if (!cm || !cm.sel || !$('#diffBox')) return;
   const head = $('#diffHead'); const box = $('#diffBox');
   if (cm.sel === 'working') {
-    if (cm.working.untracked) { box.textContent = 'Bu dosya henüz git\'e eklenmedi. Git panelinden commit edebilirsin.'; head.innerHTML = ''; return; }
-    box.innerHTML = diffHtml(cm.working.diff); head.innerHTML = '<span class="hint">Son commit ile şu anki dosya arasındaki fark</span>';
+    if (cm.working.untracked) { box.textContent = tx('ui.hist.untrackedDiff'); head.innerHTML = ''; return; }
+    box.innerHTML = diffHtml(cm.working.diff); head.innerHTML = `<span class="hint">${esc(tx('ui.hist.diffHead'))}</span>`;
     return;
   }
   const k = cm.commits.find((x) => x.hash === cm.sel); if (!k) return;
-  head.innerHTML = `<span><b>${esc(k.subject)}</b> <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.author)}</span></span><button class="btn sm" data-act="hist-load" data-hash="${k.hash}">Bu sürümü editöre al</button>`;
+  head.innerHTML = `<span><b>${esc(k.subject)}</b> <span class="hint">${esc(fmtDate(k.date))}, ${esc(k.author)}</span></span><button class="btn sm" data-act="hist-load" data-hash="${k.hash}">${esc(tx('ui.ver.loadIntoEditor'))}</button>`;
   try {
     if (!cm.diffs[k.hash]) cm.diffs[k.hash] = (await get('/api/git/diff?' + qs({ hash: k.hash, path: k.path || c.path }))).diff;
-    if (c.hist === h && cm.sel === k.hash) box.innerHTML = diffHtml(cm.diffs[k.hash] || '(fark yok)');
+    if (c.hist === h && cm.sel === k.hash) box.innerHTML = diffHtml(cm.diffs[k.hash] || tx('ui.hist.noDiff'));
   } catch (e) { box.textContent = e.message; }
 }
 
@@ -1931,19 +1940,20 @@ async function loadOldVersion(hash) {
   let r;
   try { r = await get('/api/git/show?' + qs({ hash, path: k.path || c.path })); } catch (e) { fail(e); return; }
   if (S.cur !== c) return;
-  await loadRawIntoEditor(r.raw, { what: k.short + ' commit\'inin', msg: k.short + ' commit\'ine geri dönüldü' });
+  await loadRawIntoEditor(r.raw, { source: 'commit', short: k.short });
 }
 
 // Eski bir içeriği yalnızca editöre koyar (diske yazmaz). Kaydedilmemiş değişiklik varsa önce sorar.
 // c.savedRaw ve c.mtime değişmez: dirty olur, 409 çakışma koruması sürer. `versiyon` geriye gitmez.
-async function loadRawIntoEditor(raw, { what, msg }) {
+async function loadRawIntoEditor(raw, from) {
   const c = S.cur; if (!c) return false;
   if (staleGuard()) return false;
+  const isVersion = from.source === 'version';
   if (isDirty()) {
     const a = await askChoice({
-      title: 'Kaydedilmemiş değişiklikler var',
-      text: '"' + base(c.path) + '" dosyasındaki kaydedilmemiş değişiklikler, ' + what + ' içeriğiyle değiştirilecek.',
-      choices: [{ id: 'cancel', label: 'Vazgeç' }, { id: 'discard', label: 'Değişiklikleri at ve yükle', kind: 'danger' }, { id: 'save', label: 'Önce kaydet', kind: 'primary' }]
+      title: tx('ui.discard.title'),
+      text: isVersion ? tx('ui.hist.replaceUnsavedVersion', { name: base(c.path), version: from.version }) : tx('ui.hist.replaceUnsavedCommit', { name: base(c.path), short: from.short }),
+      choices: [{ id: 'cancel', label: tx('ui.common.cancel') }, { id: 'discard', label: tx('ui.hist.discardAndLoad'), kind: 'danger' }, { id: 'save', label: tx('ui.hist.saveFirst'), kind: 'primary' }]
     });
     if (a === 'save') { if (!(await save())) return false; } else if (a !== 'discard') return false;
     if (S.cur !== c) return false;
@@ -1951,11 +1961,12 @@ async function loadRawIntoEditor(raw, { what, msg }) {
   const p = FM.parse(raw); p.eol = c.eol; p.bom = c.bom;
   if (c.isPrompt) FM.set(p, 'versiyon', FM.meta(FM.parse(c.savedRaw)).versiyon);
   c.parsed = p; c.lead = leadOf(p);
-  c.restoredFrom = { what };
+  c.restoredFrom = from;
+  const msg = isVersion ? tx('ui.hist.restoreMsgVersion', { version: from.version }) : tx('ui.hist.restoreMsgCommit', { short: from.short });
   if (!c.commitMsg.trim()) { c.commitMsg = msg; c.autoMsg = msg; }
   c.tab = c.isPrompt ? 'edit' : 'raw';
   renderMain(); updateDirty();
-  toast('Eski içerik editöre alındı. Kaydedene kadar dosya değişmez.');
+  toast(tx('ui.hist.loadedToast'));
   return true;
 }
 
