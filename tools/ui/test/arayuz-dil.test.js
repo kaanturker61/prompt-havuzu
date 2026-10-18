@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { uiGlobals } = require('./helpers');
+const FM = require('../public/fm.js');
+const Rules = require('../public/rules.js');
 
 const PUBLIC = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
@@ -511,4 +513,197 @@ test('index.html: yeni kod tx ve th adlarını kullanır (yerel t ile gölgelenm
   assert.match(html, /^const th = I18n\.th;$/m);
   assert.ok(!html.includes('\r'));
   assert.ok(!fs.readFileSync(__filename, 'utf8').includes('\r'));
+});
+
+/** Summary: Sahte DOM öğesi: yazılan innerHTML/textContent ve eklenen olay dinleyicileri saklanır. */
+function stubEl() {
+  const el = { innerHTML: '', textContent: '', value: '', hidden: false, checked: true, dataset: {}, handlers: {}, addEventListener(ev, fn) { el.handlers[ev] = fn; }, setAttribute() {}, removeAttribute() {}, focus() {}, select() {} };
+  return el;
+}
+
+/** Summary: Seçiciye göre tembel oluşturulan sahte öğeler (`$`) ve elle verilen onay kutuları (`$$`). */
+function stubDom() {
+  const els = new Proxy({}, { get: (target, key) => (typeof key === 'string' ? (target[key] = target[key] || stubEl()) : target[key]) });
+  const dom = { els, checks: [], $: (selector) => els[selector], $$: () => dom.checks };
+  return dom;
+}
+
+/** Summary: Yeni prompt, içe aktarma, yeniden adlandırma ve silme işlevleri için vm bağlamı: tarayıcı kipi I18n, sahte DOM, kayıt tutan toast/openModal/api/askText/askChoice. */
+function regionCtx(fns, mp) {
+  const g = uiGlobals({ browser: true });
+  const dom = stubDom();
+  const calls = { modal: [], toast: [], api: [], ask: [], choice: [] };
+  const env = { g, dom, calls, apiFor: async () => ({}) };
+  env.ctx = load({ fns, consts: ['esc', 'toList', 'base', 'today', 'hasWord'] }, {
+    ...g, FM, Rules, $: dom.$, $$: dom.$$,
+    S: { sel: null, cur: null, mpOpen: new Set(), modelMap: new Map(), focusKey: null },
+    FormData: class { constructor(target) { this.values = target.values; } get(key) { return this.values[key]; } },
+    ls: { get: (key, fallback) => fallback, set() {} }, lsKey: (key) => key, qs: (o) => 'path=' + o.path,
+    activeMp: () => mp, activeName: () => mp.name, libDirOf: () => 'prompts', pluginsOf: (m) => m.plugins,
+    openModal: (o) => calls.modal.push(o), closeModal() {}, toast: (message, kind) => calls.toast.push([message, kind || null]), fail(e) { throw e; },
+    confirmDiscard: async () => true, afterWrite: async () => {}, openFile: async () => {}, renderMain() {}, renderList() {}, expandParents() {}, clearCur() {},
+    expOf: () => new Set(), saveExp() {}, nodeKey: (name, path2) => name + ':' + path2,
+    api: async (method, url, body) => { calls.api.push({ method, url, body }); return env.apiFor(method, url, body); },
+    askText: async (o) => { calls.ask.push(o); return 'Yeni Ad'; },
+    askChoice: async (o) => { calls.choice.push(o); return 'yes'; }
+  });
+  return env;
+}
+
+const XSS_INPUT = '<img src=x onerror="alert(1)">';
+const XSS_ESCAPED = '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;';
+const LEGACY_TEMPLATES = {
+  bos: { label: 'Boş', meta: {}, body: '' },
+  rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
+  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
+  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
+};
+
+test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizce; meta iki dilde aynı kanonik Türkçe; dil değişince bayatlamaz', () => {
+  const g = uiGlobals({ browser: true });
+  const { templates } = load({ fns: ['templates'] }, g);
+  const snapshot = () => JSON.parse(JSON.stringify(templates()));
+  g.I18n.setLanguage('tr');
+  assert.deepEqual(snapshot(), LEGACY_TEMPLATES);
+  g.I18n.setLanguage('en');
+  const en = snapshot();
+  assert.deepEqual(Object.keys(en), Object.keys(LEGACY_TEMPLATES));
+  for (const id of Object.keys(en)) assert.deepEqual(en[id].meta, LEGACY_TEMPLATES[id].meta, 'meta kanonik: ' + id);
+  assert.deepEqual(en.komut.meta, { tur: 'komut', arguman_ipucu: '[argüman]' });
+  assert.deepEqual(en.ajan.meta, { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' });
+  assert.deepEqual(Object.values(en).map((tpl) => tpl.label), ['Blank', 'Role, task, output', 'Claude Code command', 'Claude Code agent']);
+  assert.equal(en.bos.body, '');
+  assert.equal(en.rgc.body, 'Role:\n\nTask:\n\nContext:\n- \n\nConstraints:\n- \n\nOutput format:\n1. \n');
+  assert.equal(en.komut.body, 'Task: $ARGUMENTS\n\nIf the argument is empty, ask what to do and stop.\n\nOutput format:\n1. \n');
+  assert.equal(en.ajan.body, 'Role:\n\nInput files:\n- \n\nOutput files:\n- \n\nForbidden behaviors:\n- \n');
+  for (const tpl of Object.values(en)) assert.doesNotMatch(tpl.label + tpl.body, /[çğıöşüÇĞİÖŞÜ]/);
+  g.I18n.setLanguage('tr');
+  assert.deepEqual(snapshot(), LEGACY_TEMPLATES, 'tr yeniden aynı: şablonlar bayatlamaz');
+});
+
+test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik Türkçe, gövde arayüz dilinde; kullanıcı girdisi kaçışlı', async () => {
+  const mp = { name: XSS_INPUT, libraryDir: 'prompts', plugins: [{ name: 'kod' }, { name: XSS_INPUT }] };
+  const env = regionCtx(['templates', 'openNewPrompt'], mp);
+  const today = new Date().toLocaleDateString('sv-SE');
+  const render = async (lang, tpl) => {
+    env.g.I18n.setLanguage(lang);
+    env.calls.modal.length = 0; env.calls.api.length = 0; env.calls.toast.length = 0;
+    env.apiFor = async (method, url, body) => ({ path: body.path });
+    env.ctx.openNewPrompt({ plugin: 'kod' });
+    const modal = env.calls.modal[0];
+    modal.onMount({});
+    await env.dom.els['#newForm'].handlers.submit({ preventDefault() {}, target: { values: { title: 'Başlık', plugin: 'kod', tags: 'a, b', tpl } } });
+    const [head, body] = env.calls.api[0].body.raw.split('\n---\n\n');
+    return { title: modal.title, html: modal.html, head, body, toast: env.calls.toast.map((entry) => entry[0]) };
+  };
+  const tr = await render('tr', 'komut');
+  const en = await render('en', 'komut');
+  assert.equal(tr.title, 'Yeni prompt');
+  assert.equal(en.title, 'New prompt');
+  assert.match(tr.html, /<option value="komut">Claude Code komutu<\/option>/);
+  assert.match(en.html, /<option value="komut">Claude Code command<\/option>/);
+  assert.match(tr.html, /<label>Şablon<select name="tpl">/);
+  assert.match(en.html, /<label>Template<select name="tpl">/);
+  assert.ok(tr.html.includes('Marketplace: <b>' + XSS_ESCAPED + '</b>'));
+  assert.ok(en.html.includes('Marketplace: <b>' + XSS_ESCAPED + '</b>'));
+  for (const rendered of [tr.html, en.html]) {
+    assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+    assert.ok(rendered.includes('<option value="' + XSS_ESCAPED + '" >' + XSS_ESCAPED + '</option>'));
+  }
+  const frontmatter = '---\nbaslik: Başlık\netiketler: [a, b]\ndurum: taslak\nolusturma: ' + today + '\ntur: komut\narguman_ipucu: "[argüman]"';
+  assert.equal(tr.head, frontmatter);
+  assert.equal(en.head, frontmatter, 'frontmatter anahtarları ve değerleri dilden bağımsız');
+  assert.equal(tr.body, LEGACY_TEMPLATES.komut.body);
+  assert.equal(en.body, 'Task: $ARGUMENTS\n\nIf the argument is empty, ask what to do and stop.\n\nOutput format:\n1. \n');
+  assert.deepEqual([tr.toast, en.toast], [['Prompt oluşturuldu'], ['Prompt created']]);
+  const trAgain = await render('tr', 'komut');
+  assert.deepEqual(trAgain, tr, 'tr yeniden aynı: pencere ve dosya bayatlamaz');
+});
+
+test('openImport: tara ve sonuç iletileri çoğul (tr/en); atlananlar, önizleme ve hedef kaçışlı; dil değişince bayatlamaz', async () => {
+  const mp = { name: 'mp', libraryDir: 'prompts', plugins: [{ name: 'kod', path: 'prompts/kod' }] };
+  const env = regionCtx(['openImport'], mp);
+  const flow = async (lang, scan, run, target) => {
+    env.g.I18n.setLanguage(lang);
+    env.calls.modal.length = 0;
+    env.ctx.openImport();
+    const modal = env.calls.modal[0];
+    modal.onMount({});
+    env.apiFor = async (method, url) => (url === '/api/import/scan' ? scan : run);
+    const out = env.dom.els['#impOut'];
+    await env.dom.els['#impForm'].handlers.submit({ preventDefault() {}, target: { values: { dir: '/d', target } } });
+    const scanned = out.innerHTML;
+    env.dom.checks = scan.files.map((file, i) => ({ checked: true, dataset: { i: String(i) } }));
+    await env.dom.els['#impGo'].handlers.click();
+    return { title: modal.title, html: modal.html, scanned, done: out.innerHTML };
+  };
+  const one = { dir: '/d', files: [{ rel: XSS_INPUT, file: '/d/a.txt', preview: XSS_INPUT, lines: 1 }] };
+  const oneRun = { created: [{}], skipped: [{ file: '/d/x.txt', reason: XSS_INPUT }, { file: '/d/y.txt', reason: 'Boş dosya' }] };
+  const target = 'prompts/' + XSS_INPUT;
+  const trOne = await flow('tr', one, oneRun, target);
+  const enOne = await flow('en', one, oneRun, target);
+  assert.equal(trOne.title, '.txt dosyalarını içe aktar');
+  assert.equal(enOne.title, 'Import .txt files');
+  assert.ok(trOne.html.includes('placeholder="C:\\Users\\sen\\promptlar veya ~/promptlar"') && trOne.html.includes('>Gelen kutusu</option>'));
+  assert.ok(enOne.html.includes('placeholder="C:\\Users\\you\\prompts or ~/prompts"') && enOne.html.includes('>Inbox</option>'));
+  assert.ok(trOne.scanned.includes('<h3>1 dosya bulundu</h3>') && trOne.scanned.includes('<span class="hint">1 satır</span>'));
+  assert.ok(enOne.scanned.includes('<h3>1 file found</h3>') && enOne.scanned.includes('<span class="hint">1 line</span>'));
+  const skippedList = 'x.txt (' + XSS_ESCAPED + '), y.txt (Boş dosya)';
+  assert.ok(trOne.done.includes('<h3>1 prompt oluşturuldu</h3>'));
+  assert.ok(trOne.done.includes('<p>Taslak olarak <code>prompts/' + XSS_ESCAPED + '</code> içine kaydedildi.'));
+  assert.ok(trOne.done.includes('<p class="issue warn">2 dosya atlandı: ' + skippedList + '</p>'));
+  assert.ok(enOne.done.includes('<h3>1 prompt created</h3>'));
+  assert.ok(enOne.done.includes('<p>Saved as drafts in <code>prompts/' + XSS_ESCAPED + '</code>.'));
+  assert.ok(enOne.done.includes('<p class="issue warn">2 files skipped: ' + skippedList + '</p>'));
+  for (const rendered of [trOne.scanned, trOne.done, enOne.scanned, enOne.done]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
+  assert.ok(trOne.done.includes('data-path="prompts/' + XSS_ESCAPED + '"'));
+  const many = { dir: '/d', files: [{ rel: 'a.txt', file: '/d/a.txt', preview: 'p', lines: 12 }, { rel: 'b.txt', file: '/d/b.txt', preview: 'p', lines: 1 }, { rel: 'c.txt', file: '/d/c.txt', preview: 'p', lines: 2 }] };
+  const manyRun = { created: [{}, {}, {}], skipped: [{ file: '/d/z.txt', reason: 'Okunamadı' }] };
+  const trMany = await flow('tr', many, manyRun, 'prompts/kod');
+  const enMany = await flow('en', many, manyRun, 'prompts/kod');
+  assert.ok(trMany.scanned.includes('<h3>3 dosya bulundu</h3>') && trMany.scanned.includes('12 satır'));
+  assert.ok(enMany.scanned.includes('<h3>3 files found</h3>') && enMany.scanned.includes('12 lines'));
+  assert.ok(trMany.done.includes('<h3>3 prompt oluşturuldu</h3>') && trMany.done.includes('1 dosya atlandı: z.txt (Okunamadı)'));
+  assert.ok(enMany.done.includes('<h3>3 prompts created</h3>') && enMany.done.includes('1 file skipped: z.txt (Okunamadı)'));
+  const trAgain = await flow('tr', one, oneRun, target);
+  assert.deepEqual(trAgain, trOne, 'tr yeniden aynı: içe aktarma metinleri bayatlamaz');
+});
+
+test('renamePlugin ve deleteItem: çoğul ve parametreli iletiler iki dilde, dil değişince bayatlamaz', async () => {
+  const env = regionCtx(['renamePlugin', 'deleteItem'], { name: 'mp', libraryDir: 'prompts', plugins: [] });
+  const plain = (value) => JSON.parse(JSON.stringify(value));
+  const rename = async (lang, moved) => {
+    env.g.I18n.setLanguage(lang);
+    env.calls.toast.length = 0; env.calls.choice.length = 0; env.calls.ask.length = 0;
+    env.apiFor = async () => ({ plugin: { name: 'yeni-ad', path: 'prompts/yeni-ad' }, moved });
+    await env.ctx.renamePlugin('eski');
+    return { toast: env.calls.toast[0][0], choice: plain(env.calls.choice[0]), ask: plain(env.calls.ask[0]) };
+  };
+  const remove = async (lang) => {
+    env.g.I18n.setLanguage(lang);
+    env.calls.toast.length = 0; env.calls.choice.length = 0;
+    await env.ctx.deleteItem('prompts/a.md');
+    return { toast: env.calls.toast[0][0], choice: plain(env.calls.choice[0]) };
+  };
+  const trOne = await rename('tr', 1);
+  const enOne = await rename('en', 1);
+  const trMany = await rename('tr', 3);
+  const enMany = await rename('en', 3);
+  assert.equal(trOne.toast, 'Plugin yeniden adlandırıldı: yeni-ad (1 prompt)');
+  assert.equal(trMany.toast, 'Plugin yeniden adlandırıldı: yeni-ad (3 prompt)');
+  assert.equal(enOne.toast, 'Plugin renamed: yeni-ad (1 prompt)');
+  assert.equal(enMany.toast, 'Plugin renamed: yeni-ad (3 prompts)');
+  assert.equal(trOne.choice.text, '"eski" → "yeni-ad". Promptların sürüm tag\'leri eski adla kalır, yayınlanmış çıktı (plugins/eski) kaynaksız kalır ve bir sonraki yayında temizlenir.');
+  assert.equal(enOne.choice.text, '"eski" → "yeni-ad". The version tags of its prompts keep the old name, the published output (plugins/eski) is left without a source and is cleaned up at the next publish.');
+  assert.deepEqual(trOne.choice.choices.map((c) => c.label), ['Vazgeç', 'Yeniden adlandır']);
+  assert.deepEqual(enOne.choice.choices.map((c) => c.label), ['Cancel', 'Rename']);
+  assert.deepEqual([trOne.ask.title, trOne.ask.ok], ["Plugin'i yeniden adlandır", 'Devam']);
+  assert.deepEqual([enOne.ask.title, enOne.ask.ok], ['Rename plugin', 'Continue']);
+  const trDelete = await remove('tr');
+  const enDelete = await remove('en');
+  assert.equal(trDelete.choice.text, '"prompts/a.md" çöp kutusuna (.pp/trash) taşınır. Git ile takip ediliyorsa geçmişte de durur.');
+  assert.equal(enDelete.choice.text, '"prompts/a.md" is moved to the trash (.pp/trash). If it is tracked by git, it also stays in the history.');
+  assert.deepEqual([trDelete.toast, enDelete.toast], ['Çöp kutusuna taşındı', 'Moved to the trash']);
+  assert.deepEqual(await rename('tr', 1), trOne, 'tr yeniden aynı');
+  assert.deepEqual(await remove('tr'), trDelete, 'tr yeniden aynı');
 });

@@ -1980,12 +1980,15 @@ function cancelRestore() {
 }
 
 /* --------------------------------------------------- yeni marketplace, plugin, prompt */
-const TEMPLATES = {
-  bos: { label: 'Boş', meta: {}, body: '' },
-  rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
-  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
-  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
-};
+/** Summary: Yeni prompt şablonları; etiket ve gövde arayüz dilinde, frontmatter (meta) kanonik Türkçe; kullanım anında üretilir. */
+function templates() {
+  return {
+    bos: { label: tx('ui.templates.blankLabel'), meta: {}, body: '' },
+    rgc: { label: tx('ui.templates.rgcLabel'), meta: {}, body: tx('ui.templates.rgcBody') },
+    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: tx('ui.templates.commandBody') },
+    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
+  };
+}
 
 const hasWord = (v) => /[\p{L}\p{N}]/u.test(v);
 // Yolun plugin klasörü adı; klasörsüz/gelen kutusu/dışarıdaki yollar için ''.
@@ -2006,31 +2009,31 @@ function defaultPlugin() {
 
 // Yeni marketplace penceresi (ağaç araç çubuğundan açılır).
 async function openNewMarketplace() {
-  if (!rootOk()) { toast('Önce geçerli bir library kökü kaydet', 'error'); return; }
+  if (!rootOk()) { toast(tx('ui.newMp.needRoot'), 'error'); return; }
   openModal({
-    title: 'Yeni marketplace',
+    title: tx('ui.tree.newMarketplace'),
     html: `<form class="stack" id="newMkForm" novalidate>
-      <fieldset><legend>Nasıl eklensin?</legend><div class="inline"><label class="inline"><input type="radio" name="nmMode" value="bos" checked> Boş oluştur</label><label class="inline"><input type="radio" name="nmMode" value="klon"> Uzak depodan klonla</label></div></fieldset>
+      <fieldset><legend>${esc(tx('ui.newMp.howLegend'))}</legend><div class="inline"><label class="inline"><input type="radio" name="nmMode" value="bos" checked> ${esc(tx('ui.newMp.modeBlank'))}</label><label class="inline"><input type="radio" name="nmMode" value="klon"> ${esc(tx('ui.newMp.modeClone'))}</label></div></fieldset>
       <div id="nmCloneBox" class="stack" hidden>
-        <label>GitHub veya GitLab linki<input id="nmUrl" autocomplete="off" placeholder="https://github.com/kullanıcı/depo" aria-describedby="nmUrlHint"></label>
-        <p class="hint" id="nmUrlHint" style="margin:0">Kimlik bilgisi penceresi açılabilir. Klonlama birkaç dakika sürebilir.</p>
-        <label>Klasör adı<input id="nmCloneName" autocomplete="off"></label>
+        <label>${esc(tx('ui.newMp.urlLabel'))}<input id="nmUrl" autocomplete="off" placeholder="${esc(tx('ui.newMp.urlPlaceholder'))}" aria-describedby="nmUrlHint"></label>
+        <p class="hint" id="nmUrlHint" style="margin:0">${esc(tx('ui.newMp.cloneHint'))}</p>
+        <label>${esc(tx('ui.newMp.folderName'))}<input id="nmCloneName" autocomplete="off"></label>
       </div>
       <div id="nmNewBox" class="stack">
-      <label>Ad<input id="nmName" autocomplete="off" aria-describedby="nmSlug nmErr" placeholder="Örn. ornek-promptlar" autofocus></label>
+      <label>${esc(tx('ui.fields.name'))}<input id="nmName" autocomplete="off" aria-describedby="nmSlug nmErr" placeholder="${esc(tx('ui.newMp.namePlaceholder'))}" autofocus></label>
       <p class="hint" id="nmSlug" style="margin:0"></p>
-      <label>Açıklama<input id="nmDesc" autocomplete="off"></label>
-      <label>Sahip<input id="nmOwner" autocomplete="off" placeholder="Boşsa sistem kullanıcısı kullanılır"></label>
+      <label>${esc(tx('ui.fields.description'))}<input id="nmDesc" autocomplete="off"></label>
+      <label>${esc(tx('ui.newMp.owner'))}<input id="nmOwner" autocomplete="off" placeholder="${esc(tx('ui.newMp.ownerPlaceholder'))}"></label>
       </div>
       <p class="issue error" id="nmErr" role="alert" style="margin:0" hidden></p>
-      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
-      $('#nmName', b).addEventListener('input', (e) => { $('#nmSlug', b).textContent = hasWord(e.target.value) ? 'Klasör adı: ' + FM.slug(e.target.value) : ''; });
+      $('#nmName', b).addEventListener('input', (e) => { $('#nmSlug', b).textContent = hasWord(e.target.value) ? tx('ui.newMp.folderNamePreview', { slug: FM.slug(e.target.value) }) : ''; });
       const mode = () => $$('input[name="nmMode"]', b).find((x) => x.checked).value;
       $$('input[name="nmMode"]', b).forEach((x) => x.addEventListener('change', () => {
         const k = mode() === 'klon';
         $('#nmCloneBox', b).hidden = !k; $('#nmNewBox', b).hidden = k;
-        $('#newMkForm button.primary', b).textContent = k ? 'Klonla' : 'Oluştur';
+        $('#newMkForm button.primary', b).textContent = k ? tx('ui.newMp.clone') : tx('ui.common.create');
         (k ? $('#nmUrl', b) : $('#nmName', b)).focus();
       }));
       $('#nmUrl', b).addEventListener('input', (e) => {
@@ -2047,7 +2050,7 @@ async function openNewMarketplace() {
           const cname = $('#nmCloneName', b).value.trim();
           if (!(await confirmDiscard())) return;
           const btn = $('#newMkForm button.primary', b);
-          btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = 'Klonlanıyor…';
+          btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = tx('ui.newMp.cloning');
           try {
             const r = await api('POST', '/api/marketplaces/clone', { url: n.url, name: cname || undefined, activate: true });
             closeModal();
@@ -2056,17 +2059,17 @@ async function openNewMarketplace() {
             await Promise.all([loadLibrary(), loadFacets(), loadGit(), loadRecent()]);
             if (made) { S.mpOpen.add(made); saveMpOpen(); S.sel = { mp: made, key: nodeKey(made, '') }; S.focusKey = nodeKey(made, ''); ensureDefaultExp(made); }
             renderFilters(); renderList(); renderMain();
-            if (r.warnings && r.warnings.length) cloneResultModal(r); else toast('Marketplace klonlandı');
+            if (r.warnings && r.warnings.length) cloneResultModal(r); else toast(tx('ui.newMp.cloned'));
             backgroundRemoteCheck();
           } catch (err) {
-            btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = 'Klonla';
+            btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = tx('ui.newMp.clone');
             showFieldErr('nmErr', err.message + (err.data && err.data.detail ? ' (' + err.data.detail + ')' : ''));
             (err.status === 409 ? $('#nmCloneName', b) : $('#nmUrl', b)).focus();
           }
           return;
         }
         const name = $('#nmName', b).value.trim();
-        if (!hasWord(name)) { showFieldErr('nmErr', 'Bir ad gir'); $('#nmName', b).focus(); return; }
+        if (!hasWord(name)) { showFieldErr('nmErr', tx('ui.newMp.nameRequired')); $('#nmName', b).focus(); return; }
         if (!(await confirmDiscard())) return;
         try {
           const r = await api('POST', '/api/marketplaces', { name, description: $('#nmDesc', b).value.trim(), owner: $('#nmOwner', b).value.trim(), activate: true });
@@ -2078,7 +2081,7 @@ async function openNewMarketplace() {
           S.sel = { mp: made, key: nodeKey(made, '') }; S.focusKey = nodeKey(made, '');
           ensureDefaultExp(made);
           renderFilters(); renderList(); renderMain();
-          toast("Marketplace oluşturuldu. İlk commit'i Git panelinden atabilirsin.", 'ok', 5000);
+          toast(tx('ui.newMp.created'), 'ok', 5000);
         } catch (err) { showFieldErr('nmErr', err.message); $('#nmName', b).focus(); }
       });
     }
@@ -2088,23 +2091,23 @@ async function openNewMarketplace() {
 // Yeni plugin: klasör + .gitkeep (+ açıklama). Commit atılmaz.
 function openNewPlugin() {
   const m = activeMp();
-  if (!m) { toast('Önce bir marketplace seç', 'error'); return; }
+  if (!m) { toast(tx('ui.toolbar.pickMarketplace'), 'error'); return; }
   const lib = m.libraryDir;
   openModal({
-    title: 'Yeni plugin: ' + m.name,
+    title: tx('ui.toolbar.newPluginIn', { name: m.name }),
     html: `<form class="stack" id="newPlForm" novalidate>
-      <label>Ad<input id="plName" autocomplete="off" aria-describedby="plPrev plErr plWarn" placeholder="Örn. kod-inceleme" autofocus></label>
+      <label>${esc(tx('ui.fields.name'))}<input id="plName" autocomplete="off" aria-describedby="plPrev plErr plWarn" placeholder="${esc(tx('ui.newPlugin.namePlaceholder'))}" autofocus></label>
       <p class="hint" id="plPrev" style="margin:0"></p>
       <p class="issue error" id="plErr" role="alert" style="margin:0" hidden></p>
       <p class="issue warn" id="plWarn" style="margin:0" hidden></p>
-      <label>Açıklama<input id="plDesc" autocomplete="off" placeholder="Bu plugin ne işe yarar?"></label>
-      <p class="hint" style="margin:0">Boş bırakılabilir. Yayında açıklama gerekir.</p>
+      <label>${esc(tx('ui.fields.description'))}<input id="plDesc" autocomplete="off" placeholder="${esc(tx('ui.newPlugin.descriptionPlaceholder'))}"></label>
+      <p class="hint" style="margin:0">${esc(tx('ui.newPlugin.descriptionHint'))}</p>
       <div id="plSrvErr" class="issue error" role="alert" hidden></div>
-      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
       const check = () => {
         const v = $('#plName', b).value; const slug = hasWord(v) ? FM.slug(v) : '';
-        $('#plPrev', b).textContent = slug ? `Klasör: ${lib}/${slug}/ · Claude Code'da: /${slug}:<komut>` : '';
+        $('#plPrev', b).textContent = slug ? tx('ui.newPlugin.preview', { lib, slug }) : '';
         const err = slug ? Rules.checkPluginName(slug) : null; const warn = slug ? Rules.pluginNameWarn(slug) : null;
         showFieldErr('plErr', err); showFieldErr('plWarn', err ? '' : warn);
         $('#plName', b).setAttribute('aria-invalid', err ? 'true' : 'false');
@@ -2114,9 +2117,9 @@ function openNewPlugin() {
       $('#newPlForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const { slug, err } = check();
-        if (!slug) { showFieldErr('plErr', 'Plugin adı gerekli'); $('#plName', b).focus(); return; }
+        if (!slug) { showFieldErr('plErr', tx('ui.newPlugin.nameRequired')); $('#plName', b).focus(); return; }
         if (err) { $('#plName', b).focus(); return; }
-        if (activeName() !== m.name) { showFieldErr('plSrvErr', 'Etkin marketplace değişti. Pencereyi kapatıp yeniden dene.'); return; }
+        if (activeName() !== m.name) { showFieldErr('plSrvErr', tx('ui.common.activeChangedRetry')); return; }
         try {
           const r = await api('POST', '/api/package', { name: $('#plName', b).value, description: $('#plDesc', b).value.trim() });
           closeModal();
@@ -2125,7 +2128,7 @@ function openNewPlugin() {
           expOf(m.name).add(r.plugin.path); S.mpOpen.add(m.name); saveExp(m.name); saveMpOpen();
           S.sel = { mp: m.name, key: nodeKey(m.name, r.plugin.path) }; S.focusKey = S.sel.key;
           renderList();
-          toast('Plugin oluşturuldu: ' + r.plugin.name + ". Commit'i Git panelinden atabilirsin.", 'ok', 5000);
+          toast(tx('ui.newPlugin.created', { name: r.plugin.name }), 'ok', 5000);
         } catch (err2) { showFieldErr('plSrvErr', err2.message); }
       });
     }
@@ -2135,25 +2138,26 @@ function openNewPlugin() {
 function openNewPrompt(o) {
   o = o || {};
   const m = activeMp();
-  if (!m) { toast('Önce bir marketplace seç', 'error'); return; }
+  if (!m) { toast(tx('ui.toolbar.pickMarketplace'), 'error'); return; }
   if (!m.plugins.length) {
     openModal({
-      title: 'Yeni prompt',
-      html: `<p>Bu marketplace'te henüz plugin yok.</p><div class="foot"><button class="btn" data-act="close">Kapat</button><button class="btn primary" data-act="new-plugin">Yeni plugin</button></div>`
+      title: tx('ui.menu.newPrompt'),
+      html: `<p>${esc(tx('ui.newPrompt.noPlugins'))}</p><div class="foot"><button class="btn" data-act="close">${esc(tx('ui.static.close'))}</button><button class="btn primary" data-act="new-plugin">${esc(tx('ui.tree.newPlugin'))}</button></div>`
     });
     return;
   }
   const names = m.plugins.map((p) => p.name);
   const sel = o.plugin && names.includes(o.plugin) ? o.plugin : defaultPlugin();
+  const tpls = templates();
   openModal({
-    title: 'Yeni prompt',
+    title: tx('ui.menu.newPrompt'),
     html: `<form class="stack" id="newForm">
-      <p class="hint" style="margin:0">Marketplace: <b>${esc(m.name)}</b></p>
-      <label>Başlık<input name="title" required autofocus placeholder="Örn. C# kod inceleme" autocomplete="off"></label>
-      <label>Plugin<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
-      <label>Etiketler (virgülle ayır)<input name="tags" list="dl-etiketler" placeholder="csharp, kod-inceleme" autocomplete="off"></label>
-      <label>Şablon<select name="tpl">${Object.keys(TEMPLATES).map((k) => `<option value="${k}">${esc(TEMPLATES[k].label)}</option>`).join('')}</select></label>
-      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Oluştur</button></div></form>`,
+      <p class="hint" style="margin:0">${th('ui.newPrompt.marketplace', { name: m.name })}</p>
+      <label>${esc(tx('ui.fields.title'))}<input name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.newPrompt.plugin'))}<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label>${esc(tx('ui.newPrompt.tagsLabel'))}<input name="tags" list="dl-etiketler" placeholder="${esc(tx('ui.newPrompt.tagsPlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.newPrompt.template'))}<select name="tpl">${Object.keys(tpls).map((k) => `<option value="${k}">${esc(tpls[k].label)}</option>`).join('')}</select></label>
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
       $('#newForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2164,11 +2168,11 @@ function openNewPrompt(o) {
         FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
         FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
-        const t = TEMPLATES[f.get('tpl')] || TEMPLATES.bos;
+        const t = tpls[f.get('tpl')] || tpls.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
         p.body = '\n' + t.body;
         closeModal();
-        if (activeName() !== m.name) { toast('Etkin marketplace değişti, prompt oluşturulmadı', 'error'); return; }
+        if (activeName() !== m.name) { toast(tx('ui.newPrompt.activeChanged'), 'error'); return; }
         if (!(await confirmDiscard())) return;
         try {
           const r = await api('POST', '/api/file', { path: m.libraryDir + '/' + plugin + '/' + FM.slug(title) + '.md', raw: FM.stringify(p), unique: true });
@@ -2176,7 +2180,7 @@ function openNewPrompt(o) {
           await afterWrite();
           await openFile(r.path);
           const bd = $('#fBody'); if (bd) bd.focus();
-          toast('Prompt oluşturuldu');
+          toast(tx('ui.newPrompt.created'));
         } catch (err) { fail(err); }
       });
     }
@@ -2191,33 +2195,31 @@ async function openMove(path) {
   const cl = Rules.classifyPromptPath(path, m.libraryDir);
   const targetOpts = (name) => {
     const mm = mpByName(name); const opts = mm.plugins.map((p) => ({ v: 'p:' + p.name, label: p.name }));
-    if (name === from) { opts.push({ v: 'i:', label: 'Gelen kutusu' }, { v: 'l:', label: 'Klasörsüz promptlar' }); }
+    if (name === from) { opts.push({ v: 'i:', label: tx('ui.tree.inbox') }, { v: 'l:', label: tx('ui.tree.loose') }); }
     return opts;
   };
   const defTarget = cl.kind === 'paket' ? 'p:' + cl.klasor : cl.kind === 'gelenKutusu' ? 'i:' : 'l:';
   openModal({
-    title: 'Taşı: ' + base(path),
+    title: tx('ui.move.title', { name: base(path) }),
     html: `<form class="stack" id="moveForm">
-      <label>Marketplace<select id="mvMp">${mps.map((x) => `<option value="${esc(x.name)}" ${x.name === from ? 'selected' : ''}>${esc(x.name)}${x.name === from ? ' (etkin)' : ''}</option>`).join('')}</select></label>
-      <label>Hedef<select id="mvTarget"></select></label>
-      <label>Dosya adı<input id="mvName" value="${esc(base(path))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.static.marketplace'))}<select id="mvMp">${mps.map((x) => `<option value="${esc(x.name)}" ${x.name === from ? 'selected' : ''}>${esc(x.name === from ? tx('ui.move.mpActive', { name: x.name }) : x.name)}</option>`).join('')}</select></label>
+      <label>${esc(tx('ui.common.target'))}<select id="mvTarget"></select></label>
+      <label>${esc(tx('ui.move.fileName'))}<input id="mvName" value="${esc(base(path))}" autocomplete="off"></label>
       <p class="hint" id="mvNote" style="margin:0"></p>
       <div id="mvErr" class="issue error" role="alert" hidden></div>
-      <div class="foot"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Taşı</button></div></form>`,
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.move.submit'))}</button></div></form>`,
     onMount: (b) => {
       const fill = () => {
         const name = $('#mvMp', b).value; const cross = name !== from;
         const opts = targetOpts(name);
         const keep = $('#mvTarget', b).value;
-        $('#mvTarget', b).innerHTML = opts.length ? opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('') : '<option value="">(bu marketplace\'te plugin yok)</option>';
+        $('#mvTarget', b).innerHTML = opts.length ? opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('') : `<option value="">${esc(tx('ui.move.noPlugins'))}</option>`;
         const want = cross ? keep : (keep || defTarget);
         if (opts.some((o) => o.v === want)) $('#mvTarget', b).value = want;
         else if (!cross && opts.some((o) => o.v === defTarget)) $('#mvTarget', b).value = defTarget;
         $('#mvName', b).disabled = cross;
         if (cross) $('#mvName', b).value = base(path);
-        $('#mvNote', b).textContent = cross
-          ? `Hedef marketplace: ${name}. Dosya orada yeni (commit edilmemiş) olarak görünür, kaynak çöp kutusuna taşınır. Sürüm tag'leri ve geçmiş "${from}" deposunda kalır. Commit'i iki depoda ayrı atarsın.`
-          : "Bu promptun sürüm tag'leri eski yola bağlı kalır. Yayınlanmışsa eski hedef Marketplace panelinde \"kaynağı kalmayan dosyalar\" altında görünür.";
+        $('#mvNote', b).textContent = cross ? tx('ui.move.noteCross', { name, from }) : tx('ui.move.noteSame');
       };
       fill();
       $('#mvMp', b).addEventListener('change', fill);
@@ -2225,8 +2227,8 @@ async function openMove(path) {
         e.preventDefault();
         const toMp = $('#mvMp', b).value; const tv = $('#mvTarget', b).value; const er = $('#mvErr', b);
         const showErr = (msg) => { er.textContent = msg; er.hidden = false; };
-        if (!tv) { showErr('Hedef seç'); return; }
-        if (activeName() !== from) { showErr('Etkin marketplace değişti. Pencereyi kapatıp yeniden dene.'); return; }
+        if (!tv) { showErr(tx('ui.move.pickTarget')); return; }
+        if (activeName() !== from) { showErr(tx('ui.common.activeChangedRetry')); return; }
         if (S.cur && S.cur.path === path && !(await confirmDiscard())) return;
         try {
           if (toMp !== from) {
@@ -2235,7 +2237,7 @@ async function openMove(path) {
             if (S.cur && S.cur.path === path) clearCur();
             S.mpOpen.add(toMp); saveMpOpen();
             await afterWrite(); renderMain();
-            toast(`Taşındı: ${toMp}. Sürüm tag'leri ve geçmiş "${from}" deposunda kaldı; iki depoda da commit bekleyen değişiklik var.`, 'ok', 7000);
+            toast(tx('ui.move.movedCross', { toMp, from }), 'ok', 7000);
             return;
           }
           const kind = tv.charAt(0); const nm = tv.slice(2);
@@ -2249,7 +2251,7 @@ async function openMove(path) {
           if (S.cur && S.cur.path === path) { S.cur.path = r.path; ls.set(lsKey('last'), r.path); }
           expandParents(r.path);
           await afterWrite(); renderMain();
-          toast("Taşındı. Bu promptun sürüm tag'leri eski yola bağlı kalır. Yayınlanmışsa eski hedef Marketplace panelinde \"kaynağı kalmayan dosyalar\" altında görünür.", 'ok', 6000);
+          toast(tx('ui.move.movedSame'), 'ok', 6000);
         } catch (err) { showErr(err.message); }
       });
     }
@@ -2259,33 +2261,33 @@ async function openMove(path) {
 // Prompt dosyasını aynı klasörde yeniden adlandırır.
 async function renameFile(path) {
   const dir = path.split('/').slice(0, -1).join('/');
-  const nm = await askText({ title: 'Yeniden adlandır', label: 'Yeni dosya adı', value: base(path), ok: 'Uygula' });
+  const nm = await askText({ title: tx('ui.menu.rename'), label: tx('ui.rename.newFileName'), value: base(path), ok: tx('ui.rename.apply') });
   if (!nm || nm === base(path)) return;
   let file = nm; if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
   await renameItem(path, dir + '/' + file);
 }
 
 async function renameItem(p, to) {
-  if (to === undefined) to = await askText({ title: 'Yeniden adlandır veya taşı', label: 'Yeni yol', value: p, hint: 'Başka bir klasöre taşımak için yolu düzenle.', ok: 'Uygula' });
+  if (to === undefined) to = await askText({ title: tx('ui.menu.renameOrMove'), label: tx('ui.rename.newPath'), value: p, hint: tx('ui.rename.pathHint'), ok: tx('ui.rename.apply') });
   if (!to || to === p) return;
   if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/')) && !(await confirmDiscard())) return;
   try {
     const r = await api('POST', '/api/rename', { from: p, to });
     if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) { S.cur.path = r.path + S.cur.path.slice(p.length); ls.set(lsKey('last'), S.cur.path); }
     expandParents(r.path); await afterWrite(); renderMain();
-    toast('Taşındı. Yayınlanmışsa eski hedef Marketplace panelinde "kaynağı kalmayan dosyalar" altında görünür.', 'ok', 5000);
+    toast(tx('ui.rename.moved'), 'ok', 5000);
   } catch (e) { fail(e); }
 }
 
 async function renamePlugin(name) {
   const m = activeMp(); if (!m) return;
-  const to = await askText({ title: "Plugin'i yeniden adlandır", label: 'Yeni ad', value: name, hint: 'Klasör adı ve yayın adı buna göre değişir.', ok: 'Devam' });
+  const to = await askText({ title: tx('ui.rename.pluginTitle'), label: tx('ui.rename.newName'), value: name, hint: tx('ui.rename.pluginHint'), ok: tx('ui.rename.continue') });
   if (!to || to === name) return;
   const slug = FM.slug(to);
   const a = await askChoice({
-    title: 'Plugin yeniden adlandırılsın mı?',
-    text: `"${name}" → "${slug}". Promptların sürüm tag'leri eski adla kalır, yayınlanmış çıktı (plugins/${FM.slug(name)}) kaynaksız kalır ve bir sonraki yayında temizlenir.`,
-    choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Yeniden adlandır', kind: 'primary' }]
+    title: tx('ui.rename.pluginConfirmTitle'),
+    text: tx('ui.rename.pluginConfirmText', { name, slug, output: FM.slug(name) }),
+    choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.menu.rename'), kind: 'primary' }]
   });
   if (a !== 'yes') return;
   const old = m.libraryDir + '/' + name;
@@ -2299,24 +2301,24 @@ async function renamePlugin(name) {
     if (ls.get(lsKey('sonPlugin'), '') === name) ls.set(lsKey('sonPlugin'), r.plugin.name);
     S.sel = { mp: m.name, key: nodeKey(m.name, r.plugin.path) }; S.focusKey = S.sel.key;
     await afterWrite(); renderMain();
-    toast('Plugin yeniden adlandırıldı: ' + r.plugin.name + ' (' + r.moved + ' prompt)', 'ok', 5000);
+    toast(tx('ui.rename.pluginRenamed', { name: r.plugin.name, count: r.moved }), 'ok', 5000);
   } catch (e) { fail(e); }
 }
 
 async function editPluginDesc(name) {
   const pl = pluginsOf(activeMp()).find((p) => p.name === name);
-  const d = await askText({ title: 'Plugin açıklaması: ' + name, label: 'Açıklama', value: (pl && pl.description) || '', hint: 'Bu plugin ne işe yarar? Yayında açıklama gerekir.', ok: 'Kaydet' });
+  const d = await askText({ title: tx('ui.pluginDesc.title', { name }), label: tx('ui.fields.description'), value: (pl && pl.description) || '', hint: tx('ui.pluginDesc.hint'), ok: tx('ui.file.save') });
   if (!d) return;
-  try { await api('PUT', '/api/package', { name, description: d }); await afterWrite(); toast('Açıklama kaydedildi'); } catch (e) { fail(e); }
+  try { await api('PUT', '/api/package', { name, description: d }); await afterWrite(); toast(tx('ui.pluginDesc.saved')); } catch (e) { fail(e); }
 }
 
 async function deleteItem(p, text) {
-  const a = await askChoice({ title: 'Silinsin mi?', text: text || ('"' + p + '" çöp kutusuna (.pp/trash) taşınır. Git ile takip ediliyorsa geçmişte de durur.'), choices: [{ id: 'no', label: 'Vazgeç' }, { id: 'yes', label: 'Sil', kind: 'danger' }] });
+  const a = await askChoice({ title: tx('ui.delete.title'), text: text || tx('ui.delete.text', { path: p }), choices: [{ id: 'no', label: tx('ui.common.cancel') }, { id: 'yes', label: tx('ui.delete.confirm'), kind: 'danger' }] });
   if (a !== 'yes') return;
   try {
     await api('DELETE', '/api/file?' + qs({ path: p }));
     if (S.cur && (S.cur.path === p || S.cur.path.startsWith(p + '/'))) clearCur();
-    await afterWrite(); renderMain(); toast('Çöp kutusuna taşındı');
+    await afterWrite(); renderMain(); toast(tx('ui.delete.trashed'));
   } catch (e) { fail(e); }
 }
 
@@ -2324,39 +2326,39 @@ async function deleteItem(p, text) {
 function openImport(preset) {
   const m = activeMp();
   const lib = libDirOf();
-  const targets = [{ v: lib + '/' + Rules.INBOX_DIR, label: 'Gelen kutusu' }].concat(pluginsOf(m).map((p) => ({ v: p.path, label: p.name })));
+  const targets = [{ v: lib + '/' + Rules.INBOX_DIR, label: tx('ui.tree.inbox') }].concat(pluginsOf(m).map((p) => ({ v: p.path, label: p.name })));
   openModal({
-    title: '.txt dosyalarını içe aktar', wide: true,
+    title: tx('ui.main.importTxt'), wide: true,
     html: `<div class="stack"><form class="grid2" id="impForm">
-      <label class="span2">Klasör yolu<input name="dir" value="${esc(ls.get('pp.impDir', ''))}" placeholder="C:\\Users\\sen\\promptlar veya ~/promptlar" autocomplete="off" autofocus></label>
-      <p class="span2 hint" style="margin:0">Hedef marketplace: <b>${esc(activeName())}</b></p>
-      <label>Hedef<select name="target">${targets.map((t) => `<option value="${esc(t.v)}" ${preset === t.v ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
-      <label class="chk" style="align-self:end"><input type="checkbox" name="rec"> Alt klasörleri de tara</label>
-      <div class="span2 foot-left"><button class="btn primary">Tara</button><span class="hint">Orijinal dosyalara dokunulmaz. Eski Türkçe kodlamalar (Windows-1254) ve UTF-16 otomatik çözülür.</span></div></form>
+      <label class="span2">${esc(tx('ui.import.dirLabel'))}<input name="dir" value="${esc(ls.get('pp.impDir', ''))}" placeholder="${esc(tx('ui.import.dirPlaceholder'))}" autocomplete="off" autofocus></label>
+      <p class="span2 hint" style="margin:0">${th('ui.import.targetMarketplace', { name: activeName() })}</p>
+      <label>${esc(tx('ui.common.target'))}<select name="target">${targets.map((t) => `<option value="${esc(t.v)}" ${preset === t.v ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
+      <label class="chk" style="align-self:end"><input type="checkbox" name="rec"> ${esc(tx('ui.import.recursive'))}</label>
+      <div class="span2 foot-left"><button class="btn primary">${esc(tx('ui.import.scan'))}</button><span class="hint">${esc(tx('ui.import.scanHint'))}</span></div></form>
       <div id="impOut"></div></div>`,
     onMount: (b) => {
       $('#impForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = new FormData(e.target); const dir = String(f.get('dir')).trim(); if (!dir) return;
-        const out = $('#impOut', b); out.innerHTML = '<p class="hint">Taranıyor…</p>';
+        const out = $('#impOut', b); out.innerHTML = `<p class="hint">${esc(tx('ui.import.scanning'))}</p>`;
         try {
           const r = await api('POST', '/api/import/scan', { dir, recursive: !!f.get('rec') });
           ls.set('pp.impDir', dir);
-          if (!r.files.length) { out.innerHTML = '<p>Bu klasörde .txt dosyası bulunamadı.</p>'; return; }
-          out.innerHTML = `<h3>${r.files.length} dosya bulundu</h3>
-            <div class="inline" style="margin-bottom:8px"><button type="button" class="btn sm" id="impAll">Tümünü seç / bırak</button><span class="grow"></span><button type="button" class="btn primary" id="impGo">İçe aktar</button></div>
-            <div class="ftable">${r.files.map((x, i) => `<label class="frowi"><input type="checkbox" data-i="${i}" checked><span><b>${esc(x.rel)}</b><br><span class="pv">${esc(x.preview)}</span></span><span class="hint">${x.lines} satır</span></label>`).join('')}</div>`;
+          if (!r.files.length) { out.innerHTML = `<p>${esc(tx('ui.import.noFiles'))}</p>`; return; }
+          out.innerHTML = `<h3>${esc(tx('ui.import.found', { count: r.files.length }))}</h3>
+            <div class="inline" style="margin-bottom:8px"><button type="button" class="btn sm" id="impAll">${esc(tx('ui.import.toggleAll'))}</button><span class="grow"></span><button type="button" class="btn primary" id="impGo">${esc(tx('ui.menu.import'))}</button></div>
+            <div class="ftable">${r.files.map((x, i) => `<label class="frowi"><input type="checkbox" data-i="${i}" checked><span><b>${esc(x.rel)}</b><br><span class="pv">${esc(x.preview)}</span></span><span class="hint">${esc(tx('ui.import.lines', { count: x.lines }))}</span></label>`).join('')}</div>`;
           $('#impAll', out).addEventListener('click', () => { const cb = $$('[data-i]', out); const all = cb.every((x) => x.checked); cb.forEach((x) => { x.checked = !all; }); });
           $('#impGo', out).addEventListener('click', async () => {
             const files = $$('[data-i]', out).filter((x) => x.checked).map((x) => r.files[Number(x.dataset.i)].file);
-            if (!files.length) { toast('Dosya seçilmedi', 'error'); return; }
+            if (!files.length) { toast(tx('ui.import.noneSelected'), 'error'); return; }
             try {
               const res = await api('POST', '/api/import/run', { dir: r.dir, files, target: String(f.get('target')).trim() || lib + '/' + Rules.INBOX_DIR });
               const tgt = String(f.get('target')).trim();
-              out.innerHTML = `<h3>${res.created.length} prompt oluşturuldu</h3>
-                <p>Taslak olarak <code>${esc(tgt)}</code> içine kaydedildi. Orijinal .txt dosyaları yerinde duruyor. Şimdi etiketle, klasörlere ayır ve git ile commit et.</p>
-                ${res.skipped.length ? `<p class="issue warn">${res.skipped.length} dosya atlandı: ${res.skipped.map((s) => esc(base(s.file) + ' (' + s.reason + ')')).join(', ')}</p>` : ''}
-                <div class="foot"><button class="btn" data-act="close">Kapat</button><button class="btn primary" data-act="show-folder" data-path="${esc(tgt)}">Klasörü göster</button></div>`;
+              out.innerHTML = `<h3>${esc(tx('ui.import.created', { count: res.created.length }))}</h3>
+                <p>${th('ui.import.savedAs', { target: tgt })}</p>
+                ${res.skipped.length ? `<p class="issue warn">${th('ui.import.skipped', { count: res.skipped.length, list: res.skipped.map((s) => base(s.file) + ' (' + s.reason + ')').join(', ') })}</p>` : ''}
+                <div class="foot"><button class="btn" data-act="close">${esc(tx('ui.static.close'))}</button><button class="btn primary" data-act="show-folder" data-path="${esc(tgt)}">${esc(tx('ui.import.showFolder'))}</button></div>`;
               await afterWrite();
             } catch (err) { fail(err); }
           });
