@@ -60,7 +60,7 @@ On first run the app shows a setup screen (**Kuruluma devam et**, continue setup
 2. **Create a marketplace** with **+ Marketplace**. This runs `git init` (branch `main`) and writes the skeleton. No commit is made automatically. The same dialog can clone from a remote instead (**Uzak depodan klonla**).
 3. **Add a plugin and prompts** with **+ Plugin** and **+ Prompt**. A plugin is a folder under `prompts/` and becomes a plugin of the same name when published.
 4. **Edit, commit, version.** Edit the frontmatter and body, write a commit message, press the save button (**Kaydet**, `Ctrl+S`). Use **+1** to cut a prompt version and the **Geçmiş** tab to review history.
-5. **Publish and install.** Set `tur` (type) to `komut`, `ajan` or `skill`, open the package page, and press **Yayınla** (Publish). Then add the marketplace in Claude Code (next section).
+5. **Publish and install.** In the editor's Claude Code publishing settings set the type (`tur`) to command, agent or skill and fill in the fields you need, open the package page, and press **Yayınla** (Publish). Then add the marketplace in Claude Code (next section).
 
 <details>
 <summary>Tree details</summary>
@@ -108,10 +108,10 @@ A prompt that cannot be published is never dropped silently. Reasons shown in th
 | Code | Meaning |
 |---|---|
 | `turYok` | Publish fields are filled but `tur` is missing |
-| `turGecersiz` | `tur` is not `komut`, `ajan` or `skill` |
+| `turGecersiz` | `tur` is not `prompt`, `komut`, `ajan` or `skill` |
 | `onYuzKapanmamis` | Frontmatter is not closed (no second `---`) |
 | `dosyaBuyuk` | File is larger than 2 MB |
-| `yayinDisi` | No `tur`: intentionally not published |
+| `yayinDisi` | `tur: prompt` or no `tur`: intentionally not published |
 | `durumHaric` | `durum` (status) is set to something other than `kararlı` (only stable or empty status is exported) |
 | `paketDisiKlasor` | Folder is not part of a package (inbox or excluded folder) |
 
@@ -119,32 +119,36 @@ A prompt that cannot be published is never dropped silently. Reasons shown in th
 
 ## Prompt files
 
-Every prompt is a Markdown file. All fields are optional and unknown keys are left untouched. Example:
+Every prompt is a Markdown file. All fields are optional and unknown keys are left untouched. A field is written only when you give it a value: new prompts and imported files get no `baslik`, `durum` or `olusturma` automatically, and a prompt without a title is shown by its file name. Example:
 
 ```markdown
 ---
-baslik: Code review
 etiketler: [review, git]
 durum: kararlı
 versiyon: 1.0.0
 tur: komut
-paket: ornek
-komut_adi: review
-aciklama: Review the staged changes
-izinli_araclar: Bash(git diff:*), Read
+name: review
+description: Review the staged changes
+argument-hint: "[focus]"
+allowed-tools: Bash(git diff:*), Read
 model: sonnet
 ---
-Review the staged changes with this focus: {{focus}}
+Review the staged changes with this focus: $ARGUMENTS
 ```
+
+Prompt Havuzu's own fields keep their Turkish names:
 
 | Field | Purpose |
 |---|---|
 | `baslik`, `etiketler`, `projeler`, `olusturma` | Title, tags, projects it is used in, creation date |
 | `durum` | Status: `taslak` (draft), `kararlı` (stable), `arşiv` (archive) |
 | `versiyon` | Last released version as `X.Y.Z`; set by **+1** (an empty field becomes `1.0.0` on the first bump) |
-| `tur` | `komut` (command), `ajan` (agent) or `skill`; required to publish |
-| `paket` | Plugin the prompt belongs to; new prompts get their folder name |
-| `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model` | Converted to Claude Code frontmatter (for example `izinli_araclar` becomes `allowed-tools` or `tools`) |
+| `tur` | `prompt` (plain prompt, not published), `komut` (command), `ajan` (agent) or `skill`; a prompt without `tur` counts as `prompt` |
+| `paket` | Only for loose prompts (directly in `prompts/`): the plugin to publish into |
+
+Claude Code fields use their real names, and the editor's **Claude Code publishing settings** shows every field that is valid for the selected type, labeled with that name. Commands and skills accept fields such as `description`, `argument-hint`, `allowed-tools`, `model`, `effort`, `disable-model-invocation`, `user-invocable`, `context` and `paths` (skills only); agents accept fields such as `name`, `description`, `tools`, `disallowedTools`, `model`, `maxTurns`, `skills`, `memory` and `color`. See the Claude Code docs for [skills and commands](https://code.claude.com/docs/en/skills) and [subagents](https://code.claude.com/docs/en/sub-agents). Nested fields (`hooks`, `metadata`, `experimental`) are written by hand in the **Ham metin** (raw text) tab and published as written; run `claude plugin validate` after editing them. Plugin agents ignore `permissionMode`, `mcpServers`, `hooks` and `initialPrompt`, so these are never published for agents.
+
+Publishing writes only the Claude Code fields that have a value. For commands, `name` only sets the file (and so the command) name. Older prompts that use the Turkish keys `komut_adi`, `aciklama`, `arguman_ipucu` and `izinli_araclar` keep working; the editor renames them to `name`, `description`, `argument-hint` and `allowed-tools` (or `tools` for agents) when you save, and their published output stays byte for byte the same.
 
 ## Configuration
 

@@ -103,12 +103,12 @@ Adımlar:
 4. Uzak depo olmayan bir marketplace'te "Kontrol et" ile hata üret, dili değiştir, uygulamayı yeniden başlat.
 Beklenen: Kurulum iletileri yeni dilde (önbellekten Türkçe gelmez). `.git/pp-state.json` içinde `lastCheck` için `error` metni yok, ileti açılışta seçili dilde üretilir.
 
-15. İngilizce arayüzde içe aktarılan başlıklar doğru büyük harfle başlar
+15. İçe aktarılan dosyaya dil ne olursa olsun frontmatter yazılmaz
 Adımlar:
 1. İçinde metin olan `idea.txt` dosyasını İngilizce arayüzle içe aktar.
-2. Oluşan prompt'un `baslik` alanına bak.
+2. Oluşan prompt'un ham metnine ve ağaçtaki adına bak.
 3. Aynısını Türkçe arayüzde `ilk.txt` ile yap.
-Beklenen: İngilizce: `baslik: Idea`. Türkçe: `baslik: İlk`.
+Beklenen: İki dosyada da frontmatter yoktur (`baslik`, `durum`, `olusturma` yazılmaz). Ağaçta ve aramada dosya adı (`idea`, `ilk`) görünür.
 
 16. Arama ve sıralama dilden bağımsız
 Adımlar:
@@ -235,3 +235,121 @@ Adımlar:
 2. `pp.config.json`'daki katalog sürümü `marketplace.json`'dakinden farklı olan marketplace'te Marketplace panelinden doğru sürümü yazıp "Marketplace dosyalarını yaz"; değişikliği commit et.
 3. Her marketplace'te `pp.config.json`'u uyarı düğmesiyle çöpe taşı ve (izleniyorsa) commit et.
 Beklenen: Promptlar, plugin'ler ve yayın durumları değişmeden görünür. Yayınlanmış plugin'lerin açıklaması paket sayfasında görünür. 3. adımdan sonra hiçbir marketplace'te uyarı kalmaz.
+
+36. Prompt türü seçilince yayın alanları gizlenir ve tur: prompt yazılır
+Adımlar:
+1. `tur: komut` olan, `description` ve `model` alanları dolu bir prompt aç.
+2. "Claude Code yayın ayarları" bölmesinde Tür listesinden "Prompt (yayınlanmaz)" seç.
+3. Kaydet, Ham metin sekmesine geç.
+Beklenen: Alan listesi kaybolur, rozet "Yayın dışı" olur, uyarı çıkmaz, onay penceresi açılmaz. Dosyada `tur: prompt` yazar; `description` ve `model` satırları yerinde kalır. Paket sayfasında prompt "hariç" listesinde "Prompt türü: Claude Code'a yayınlanmaz." gerekçesiyle görünür.
+
+37. Türü boş eski dosya örtük Prompt olarak görünür ve dosya değişmez
+Adımlar:
+1. Frontmatter'ında `tur` olmayan, yayın alanı da olmayan bir prompt aç.
+2. Tür listesine bak, listeyi aç; hiçbir şeyi değiştirmeden başka dosyaya geç.
+Beklenen: Seçicide "Prompt (tür yazılmamış)" görünür, açılan listede yalnızca Prompt / Komut / Ajan / Skill vardır. Dosya kirli sayılmaz, diskte değişiklik olmaz. Ağaçta tür rozeti ve "!" yoktur.
+
+38. Türü boş ama yayın alanı dolu dosyada uyarı Prompt seçilince kalkar
+Adımlar:
+1. Ham metinde `tur` satırını silip `aciklama: x` bırak, kaydet.
+2. Düzenle sekmesinde uyarı bandını oku, ağaçtaki "!" rozetine bak.
+3. Tür listesinden "Prompt (yayınlanmaz)" seç ve kaydet.
+Beklenen: 2. adımda `turYok` uyarısı (alan adıyla) ve "!" görünür, paket sayfasında paket engellidir. 3. adımdan sonra uyarı, rozet ve engel kalkar; dosyada `tur: prompt` yazar.
+
+39. Komut türünde değer girilince satır İngilizce anahtarla eklenir, boşaltılınca silinir
+Adımlar:
+1. Yeni boş bir prompt oluştur, Tür olarak "Komut (slash command)" seç.
+2. `argument-hint` alanına `[konu]` yaz; "Diğer Claude Code alanları"nı açıp `effort` için `high` seç.
+3. Ham metne bak; sonra `argument-hint` alanını boşalt, `effort`'u "(boş: varsayılan)" yap ve tekrar Ham metne bak.
+Beklenen: Etiketler `argument-hint`, `effort` gibi gerçek anahtar adlarıdır ve altlarında açıklama vardır. İlk bakışta `argument-hint: "[konu]"` ve `effort: high` satırları vardır; boşaltınca ikisi de silinir, boş satır kalmaz.
+
+40. Tür değişince alan kümesi değişir ve kullanılmayan alanlar notu çıkar
+Adımlar:
+1. Komut türündeki bir prompta `allowed-tools` ve `disable-model-invocation` değeri gir.
+2. Türü "Skill" yap, sonra "Ajan (subagent)" yap.
+Beklenen: Skill'de `paths` alanı da görünür, komutta görünmez. Ajanda `tools`, `maxTurns`, `memory`, `color` gibi alanlar görünür; `allowed-tools` ve `disable-model-invocation` "Dosyada olup bu türde yayına girmeyen alanlar" notunda listelenir. Ajan için `permissionMode`, `mcpServers`, `hooks` ve `initialPrompt` yok sayılır notu görünür. Odak tür listesinde kalır.
+
+41. Boolean, liste ve sayı alanları doğru YAML biçiminde yazılır
+Adımlar:
+1. Skill türünde `user-invocable` için `false` seç, `paths` alanına iki satır yaz: `src/**/*.{ts,tsx}` ve `lib/**`.
+2. Türü Ajan yapıp `maxTurns` için `12` yaz, `skills` alanına iki satırda `a` ve `b` yaz.
+3. Ham metne bak.
+Beklenen: `user-invocable: false` (tırnaksız), `paths: ["src/**/*.{ts,tsx}", lib/**]`, `maxTurns: 12`, `skills: [a, b]`. Virgül içeren glob tek öğe kalır.
+
+42. Eski Türkçe anahtarlar kaydedilirken biçim korunarak İngilizceye taşınır
+Adımlar:
+1. Diskte `aciklama: "Kod: inceleme"   # not`, `arguman_ipucu: [dosya]` ve `izinli_araclar: Read` satırları olan bir komut promptu hazırla (CRLF satır sonlu).
+2. Düzenle sekmesinde `description` alanında eski değerin göründüğünü kontrol et; yalnızca etiket ekleyip kaydet.
+3. `git diff` ile değişikliğe bak.
+Beklenen: Alanlar eski değerleri gösterir. Farkta yalnızca anahtar adları değişir (`description`, `argument-hint`, `allowed-tools`); değer, tırnak, yorum ve CRLF korunur; satır sırası değişmez. Etiket satırı eklenir.
+
+43. Yalnızca eski alanlı paketin çıktısı değişmez ve sürüm artışı önerilmez
+Adımlar:
+1. Güncellemeden önce yayınlanmış, yalnızca eski Türkçe alanlı promptları olan bir paket seç.
+2. Güncellenmiş araçla paket sayfasını aç; ardından "Marketplace'i güncelle"yi çalıştır.
+3. `git status` ve `git diff plugins/` çıktısına bak.
+Beklenen: Paket sayfası "değişiklik yok" der, sürüm önerisi yoktur. `plugins/` altında hiçbir bileşen dosyası değişmez. Aynı paketteki bir prompt 42. senaryodaki gibi taşınıp commit'lense de sonuç aynıdır.
+
+44. Yeni Claude Code alanları çıktıya girer ve plugin doğrulamasından geçer
+Adımlar:
+1. Bir skill promptuna `when_to_use`, `disable-model-invocation: true` ve `effort: low` gir, commit'le.
+2. Paketi yayınla; `plugins/<paket>/skills/<ad>/SKILL.md` dosyasını aç.
+3. `claude plugin validate <marketplace klasörü>` çalıştır.
+Beklenen: `SKILL.md`'de `name`, `description`, varsa `argument-hint`/`allowed-tools`/`model`, ardından `when_to_use`, `disable-model-invocation: true`, `effort: low` sırası vardır; aracın `tur`, `paket`, `baslik`, `durum`, `versiyon`, `etiketler` alanları yoktur. Doğrulama hatasız geçer.
+
+45. Ham metinde yazılan hooks skill çıktısına aynen girer, ajanda girmez
+Adımlar:
+1. Bir skill promptuna Ham metin sekmesinden girintili bir `hooks` bloğu ekle, kaydet, yayınla.
+2. Aynı bloğu ve `permissionMode: plan` satırını bir ajan promptuna ekle, yayınla.
+Beklenen: Skill çıktısında `hooks` bloğu girintisiyle aynen bulunur. Ajan çıktısında `hooks` ve `permissionMode` yoktur; editörde ikisi "yayına girmeyen alanlar" notunda listelenir.
+
+46. Yeni prompt baslik, durum ve olusturma yazmaz
+Adımlar:
+1. "+ Prompt" ile "Kod İnceleme" adıyla, etiketsiz ve "Boş" şablonla prompt oluştur.
+2. Aynısını "Claude Code komutu" şablonu ve "a, b" etiketleriyle tekrarla.
+3. İki dosyanın Ham metnine bak.
+Beklenen: Diyalogda "Dosya: kod-inceleme.md" önizlemesi görünür. İlk dosyada frontmatter yoktur. İkincide yalnızca `etiketler: [a, b]`, `tur: komut` ve `argument-hint: "[argüman]"` vardır; `baslik`, `durum` ve `olusturma` yoktur.
+
+47. İçe aktarma frontmatter yazmaz, "---" ile başlayan metin bozulmaz
+Adımlar:
+1. Bir klasöre `fikir.txt` (düz metin) ve ilk satırı `---` olan `cizgi.txt` koy.
+2. "İçe aktar" ile ikisini bir plugin'e aktar, oluşan dosyaları aç.
+Beklenen: `fikir.md` yalnızca metni içerir (baştaki boş satır yok). `cizgi.md` boş satırla başlar, editörde "frontmatter kapanmamış" uyarısı çıkmaz, metnin tamamı gövdede görünür.
+
+48. Başlıksız prompt her yerde dosya adıyla görünür
+Adımlar:
+1. 46. senaryodaki başlıksız prompta ağaçta, aramada ("kod") ve ön sayfadaki "Son değişenler"de bak.
+2. Editörde başlık kutusuna "Kod İnceleme" yaz, kaydet; sonra kutuyu boşaltıp kaydet.
+Beklenen: Ağaç, arama ve son değişenler `kod-inceleme` gösterir (ağaçta `.md` uzantısı yoktur). Başlık yazılınca her yerde başlık görünür; boşaltılınca `baslik` satırı silinir ve dosya adı geri gelir.
+
+49. Ön sayfa ve tür filtresi Prompt'u gösterir
+Adımlar:
+1. Ön sayfadaki tür karosuna bak.
+2. Sol filtreden tür olarak "Prompt" seç.
+Beklenen: Karoda Komut, Ajan, Skill ve Prompt sayıları vardır. Filtre türü boş, `tur: prompt` ya da tanınmayan türdeki promptları listeler; durum karosunda yeni promptlar "Durumu boş" altında sayılır.
+
+50. Geçmiş sekmesinde Claude Code anahtarları gerçek adıyla görünür
+Adımlar:
+1. 42. senaryodaki promptta, taşımadan önceki ve sonraki iki sürümü (+1 ile) oluştur.
+2. Geçmiş sekmesinde iki sürümü karşılaştır.
+Beklenen: Alan tablosunda `aciklama` ve `description` satırları kod biçiminde (çevrilmeden) görünür; Başlık, Etiketler gibi araç alanları çevrilmiş etiketle görünür.
+
+51. İngilizce arayüzde etiketler aynı, ipuçları İngilizce
+Adımlar:
+1. Üst çubuktan EN seç.
+2. Bir ajan promptunun yayın ayarlarını ve "More Claude Code fields" bölmesini aç.
+3. Prompt seç ve kaydet.
+Beklenen: Alan etiketleri yine `description`, `maxTurns` gibi gerçek adlardır; ipuçları ve notlar İngilizcedir. Seçici "Prompt (not published)" gösterir, dosyaya yine `tur: prompt` yazılır.
+
+52. Klavye ve ekran okuyucu ile alan kullanımı
+Adımlar:
+1. Yalnızca klavyeyle tür listesine gel, Skill seç; Tab ile alanlarda ilerle.
+2. "Diğer Claude Code alanları" özetini Enter ile aç.
+3. Ekran okuyucuyla bir alana odaklan.
+Beklenen: Her alan etiketiyle, ardından ipucu metniyle (`aria-describedby`) okunur. Özet klavyeyle açılır. Tür değişince odak listede kalır. Hiçbir metin büyük harfe çevrilmez; Tür satırı ile alanların etiket ve girdi sütunları hizalıdır.
+
+53. Prompt seçimi yayındaki çıktıyı kaldırır
+Adımlar:
+1. Yayında olan bir komut promptunu "Prompt (yayınlanmaz)" yap, kaydet, commit'le.
+2. Paket sayfasını aç.
+Beklenen: Çıktı dosyası "kaldırılacak" olarak görünür ve büyük sürüm önerilir.
