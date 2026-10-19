@@ -95,12 +95,12 @@ function mainCtx(raw = SAMPLE, curExtra = {}, sExtra = {}) {
   };
   const ctx = load({
     fns: ['editPaneHtml', 'chipsHtml', 'hueOf', 'curCheck', 'exportCheck', 'pubPill', 'bodyInfoText', 'rawPaneHtml', 'histPaneHtml', 'histModeBar', 'histCommitHtml', 'histVerHtml',
-      'crumbsHtml', 'renderMainInner', 'startHtml', 'fieldLabel', 'verTimelineHtml', 'verCardHtml', 'verViewHtml', 'fieldCellsHtml', 'wordDiffHtml', 'verCompareHtml', 'verMainHtml'],
-    consts: ['esc', 'str', 'toList', 'base', 'stem', 'fold', 'normTur', 'curNotice', 'HIST_STALE', 'verLabel', 'verByTag', 'FIELD_LABEL_KEYS', 'fmtDate', 'activeName', 'whereOf', 'durumClass'],
+      'crumbsHtml', 'renderMainInner', 'startHtml', 'fieldLabel', 'pubFieldsHtml', 'ccFieldHtml', 'ccHint', 'verTimelineHtml', 'verCardHtml', 'verViewHtml', 'fieldCellsHtml', 'wordDiffHtml', 'verCompareHtml', 'verMainHtml'],
+    consts: ['esc', 'str', 'toList', 'base', 'stem', 'fold', 'normTur', 'curNotice', 'HIST_STALE', 'verLabel', 'verByTag', 'FIELD_LABEL_KEYS', 'CC_HINT_KEYS', 'fmtDate', 'activeName', 'whereOf', 'durumClass'],
     expose: ['verLabel', 'fmtDate']
   }, {
     ...g, S, $: dom.$, ls: { get: (k, d) => d }, libDirOf: () => 'prompts', computeRaw: () => FM.stringify(c.parsed), uncommitted: () => false, saveLabel: () => 'SAVE',
-    autosize() {}, paintPaketHint() {}, paintVerHint() {}, paintVerWarn() {}, paintHist() {}
+    autosize() {}, sizeCcLists() {}, paintPaketHint() {}, paintVerHint() {}, paintVerWarn() {}, paintHist() {}
   });
   return { ctx, g, S, c, dom };
 }
@@ -128,10 +128,11 @@ function optionValues(markup, selectId) {
 const EDIT_TR = [
   '<label>Etiketler</label>', '<label for="fDurum2">Durum</label>', '>Belirsiz</option>', '>Taslak</option>', '>Kararlı</option>', '>Arşiv</option>',
   '<label for="fVer">Sürüm</label>', 'placeholder="Henüz sürüm yok (+1 ile 1.0.0)"', 'title="Yeni sürüm oluştur: versiyon artar, commit ve tag atılır"',
-  '<label>Projeler</label>', '<summary><b>Claude Code yayın ayarları</b>', '<label for="pTur">Tür</label>', '>Yayın dışı</option>', '>Komut (slash command)</option>',
-  '>Ajan (subagent)</option>', '>Skill</option>', '<label for="pPaket">Paket</label>', '>Paket: plug (klasörden)</span>', '<label for="pAd">Ad</label>',
-  '<label for="pAcik">Açıklama</label>', 'placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?"', '<label for="pArg">Argüman ipucu</label>', 'placeholder="[dosya yolu]"',
-  '<label for="pArac">İzinli araçlar</label>', '<label for="pModel">Model</label>', '>Paket sayfasını aç</button>', "Claude Code'da çağır: <code>/plug:foo</code>",
+  '<label>Projeler</label>', '<summary><b>Claude Code yayın ayarları</b>', '<label for="pTur">Tür</label>', '>Prompt (yayınlanmaz)</option>', '>Komut (slash command)</option>',
+  '>Ajan (subagent)</option>', '>Skill</option>', '<label for="pPaket">Paket</label>', '>Paket: plug (klasörden)</span>', '<label for="cc-name" class="cckey">name</label>',
+  '<label for="cc-description" class="cckey">description</label>', 'placeholder="Bu prompt ne işe yarar? Claude ne zaman kullanmalı?"', '<label for="cc-argument-hint" class="cckey">argument-hint</label>', 'placeholder="[dosya yolu]"',
+  '<label for="cc-allowed-tools" class="cckey">allowed-tools</label>', '<label for="cc-model" class="cckey">model</label>', '<summary>Diğer Claude Code alanları</summary>', 'yayına aktarılır: hooks, metadata</p>',
+  'aria-describedby="cc-name-h"', '<div id="cc-name-h" class="hint">Komutun ve çıktı dosyasının adını belirler (küçük harfe ve tireye çevrilir).', '>Paket sayfasını aç</button>', "Claude Code'da çağır: <code>/plug:foo</code>",
   'aria-label="Prompt metni"', 'placeholder="Prompt metnini buraya yaz. {{degisken}} biçiminde yer tutucular kullanabilirsin."',
   'aria-label="x değerini kaldır"', 'placeholder="Etiket ekle, Enter"', 'placeholder="Hangi projelerde kullanılıyor?"', '<span class="pill ok">Yayında, güncel</span>'
 ];
@@ -139,10 +140,11 @@ const EDIT_TR = [
 const EDIT_EN = [
   '<label>Tags</label>', '<label for="fDurum2">Status</label>', '>Not set</option>', '>Draft</option>', '>Stable</option>', '>Archived</option>',
   '<label for="fVer">Version</label>', 'placeholder="No version yet (+1 creates 1.0.0)"', 'title="Create a new version: the version is bumped, and a commit and a tag are made"',
-  '<label>Projects</label>', '<summary><b>Claude Code publishing settings</b>', '<label for="pTur">Type</label>', '>Not published</option>', '>Command (slash command)</option>',
-  '>Agent (subagent)</option>', '>Skill</option>', '<label for="pPaket">Package</label>', '>Package: plug (from the folder)</span>', '<label for="pAd">Name</label>',
-  '<label for="pAcik">Description</label>', 'placeholder="What does this prompt do? When should Claude use it?"', '<label for="pArg">Argument hint</label>', 'placeholder="[file path]"',
-  '<label for="pArac">Allowed tools</label>', '<label for="pModel">Model</label>', '>Open package page</button>', 'Invoke in Claude Code: <code>/plug:foo</code>',
+  '<label>Projects</label>', '<summary><b>Claude Code publishing settings</b>', '<label for="pTur">Type</label>', '>Prompt (not published)</option>', '>Command (slash command)</option>',
+  '>Agent (subagent)</option>', '>Skill</option>', '<label for="pPaket">Package</label>', '>Package: plug (from the folder)</span>', '<label for="cc-name" class="cckey">name</label>',
+  '<label for="cc-description" class="cckey">description</label>', 'placeholder="What does this prompt do? When should Claude use it?"', '<label for="cc-argument-hint" class="cckey">argument-hint</label>', 'placeholder="[file path]"',
+  '<label for="cc-allowed-tools" class="cckey">allowed-tools</label>', '<label for="cc-model" class="cckey">model</label>', '<summary>More Claude Code fields</summary>', 'published as written: hooks, metadata</p>',
+  'aria-describedby="cc-name-h"', '<div id="cc-name-h" class="hint">Sets the command name and the output file name (converted to lowercase with hyphens).', '>Open package page</button>', 'Invoke in Claude Code: <code>/plug:foo</code>',
   'aria-label="Prompt text"', 'placeholder="Write the prompt text here. You can use placeholders in the {{variable}} format."',
   'aria-label="Remove x"', 'placeholder="Add a tag, Enter"', 'placeholder="Which projects is it used in?"', '<span class="pill ok">Published, up to date</span>'
 ];
@@ -152,7 +154,7 @@ test('editör paneli: tr bugünkü Türkçe, en İngilizce; aynı işlev tr-en-t
   const out = inLangs(g, () => ctx.editPaneHtml());
   for (const text of EDIT_TR) assert.ok(out.tr.includes(text), 'tr: ' + text + '\n' + out.tr);
   for (const text of EDIT_EN) assert.ok(out.en.includes(text), 'en: ' + text + '\n' + out.en);
-  assert.doesNotMatch(out.en, /Etiketler|Belirsiz|Yayın dışı|Taslak/);
+  assert.doesNotMatch(out.en, /Etiketler|Belirsiz|Yayın dışı|Taslak|Diğer Claude/);
 });
 
 test('editör paneli: işaretleme iskeleti (id, data-f, option value) iki dilde aynı', () => {
@@ -162,27 +164,34 @@ test('editör paneli: işaretleme iskeleti (id, data-f, option value) iki dilde 
 });
 
 test('editör paneli: ajan kullanım ipucu, klasörsüz prompt için varsayılan paket yer tutucusu ve tanınmayan değerler', () => {
-  const { ctx, g } = mainCtx('---\nbaslik: B\ntur: yanlis\ndurum: ilginc\n---\nx', { path: 'prompts/loose.md', publish: { tur: 'ajan', paket: 'plug', ad: 'foo', state: 'guncel' } });
+  const { ctx, g, c } = mainCtx('---\nbaslik: B\ntur: yanlis\ndurum: ilginc\n---\nx', { path: 'prompts/loose.md', publish: { tur: 'ajan', paket: 'plug', ad: 'foo', state: 'guncel' } });
   const out = inLangs(g, () => ctx.editPaneHtml());
   assert.ok(out.tr.includes('Ajan adı: <code>foo</code>') && out.en.includes('Agent name: <code>foo</code>'));
-  assert.ok(out.tr.includes('placeholder="Varsayılan: varsayilan"') && out.en.includes('placeholder="Default: varsayilan"'));
+  c.parsed = FM.parse('---\nbaslik: B\ntur: ajan\n---\nx');
+  const agent = inLangs(g, () => ctx.editPaneHtml());
+  assert.ok(agent.tr.includes('placeholder="Varsayılan: varsayilan"') && agent.en.includes('placeholder="Default: varsayilan"'));
+  assert.ok(agent.tr.includes('plugin ajanlarında yok sayar; bu yüzden sunulmaz ve yayınlanmaz: permissionMode, mcpServers, hooks, initialPrompt</p>'));
+  assert.ok(agent.en.includes('in plugin agents, so they are not offered or published: permissionMode, mcpServers, hooks, initialPrompt</p>'));
+  assert.ok(agent.tr.includes('<label for="cc-maxTurns" class="cckey">maxTurns</label>') && !agent.tr.includes('cc-allowed-tools'));
+  c.parsed = FM.parse('---\nbaslik: B\ntur: yanlis\ndurum: ilginc\n---\nx');
   assert.ok(out.tr.includes('⚠ "yanlis" (tanınmadı)</option>') && out.en.includes('⚠ "yanlis" (not recognized)</option>'));
   for (const lang of ['tr', 'en']) assert.ok(out[lang].includes('<option value="ilginc" selected>ilginc</option>'), 'bilinmeyen durum ham: ' + lang);
 });
 
 test('kanonik değer: İngilizce arayüzde Stable ve Command seçimi dosyaya durum: kararlı ve tur: komut yazar', () => {
   const { ctx, g, S, c } = mainCtx('---\nbaslik: A\n---\ngövde');
-  const setter = load({ fns: ['setField'], consts: ['str'] }, { ...g, S, leadOf: () => '', updateDirty() {}, refreshPubWarn() {}, paintPaketHint() {}, paintVerHint() {} });
-  const pick = (lang, durumText, turText) => {
+  const repainted = [];
+  const setter = load({ fns: ['setField', 'ccFieldOf', 'ccInputValue'], consts: ['str'] }, { ...g, S, leadOf: () => '', updateDirty() {}, refreshPubWarn() {}, paintPaketHint() {}, paintVerHint() {}, paintPubFields() { repainted.push(1); } });
+  const pick = (lang, durumText, turText, promptText) => {
     g.I18n.setLanguage(lang);
     const markup = ctx.editPaneHtml();
-    return { durum: optionValue(markup, 'fDurum2', durumText), tur: optionValue(markup, 'pTur', turText), durumValues: optionValues(markup, 'fDurum2'), turValues: optionValues(markup, 'pTur') };
+    return { durum: optionValue(markup, 'fDurum2', durumText), tur: optionValue(markup, 'pTur', turText), prompt: optionValue(markup, 'pTur', promptText), durumValues: optionValues(markup, 'fDurum2'), turValues: optionValues(markup, 'pTur') };
   };
-  const tr = pick('tr', 'Kararlı', 'Komut (slash command)');
-  const en = pick('en', 'Stable', 'Command (slash command)');
+  const tr = pick('tr', 'Kararlı', 'Komut (slash command)', 'Prompt (yayınlanmaz)');
+  const en = pick('en', 'Stable', 'Command (slash command)', 'Prompt (not published)');
   assert.deepEqual(en, tr, 'seçilen değerler ve option value kümeleri dilden bağımsız');
   assert.deepEqual(en.durumValues, ['', 'taslak', 'kararlı', 'arşiv']);
-  assert.deepEqual(en.turValues, ['', 'komut', 'ajan', 'skill']);
+  assert.deepEqual(en.turValues, ['', 'prompt', 'komut', 'ajan', 'skill']);
   g.I18n.setLanguage('en');
   setter.setField('durum', en.durum);
   setter.setField('tur', en.tur);
@@ -190,6 +199,17 @@ test('kanonik değer: İngilizce arayüzde Stable ve Command seçimi dosyaya dur
   assert.match(written, /^durum: kararlı$/m);
   assert.match(written, /^tur: komut$/m);
   assert.doesNotMatch(written, /Stable|Command|Draft|Archived/);
+  setter.setField('tur', en.prompt);
+  assert.match(FM.stringify(c.parsed), /^tur: prompt$/m);
+  assert.equal(c.turClearedExplicitly, true, 'Prompt seçimi açık bir seçimdir, onay sorulmaz');
+  assert.equal(repainted.length, 2, 'tür değişince alan bölmesi yeniden çizilir');
+  c.parsed = FM.parse('---\ntur: komut\naciklama: Eski\nizinli_araclar: Read\n---\ng');
+  setter.setField('description', ' Yeni ');
+  setter.setField('model', '');
+  setter.setField('disable-model-invocation', 'true');
+  setter.setField('arguments', 'a\n\n b \n');
+  assert.equal(FM.stringify(c.parsed), '---\ntur: komut\ndescription: Yeni\narguments: [a, b]\nizinli_araclar: Read\ndisable-model-invocation: true\n---\ng',
+    'alan değişince yalnızca o alanın eski anahtarı taşınır; boş değer yazılmaz; bool tırnaksız, liste köşeli');
 });
 
 test('XSS: editör alanları, etiket çipleri, değişken listesi ve ham metin iki dilde kaçışlanır', () => {
@@ -203,6 +223,15 @@ test('XSS: editör alanları, etiket çipleri, değişken listesi ve ham metin i
   for (const lang of ['tr', 'en']) {
     assert.doesNotMatch(out[lang], /<img/, lang);
     assert.ok(out[lang].includes(XSS_ESCAPED), lang);
+  }
+  for (const key of ['name', 'description', 'argument-hint', 'allowed-tools', 'model', 'when_to_use', 'effort', 'user-invocable', 'paths']) FM.set(p, key, XSS);
+  FM.set(p, 'tur', 'skill');
+  const fields = inLangs(g, () => ctx.editPaneHtml());
+  for (const lang of ['tr', 'en']) {
+    assert.doesNotMatch(fields[lang], /<img/, lang);
+    assert.ok(fields[lang].includes('id="cc-description" data-f="description" aria-describedby="cc-description-h" value="' + XSS_ESCAPED + '"'), lang);
+    assert.ok(fields[lang].includes('<option value="' + XSS_ESCAPED + '" selected>'), lang + ': tanınmayan değer kaçışlı');
+    assert.ok(fields[lang].includes('>' + XSS_ESCAPED + '</textarea>'), lang);
   }
   const chips = inLangs(g, () => ctx.chipsHtml('etiketler', [XSS], 'ph'));
   for (const lang of ['tr', 'en']) assert.doesNotMatch(chips[lang], /<img/, lang);
@@ -511,8 +540,8 @@ test('sürüm karşılaştırma: alan tablosu etiketleri, silinen/eklenen okuyuc
   ver.cmp = { data: compareFixture(ver) };
   const out = inLangs(g, () => ctx.verCompareHtml(ver));
   const heads = (markup) => [...markup.matchAll(/<th scope="row">(.*?)<\/th>/g)].map((m) => m[1].replace(/<\/?code>/g, '`'));
-  assert.deepEqual(heads(out.tr), ['Başlık', 'Etiketler', 'Projeler', 'Ad', 'İzinli araçlar', '`bilinmeyen_anahtar`', '`constructor`']);
-  assert.deepEqual(heads(out.en), ['Title', 'Tags', 'Projects', 'Name', 'Allowed tools', '`bilinmeyen_anahtar`', '`constructor`']);
+  assert.deepEqual(heads(out.tr), ['Başlık', 'Etiketler', 'Projeler', '`komut_adi`', '`izinli_araclar`', '`bilinmeyen_anahtar`', '`constructor`']);
+  assert.deepEqual(heads(out.en), ['Title', 'Tags', 'Projects', '`komut_adi`', '`izinli_araclar`', '`bilinmeyen_anahtar`', '`constructor`']);
   assert.ok(out.tr.includes('<caption>Frontmatter alanları</caption><thead><tr><th scope="col">Alan</th><th scope="col">v1.0.0</th><th scope="col">v2.0.0</th>'));
   assert.ok(out.en.includes('<caption>Frontmatter fields</caption><thead><tr><th scope="col">Field</th><th scope="col">v1.0.0</th><th scope="col">v2.0.0</th>'));
   assert.ok(out.tr.includes('<span class="sr">silinen: </span>' + MINUS + 'a') && out.tr.includes('<span class="sr">eklenen: </span>+c'));
@@ -572,12 +601,12 @@ test('sürüm karşılaştırma: aynı seçim, yükleniyor, ayniSurum kodu, sunu
 
 test('etiket tabloları: fieldLabel ve verLabel dil değişince bayatlamaz; bilinmeyen ve prototip anahtarları boş döner', () => {
   const { ctx, g } = mainCtx(SAMPLE);
-  const keys = ['baslik', 'etiketler', 'projeler', 'durum', 'versiyon', 'olusturma', 'tur', 'paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model'];
+  const keys = ['baslik', 'etiketler', 'projeler', 'durum', 'versiyon', 'olusturma', 'tur', 'paket'];
   const out = inLangs(g, () => plain(keys.map((k) => ctx.fieldLabel(k))));
-  assert.deepEqual(out.tr, ['Başlık', 'Etiketler', 'Projeler', 'Durum', 'Versiyon', 'Oluşturma', 'Tür', 'Paket', 'Ad', 'Açıklama', 'Argüman ipucu', 'İzinli araçlar', 'Model']);
-  assert.deepEqual(out.en, ['Title', 'Tags', 'Projects', 'Status', 'Version', 'Created', 'Type', 'Package', 'Name', 'Description', 'Argument hint', 'Allowed tools', 'Model']);
-  const unknown = inLangs(g, () => plain(['bilinmeyen', 'constructor', '__proto__', 'toString', ''].map((k) => ctx.fieldLabel(k))));
-  assert.deepEqual(unknown.tr, ['', '', '', '', '']);
+  assert.deepEqual(out.tr, ['Başlık', 'Etiketler', 'Projeler', 'Durum', 'Versiyon', 'Oluşturma', 'Tür', 'Paket']);
+  assert.deepEqual(out.en, ['Title', 'Tags', 'Projects', 'Status', 'Version', 'Created', 'Type', 'Package']);
+  const unknown = inLangs(g, () => plain(['bilinmeyen', 'constructor', '__proto__', 'toString', '', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model', 'description', 'allowed-tools'].map((k) => ctx.fieldLabel(k))));
+  assert.deepEqual(unknown.tr, ['', '', '', '', '', '', '', '', '', '', '', '']);
   const labels = inLangs(g, () => plain([ctx.verLabel('HEAD', null), ctx.verLabel('prompt/a/v1.0.0', '1.0.0')]));
   assert.deepEqual(labels.tr, ['Son commit', 'v1.0.0']);
   assert.deepEqual(labels.en, ['Last commit', 'v1.0.0']);
@@ -900,7 +929,6 @@ test('sözlük: bölgenin tr değerleri bugünkü metnin harfi harfine aynısı 
   const locked = {
     'ui.common.none': 'yok',
     'ui.common.openGitPanel': 'Git panelini aç',
-    'ui.fields.allowedTools': 'İzinli araçlar',
     'ui.main.staleBanner': "Bu dosya <b>{mp}</b> marketplace'ine ait ama etkin marketplace şu an <b>{active}</b>. Kaydetmek için dosyayı ağaçtan yeniden aç.",
     'ui.main.restoredCommit': "Editörde {short} commit'inin içeriği var (kaydedilmedi). Kaydedersen dosya bu içerikle değişir.",
     'ui.main.commitPlaceholder': 'Ne değişti, neden? (boşsa yalnızca kaydedilir)',

@@ -458,7 +458,7 @@ const STATIC_TR = {
   'ui.static.typeCommand': 'Komut',
   'ui.static.typeAgent': 'Ajan',
   'ui.static.typeSkill': 'Skill',
-  'ui.static.notPublished': 'Yayın dışı',
+  'ui.static.typePrompt': 'Prompt',
   'ui.static.searchInFiles': 'Marketplace dosyalarında da ara (plugins/)',
   'ui.static.library': 'Kütüphane',
   'ui.static.clearFilters': 'Filtreyi temizle',
@@ -469,7 +469,7 @@ const STATIC_TR = {
   'ui.static.close': 'Kapat',
   'ui.settings.language': 'Dil / Language'
 };
-const SAME_IN_EN = ['ui.settings.language', 'ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
+const SAME_IN_EN = ['ui.settings.language', 'ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.typePrompt', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
 
 /** Summary: <title> ve gövdedeki (ilk <script>'e kadar) data-i18n* öznitelikli etiketleri sahte öğelere çevirir. */
 function staticNodes() {
@@ -513,7 +513,7 @@ test('statik işaretleme: seçenek değerleri (veri) korunur; her seçeneğin an
   const opts = [...html.matchAll(/<option value="([^"]*)" data-i18n="([^"]+)"><\/option>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(opts, [
     ['', 'ui.static.allStatuses'], ['taslak', 'ui.static.statusDraft'], ['kararlı', 'ui.static.statusStable'], ['arşiv', 'ui.static.statusArchived'],
-    ['', 'ui.static.allTypes'], ['komut', 'ui.static.typeCommand'], ['ajan', 'ui.static.typeAgent'], ['skill', 'ui.static.typeSkill'], ['yok', 'ui.static.notPublished']
+    ['', 'ui.static.allTypes'], ['komut', 'ui.static.typeCommand'], ['ajan', 'ui.static.typeAgent'], ['skill', 'ui.static.typeSkill'], ['yok', 'ui.static.typePrompt']
   ]);
 });
 
@@ -592,8 +592,8 @@ const XSS_ESCAPED = '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;';
 const LEGACY_TEMPLATES = {
   bos: { label: 'Boş', meta: {}, body: '' },
   rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
-  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
-  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
+  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', 'argument-hint': '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
+  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
 };
 
 test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizce; meta iki dilde aynı kanonik Türkçe; dil değişince bayatlamaz', () => {
@@ -606,8 +606,8 @@ test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizc
   const en = snapshot();
   assert.deepEqual(Object.keys(en), Object.keys(LEGACY_TEMPLATES));
   for (const id of Object.keys(en)) assert.deepEqual(en[id].meta, LEGACY_TEMPLATES[id].meta, 'meta kanonik: ' + id);
-  assert.deepEqual(en.komut.meta, { tur: 'komut', arguman_ipucu: '[argüman]' });
-  assert.deepEqual(en.ajan.meta, { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' });
+  assert.deepEqual(en.komut.meta, { tur: 'komut', 'argument-hint': '[argüman]' });
+  assert.deepEqual(en.ajan.meta, { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' });
   assert.deepEqual(Object.values(en).map((tpl) => tpl.label), ['Blank', 'Role, task, output', 'Claude Code command', 'Claude Code agent']);
   assert.equal(en.bos.body, '');
   assert.equal(en.rgc.body, 'Role:\n\nTask:\n\nContext:\n- \n\nConstraints:\n- \n\nOutput format:\n1. \n');
@@ -621,7 +621,6 @@ test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizc
 test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik Türkçe, gövde arayüz dilinde; kullanıcı girdisi kaçışlı', async () => {
   const mp = { name: XSS_INPUT, libraryDir: 'prompts', plugins: [{ name: 'kod' }, { name: XSS_INPUT }] };
   const env = regionCtx(['templates', 'openNewPrompt'], mp);
-  const today = new Date().toLocaleDateString('sv-SE');
   const render = async (lang, tpl) => {
     env.g.I18n.setLanguage(lang);
     env.calls.modal.length = 0; env.calls.api.length = 0; env.calls.toast.length = 0;
@@ -639,6 +638,8 @@ test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik T�
   assert.equal(en.title, 'New prompt');
   assert.match(tr.html, /<option value="komut">Claude Code komutu<\/option>/);
   assert.match(en.html, /<option value="komut">Claude Code command<\/option>/);
+  assert.match(tr.html, /<label>Ad<input id="npTitle" name="title"/);
+  assert.match(en.html, /<label>Name<input id="npTitle" name="title"/);
   assert.match(tr.html, /<label>Şablon<select name="tpl">/);
   assert.match(en.html, /<label>Template<select name="tpl">/);
   assert.ok(tr.html.includes('Marketplace: <b>' + XSS_ESCAPED + '</b>'));
@@ -647,7 +648,7 @@ test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik T�
     assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
     assert.ok(rendered.includes('<option value="' + XSS_ESCAPED + '" >' + XSS_ESCAPED + '</option>'));
   }
-  const frontmatter = '---\nbaslik: Başlık\netiketler: [a, b]\ndurum: taslak\nolusturma: ' + today + '\ntur: komut\narguman_ipucu: "[argüman]"';
+  const frontmatter = '---\netiketler: [a, b]\ntur: komut\nargument-hint: "[argüman]"';
   assert.equal(tr.head, frontmatter);
   assert.equal(en.head, frontmatter, 'frontmatter anahtarları ve değerleri dilden bağımsız');
   assert.equal(tr.body, LEGACY_TEMPLATES.komut.body);
@@ -954,8 +955,8 @@ test('Marketplace paneli: sade ayar formu, çoğullar, kopyala düğmesi ve "Kay
   assert.ok(trOut.includes('Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
   assert.ok(enOut.includes('The source is probably <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
   assert.ok(trOut.includes('<span class="pill">ajan</span>') && enOut.includes('<span class="pill">agent</span>'));
-  assert.ok(trOut.includes('<p class="hint">1 prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>'));
-  assert.ok(enOut.includes('<p class="hint">1 prompt is intentionally not published (no type selected).</p>'));
+  assert.ok(trOut.includes('<p class="hint">1 prompt bilinçli olarak yayın dışı (Prompt türü ya da tür seçilmemiş).</p>'));
+  assert.ok(enOut.includes('<p class="hint">1 prompt is intentionally not published (Prompt type or no type selected).</p>'));
   assert.ok(enCtx.mkListHtml({ ...MK_STATE, unpublishedCount: 3 }).includes('3 prompts are intentionally not published'));
   assert.ok(trOut.includes('data-act="mk-update">Marketplace\'i güncelle</button>') && enOut.includes('data-act="mk-update">Update marketplace</button>'));
   assert.ok(trOut.includes('"Marketplace\'i güncelle" bunları çöp kutusuna taşır.') && enOut.includes('"Update marketplace" moves them to the trash.'));

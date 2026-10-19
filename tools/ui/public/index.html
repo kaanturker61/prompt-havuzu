@@ -257,16 +257,33 @@ mark { background: color-mix(in srgb, var(--lime) 80%, transparent); color: #121
 .chip button:hover { background: var(--ink); color: var(--card); }
 .meta .chips input.chip-in, .chips input.chip-in { border: 0; outline: 0; box-shadow: none; background: transparent; flex: 1; min-width: 100px; width: auto; padding: 3px 4px; }
 /* yayın ayarları paneli */
-details.pub { margin: 6px 0 22px; border: 2px dashed var(--field); border-radius: 20px; background: color-mix(in srgb, var(--cobalt) 5%, var(--card)); transition: border-color .2s, background-color .2s; }
+details.pub { --cc-col: 210px; margin: 6px 0 22px; border: 2px dashed var(--field); border-radius: 20px; background: color-mix(in srgb, var(--cobalt) 5%, var(--card)); transition: border-color .2s, background-color .2s; }
 details.pub[open] { border-style: solid; border-color: var(--rule); }
 details.pub > summary { list-style: none; padding: 13px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 18px; }
 details.pub > summary::-webkit-details-marker { display: none; }
 details.pub > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--rule); border-radius: 50%; background: var(--lime); color: #121116; font: 800 16px/1 var(--sans); transition: transform .45s var(--spring); }
 details.pub[open] > summary::before { transform: rotate(135deg); }
 details.pub summary b { font: 750 17px/1.2 var(--display); font-variation-settings: "opsz" 24; letter-spacing: -.02em; }
-details.pub .meta { padding: 4px 16px 14px 54px; margin: 0; }
+details.pub .meta { grid-template-columns: var(--cc-col) minmax(0, 1fr); padding: 4px 16px 14px 54px; margin: 0; }
 details.pub > .issue { margin: 0 16px 8px 54px; }
 .pubfoot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0 16px 16px 54px; }
+details.pub .meta.cc { align-items: start; }
+details.pub .meta.cc > label { padding-top: 9px; }
+details.pub .meta > label.cckey { font: 400 12.5px var(--mono); overflow-wrap: anywhere; color: var(--ink); }
+.meta.cc .hint { margin-top: 4px; }
+.meta.cc .hint:empty { display: none; }
+.meta textarea.cclist { width: 100%; min-height: 44px; resize: vertical; padding: 8px 12px; border: 2px solid transparent; border-radius: 12px; background-color: var(--soft); color: var(--ink); font: 400 13px/1.5 var(--mono); transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+.meta textarea.cclist:hover { border-color: var(--field); }
+.meta textarea.cclist:focus { outline: 0; border-color: var(--rule); background-color: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
+details.ccmore { margin: 4px 16px 12px 54px; border: 2px dashed var(--field); border-radius: 14px; transition: border-color .2s; }
+details.ccmore[open] { border-style: solid; border-color: var(--rule); }
+details.ccmore > summary { list-style: none; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; border-radius: 12px; }
+details.ccmore > summary::-webkit-details-marker { display: none; }
+details.ccmore > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--rule); border-radius: 50%; background: var(--sun); color: #121116; font: 800 13px/1 var(--sans); transition: transform .45s var(--spring); }
+details.ccmore[open] > summary::before { transform: rotate(135deg); }
+details.pub details.ccmore .meta { grid-template-columns: calc(var(--cc-col) - 14px) minmax(0, 1fr); padding: 4px 12px 12px; }
+.ccnotes { display: grid; gap: 6px; padding: 0 16px 14px 54px; }
+.ccnotes > * { margin: 0; }
 /* gövde editörü */
 .bodywrap { margin-top: 4px; }
 .bodywrap textarea, #fRaw { width: 100%; min-height: 320px; resize: vertical; padding: 22px 26px 26px; border: 2px solid var(--rule); border-radius: 20px; background: var(--code); color: var(--ink);
@@ -529,7 +546,11 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
   .hist, .gitgrid, .grid2 { grid-template-columns: 1fr; }
   .meta { grid-template-columns: 1fr; gap: 4px; }
   .meta > label { margin-top: 10px; }
-  details.pub .meta, details.pub > .issue, .pubfoot { padding-left: 16px; margin-left: 0; }
+  details.pub .meta, details.pub > .issue, .pubfoot, .ccnotes { padding-left: 16px; margin-left: 0; }
+  details.pub .meta, details.pub details.ccmore .meta { grid-template-columns: 1fr; }
+  details.pub .meta.cc { gap: 4px; }
+  details.pub .meta.cc > label { padding-top: 0; }
+  details.ccmore { margin-left: 16px; }
   .mkrow { grid-template-columns: 1fr; }
   .tile.stat, .tile.types { grid-column: 1 / -1; }
   .tile.hero { padding: 28px 22px 24px; min-height: 0; }
@@ -576,7 +597,7 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
           <option value="" data-i18n="ui.static.allStatuses"></option><option value="taslak" data-i18n="ui.static.statusDraft"></option><option value="kararlı" data-i18n="ui.static.statusStable"></option><option value="arşiv" data-i18n="ui.static.statusArchived"></option>
         </select>
         <select id="fTur" data-i18n-aria-label="ui.static.filterTypeLabel">
-          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.notPublished"></option>
+          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.typePrompt"></option>
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="fScope"><span data-i18n="ui.static.searchInFiles"></span></label>
@@ -761,7 +782,7 @@ function hl(text, tokens) {
   return out + esc(text.slice(pos));
 }
 
-function autosize(el) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(300, el.scrollHeight + 4) + 'px'; }
+function autosize(el, min = 300) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(min, el.scrollHeight + 4) + 'px'; }
 
 /* --------------------------------------------------------------------- durum */
 const S = {
@@ -992,7 +1013,7 @@ function rowHtml(it, focusKey) {
       acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">${th('ui.tree.initGit')}</button>`; break;
     case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', tx('ui.tree.actionsFor', { name: it.node.name })) : ''; break;
     default: { // file
-      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
+      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name.replace(/\.(md|markdown)$/i, '');
       label = esc(txt);
       icon = `<span class="dot ${m ? durumClass(m.durum) : ''}"></span>`;
       pills = (m && m.tur ? `<span class="pill">${esc(turLabel(m.tur))}</span>` : '')
@@ -1431,6 +1452,7 @@ function pubPill() {
 function editPaneHtml() {
   const c = S.cur; const m = FM.meta(c.parsed);
   const tur = normTur(m.tur);
+  const turShown = Rules.turOf(m.tur);
   const shownBody = c.parsed.body.slice(c.lead.length);
   const chk = curCheck();
   const nt = curNotice();
@@ -1467,23 +1489,102 @@ function editPaneHtml() {
     <div class="meta">
       <label for="pTur">${esc(tx('ui.fields.type'))}</label>
       <select id="pTur" data-f="tur">
-        <option value="">${esc(tx('ui.static.notPublished'))}</option>
-        ${rawTur && !tur ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        ${rawTur ? '' : `<option value="" selected hidden>${esc(tx('ui.edit.turImplicitPrompt'))}</option>`}
+        ${rawTur && !turShown ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        <option value="prompt" ${rawTur && turShown === 'prompt' ? 'selected' : ''}>${esc(tx('ui.edit.turPromptOption'))}</option>
         <option value="komut" ${tur === 'komut' ? 'selected' : ''}>${esc(tx('ui.edit.turCommandOption'))}</option>
         <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>${esc(tx('ui.edit.turAgentOption'))}</option>
         <option value="skill" ${tur === 'skill' ? 'selected' : ''}>${esc(tx('ui.static.typeSkill'))}</option>
       </select>
-      <label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
-      <label for="pAd">${esc(tx('ui.fields.name'))}</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
-      <label for="pAcik">${esc(tx('ui.fields.description'))}</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="${esc(tx('ui.edit.descriptionPlaceholder'))}">
-      <label for="pArg">${esc(tx('ui.fields.argumentHint'))}</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="${esc(tx('ui.edit.argumentHintPlaceholder'))}">
-      <label for="pArac">${esc(tx('ui.fields.allowedTools'))}</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
-      <label for="pModel">${esc(tx('ui.fields.model'))}</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
     </div>
+    <div id="pubFields">${pubFieldsHtml()}</div>
     <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${usage}</span></div>
   </details>
   <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="${esc(tx('ui.edit.bodyLabel'))}" placeholder="${esc(tx('ui.edit.bodyPlaceholder', { example: '{{' + tx('ui.edit.exampleVar') + '}}' }))}">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
+}
+
+/** Summary: Claude Code alanı -> ipucu sözlük anahtarı (türe göre değişenler tür başına). */
+const CC_HINT_KEYS = { name: { komut: 'ui.cc.nameCommand', skill: 'ui.cc.nameSkill', ajan: 'ui.cc.nameAgent' }, description: { komut: 'ui.cc.descriptionCommand', skill: 'ui.cc.descriptionCommand', ajan: 'ui.cc.descriptionAgent' }, when_to_use: 'ui.cc.whenToUse', 'argument-hint': 'ui.cc.argumentHint', arguments: 'ui.cc.arguments', 'disable-model-invocation': 'ui.cc.disableModelInvocation', 'user-invocable': 'ui.cc.userInvocable', 'allowed-tools': 'ui.cc.allowedTools', 'disallowed-tools': 'ui.cc.disallowedTools', model: 'ui.cc.model', effort: 'ui.cc.effort', context: 'ui.cc.context', agent: 'ui.cc.agent', background: { komut: 'ui.cc.backgroundSkill', skill: 'ui.cc.backgroundSkill', ajan: 'ui.cc.backgroundAgent' }, paths: 'ui.cc.paths', shell: 'ui.cc.shell', license: 'ui.cc.license', compatibility: 'ui.cc.compatibility', tools: 'ui.cc.tools', disallowedTools: 'ui.cc.agentDisallowedTools', maxTurns: 'ui.cc.maxTurns', autoCompactWindow: 'ui.cc.autoCompactWindow', skills: 'ui.cc.skills', memory: 'ui.cc.memory', omitClaudeMd: 'ui.cc.omitClaudeMd', isolation: 'ui.cc.isolation', color: 'ui.cc.color' };
+
+/** Summary: Claude Code alanının geçerli dildeki ipucu metni; ipucu tanımlı değilse boş döner. */
+function ccHint(key, tur) {
+  const e = Object.prototype.hasOwnProperty.call(CC_HINT_KEYS, key) ? CC_HINT_KEYS[key] : null;
+  const k = e && (typeof e === 'string' ? e : e[tur]);
+  return k ? tx(k) : '';
+}
+
+/** Summary: Claude Code alanı için etiket (gerçek anahtar adı), girdi ve ipucu işaretlemesi. */
+function ccFieldHtml(f, tur) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const id = 'cc-' + f.key;
+  const val = Rules.ccValue(m, f.key, tur);
+  const text = str(val).trim();
+  const attrs = `id="${id}" data-f="${f.key}" aria-describedby="${id}-h"`;
+  const unknown = (v) => `<option value="${esc(v)}" selected>${th('ui.edit.ccUnrecognized', { value: v })}</option>`;
+  const empty = `<option value="">${esc(tx('ui.edit.ccEmptyOption'))}</option>`;
+  let ctl;
+  if (f.kind === 'bool') {
+    const b = Rules.ccBool(val);
+    ctl = `<select ${attrs}>${empty}<option value="true" ${b === true ? 'selected' : ''}>true</option><option value="false" ${b === false ? 'selected' : ''}>false</option>${text && b === null ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'enum') {
+    ctl = `<select ${attrs}>${empty}${f.values.map((v) => `<option value="${esc(v)}" ${text === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}${text && !f.values.includes(text) ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'list') {
+    ctl = `<textarea ${attrs} class="cclist" rows="2" spellcheck="false" placeholder="${esc(tx('ui.edit.ccListPlaceholder'))}">${esc(Rules.ccList(f, val).join('\n'))}</textarea>`;
+  } else {
+    const ph = f.key === 'name' ? FM.slug(stem(c.path)) : f.key === 'description' ? tx('ui.edit.descriptionPlaceholder') : f.key === 'argument-hint' ? tx('ui.edit.argumentHintPlaceholder')
+      : ({ 'allowed-tools': 'Bash(git diff:*), Read', tools: 'Read, Grep, Glob', model: 'sonnet' })[f.key] || '';
+    ctl = `<input ${attrs} value="${esc(str(val))}" placeholder="${esc(ph)}" autocomplete="off"${f.kind === 'int' ? ' inputmode="numeric"' : ''}${f.maxLength ? ` maxlength="${f.maxLength}"` : ''}${f.key === 'model' ? ' list="dl-cc-model"' : ''}>`;
+  }
+  return `<label for="${id}" class="cckey">${esc(f.key)}</label><div>${ctl}<div id="${id}-h" class="hint">${esc(ccHint(f.key, tur))}</div></div>`;
+}
+
+/** Summary: Türe göre Claude Code alanları bölmesi (paket satırı, temel alanlar, diğer alanlar, notlar); tür yayınlanabilir değilse boş. */
+function pubFieldsHtml(forceOpen) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const tur = normTur(m.tur);
+  if (!tur) return '';
+  const mk = S.info.config.marketplace;
+  const pkgCl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  const fields = Rules.ccFieldsFor(tur);
+  const more = fields.filter((f) => f.group === 'diger');
+  const rawKeys = fields.filter((f) => f.group === 'ham').map((f) => f.key);
+  const ignored = Rules.CC_PLUGIN_IGNORED[tur] || [];
+  const unused = Rules.ccUnusedKeys(m, tur);
+  const open = !!forceOpen || more.some((f) => str(Rules.ccValue(m, f.key, tur)).trim() !== '');
+  const pkgRow = `<label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>`;
+  const notes = (rawKeys.length ? `<p class="hint">${esc(tx('ui.edit.ccRawOnly', { keys: rawKeys.join(', ') }))}</p>` : '')
+    + (ignored.length ? `<p class="hint">${esc(tx('ui.edit.ccPluginIgnored', { keys: ignored.join(', ') }))}</p>` : '')
+    + (unused.length ? `<p class="issue info">${esc(tx('ui.edit.ccUnused', { keys: unused.join(', ') }))}</p>` : '');
+  return `<div class="meta cc">${pkgRow}${fields.filter((f) => f.group === 'temel').map((f) => ccFieldHtml(f, tur)).join('')}</div>
+    <details class="ccmore" ${open ? 'open' : ''}><summary>${esc(tx('ui.edit.ccMore'))}</summary><div class="meta cc">${more.map((f) => ccFieldHtml(f, tur)).join('')}</div></details>
+    <datalist id="dl-cc-model">${['inherit', 'sonnet', 'opus', 'haiku', 'fable'].map((v) => `<option value="${v}"></option>`).join('')}</datalist>
+    ${notes ? `<div class="ccnotes">${notes}</div>` : ''}`;
+}
+
+/** Summary: Açık dosyanın türündeki Claude Code alanı tanımı; yoksa null döner. */
+function ccFieldOf(key) {
+  return Rules.ccFieldsFor(Rules.normTur(FM.meta(S.cur.parsed).tur)).find((f) => f.key === key) || null;
+}
+
+/** Summary: Girdi metnini alanın yazılacak değerine çevirir (bool -> boolean, liste -> satır dizisi, diğerleri kırpılmış metin). */
+function ccInputValue(f, raw) {
+  const v = typeof raw === 'string' ? raw : str(raw);
+  if (f.kind === 'bool') return v.trim() === 'true' ? true : v.trim() === 'false' ? false : v.trim();
+  if (f.kind === 'list') return v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  return v.trim();
+}
+
+/** Summary: Liste alanlarının yüksekliğini içeriğe uydurur. */
+function sizeCcLists(root) { $$('textarea.cclist', root).forEach((t) => autosize(t, 44)); }
+
+/** Summary: Claude Code alanları bölmesini yeniden çizer (tür değişince); "diğer alanlar" açıksa açık kalır. */
+function paintPubFields() {
+  const c = S.cur; const box = $('#pubFields'); if (!c || !box) return;
+  const more = $('details.ccmore', box);
+  box.innerHTML = pubFieldsHtml(!!(more && more.open));
+  sizeCcLists(box);
+  paintPaketHint();
 }
 
 function bodyInfoText() {
@@ -1597,7 +1698,7 @@ function renderMainInner() {
     ${staleBanner}${banner}${ext}${restore}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${esc(t[1])}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
-  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
+  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); sizeCcLists(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
   if (c.tab === 'hist') paintHist();
   paintVerHint(); paintVerWarn();
@@ -1623,7 +1724,7 @@ function startHtml() {
     const shown = st.filter((x) => x[2] > 0);
     const types = [['komut', tx('ui.static.typeCommand')], ['ajan', tx('ui.static.typeAgent')], ['skill', tx('ui.static.typeSkill')]]
       .map(([k, label]) => [label, sum(F.tur, (x) => x.name === k)]);
-    types.push([tx('ui.static.notPublished'), Math.max(0, n - types.reduce((a, x) => a + x[1], 0))]);
+    types.push([tx('ui.static.typePrompt'), Math.max(0, n - types.reduce((a, x) => a + x[1], 0))]);
     stats = `<div class="tile stat"><div class="big">${n}</div><div class="bar" aria-hidden="true">${shown.map((x) => `<span class="b-${x[0]}" style="flex:${x[2]}"></span>`).join('')}</div>
       <ul class="legend">${shown.map((x) => `<li><span class="dot ${x[0] === 'bos' ? '' : x[0]}"></span>${esc(x[1])}<b>${x[2]}</b></li>`).join('')}</ul></div>
       <div class="tile types"><ul>${types.map((x) => `<li><b>${x[1]}</b><span>${esc(x[0])}</span></li>`).join('')}</ul></div>`;
@@ -1636,11 +1737,14 @@ function startHtml() {
 /* ---------------------------------------------------------------- düzenleme */
 function setField(key, value) {
   const c = S.cur;
-  FM.set(c.parsed, key, typeof value === 'string' ? value.trim() : value);
+  const cc = c.isPrompt ? ccFieldOf(key) : null;
+  if (cc) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur), key);
+  FM.set(c.parsed, key, cc ? ccInputValue(cc, value) : (typeof value === 'string' ? value.trim() : value));
   c.lead = c.lead || leadOf(c.parsed);
   updateDirty();
   if (key === 'tur') {
-    c.turClearedExplicitly = !str(value).trim();
+    c.turClearedExplicitly = !Rules.normTur(value);
+    paintPubFields();
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
   if (key === 'paket') paintPaketHint();
@@ -1842,6 +1946,7 @@ async function openBump() {
         if (extra) { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn sm'; bt.dataset.act = extra.act; bt.textContent = extra.label; er.appendChild(document.createTextNode(' ')); er.appendChild(bt); }
       };
       const send = async (force, pick) => {
+        if (c.dirty && c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
         const body = { path: c.path, level: pick.level, note: pick.note,
           raw: c.dirty ? FM.stringify(c.parsed) : undefined, baseMtime: force ? undefined : c.mtime };
         try {
@@ -1889,6 +1994,7 @@ async function save(force) {
   if (!c.dirty && c.commitMsg.trim() && uncommitted(c.path)) return commitOnly();
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
   if (!(await confirmTurRemoval(c, force))) return false;
+  if (c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
   const raw = FM.stringify(c.parsed);
   const msg = c.commitMsg.trim();
   try {
@@ -2037,7 +2143,7 @@ function diffHtml(d) {
 }
 
 /** Summary: Frontmatter anahtarı -> görünen etiket sözlük anahtarı. */
-const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package', komut_adi: 'ui.fields.name', aciklama: 'ui.fields.description', arguman_ipucu: 'ui.fields.argumentHint', izinli_araclar: 'ui.fields.allowedTools', model: 'ui.fields.model' };
+const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package' };
 
 /** Summary: Frontmatter anahtarının görünen etiketi; bilinmeyen anahtar için boş döner. */
 function fieldLabel(key) {
@@ -2248,8 +2354,8 @@ function templates() {
   return {
     bos: { label: tx('ui.templates.blankLabel'), meta: {}, body: '' },
     rgc: { label: tx('ui.templates.rgcLabel'), meta: {}, body: tx('ui.templates.rgcBody') },
-    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: tx('ui.templates.commandBody') },
-    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
+    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', 'argument-hint': '[argüman]' }, body: tx('ui.templates.commandBody') },
+    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
   };
 }
 
@@ -2416,24 +2522,24 @@ function openNewPrompt(o) {
     title: tx('ui.menu.newPrompt'),
     html: `<form class="stack" id="newForm">
       <p class="hint" style="margin:0">${th('ui.newPrompt.marketplace', { name: m.name })}</p>
-      <label>${esc(tx('ui.fields.title'))}<input name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.fields.name'))}<input id="npTitle" name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off" aria-describedby="npFile"></label>
+      <p class="hint" id="npFile" style="margin:0"></p>
       <label>${esc(tx('ui.newPrompt.plugin'))}<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
       <label>${esc(tx('ui.newPrompt.tagsLabel'))}<input name="tags" list="dl-etiketler" placeholder="${esc(tx('ui.newPrompt.tagsPlaceholder'))}" autocomplete="off"></label>
       <label>${esc(tx('ui.newPrompt.template'))}<select name="tpl">${Object.keys(tpls).map((k) => `<option value="${k}">${esc(tpls[k].label)}</option>`).join('')}</select></label>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
+      $('#npTitle', b).addEventListener('input', (e) => { $('#npFile', b).textContent = hasWord(e.target.value) ? tx('ui.newPrompt.filePreview', { file: FM.slug(e.target.value) + '.md' }) : ''; });
       $('#newForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
         const title = String(f.get('title')).trim(); if (!title) return;
         const plugin = String(f.get('plugin'));
         const p = FM.parse('');
-        FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
-        FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = tpls[f.get('tpl')] || tpls.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
-        p.body = '\n' + t.body;
+        FM.setBody(p, t.body);
         closeModal();
         if (activeName() !== m.name) { toast(tx('ui.newPrompt.activeChanged'), 'error'); return; }
         if (!(await confirmDiscard())) return;
@@ -3845,7 +3951,7 @@ document.addEventListener('input', (ev) => {
   if (S.pk && t.closest && t.closest('.pkrel')) { pkValidate(); return; }
   if (!S.cur) return;
   if (t.id === 'commitMsg') { S.cur.commitMsg = t.value; updateDirty(); return; }
-  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
+  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); if (t.tagName === 'TEXTAREA') autosize(t, 44); return; }
   if (t.id === 'fBody') {
     S.cur.parsed.body = S.cur.lead + t.value;
     autosize(t); updateDirty();
@@ -3866,7 +3972,10 @@ document.addEventListener('change', (ev) => {
   else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
 });
 
-document.addEventListener('toggle', (ev) => { if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open); }, true);
+document.addEventListener('toggle', (ev) => {
+  if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open);
+  if (ev.target.open && ev.target.matches && ev.target.matches('#pubBox, details.ccmore')) sizeCcLists(ev.target);
+}, true);
 
 document.addEventListener('keydown', (ev) => {
   const t = ev.target;

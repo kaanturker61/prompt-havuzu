@@ -95,17 +95,17 @@ function loadBrowser() {
 
 /** Summary: rules.js'in dışa açtığı anahtarlar (Aşama 3 öncesiyle aynı olmalı). */
 const EXPORTS = [
-  'DEFAULT_VERSION', 'INBOX_DIR', 'LEVEL_LABEL', 'LIBRARY_DIR', 'LIBRARY_DIR_RESERVED',
+  'CC_FIELDS', 'CC_PLUGIN_IGNORED', 'DEFAULT_VERSION', 'INBOX_DIR', 'LEVEL_LABEL', 'LIBRARY_DIR', 'LIBRARY_DIR_RESERVED',
   'MAX_NAME_BYTES', 'MAX_URL_LENGTH', 'MSG', 'PACKAGE_TAG_PREFIX',
-  'PROMPT_TAG_PREFIX', 'PUBLISH_FIELDS', 'RESERVED_DIRS', 'SEMVER_RE',
-  'VERSION_LEVELS', 'VERSION_PART_MAX', 'bumpVersion', 'checkEntryName',
+  'PROMPT_TAG_PREFIX', 'PUBLISH_FIELDS', 'RESERVED_DIRS', 'SEMVER_RE', 'TUR_PROMPT',
+  'VERSION_LEVELS', 'VERSION_PART_MAX', 'bumpVersion', 'ccBool', 'ccFieldsFor', 'ccList', 'ccUnusedKeys', 'ccValue', 'checkEntryName',
   'checkMarketplaceName', 'checkPluginName', 'checkRemoteName', 'checkRemoteUrl',
   'checkVersion', 'classifyPromptPath', 'coerceVersion', 'compareVersions',
   'durumAllowed', 'isDeviceName', 'isFmBroken', 'isProtectedPath',
-  'levelBetween', 'marketplaceAddCommand', 'maxLevel', 'normTur',
+  'levelBetween', 'marketplaceAddCommand', 'maxLevel', 'migrateLegacyKeys', 'normTur',
   'normalizeRepoUrl', 'normalizeVersion', 'packageTag', 'parseLibraryDir',
   'parsePackageTag', 'parsePromptTag', 'pluginNameWarn', 'promptTag',
-  'promptTagAd', 'publishCheck', 'repoProvider', 'resolvePackage'
+  'promptTagAd', 'publishCheck', 'repoProvider', 'resolvePackage', 'turOf'
 ];
 
 /** Summary: [kullanılan sözlük anahtarları, çağrı, beklenen tr metni, beklenen en metni] örnekleri; her rules.* anahtarı en az bir örnekte geçer. */
@@ -114,8 +114,8 @@ const CASES = [
     'Yayın alanları dolu (komut_adi, aciklama) ama "tur" yok. Bu prompt yayınlanmayacak.',
     'Publish fields are filled in (komut_adi, aciklama) but "tur" is missing. This prompt will not be published.'],
   [['rules.turGecersiz'], () => Rules.MSG.turGecersiz('komutt'),
-    '"tur" değeri tanınmadı: "komutt". Geçerli değerler: komut, ajan, skill. Bu prompt yayınlanmayacak.',
-    'The "tur" value was not recognized: "komutt". Valid values: komut, ajan, skill. This prompt will not be published.'],
+    '"tur" değeri tanınmadı: "komutt". Geçerli değerler: prompt, komut, ajan, skill. Bu prompt yayınlanmayacak.',
+    'The "tur" value was not recognized: "komutt". Valid values: prompt, komut, ajan, skill. This prompt will not be published.'],
   [['rules.onYuzKapanmamis'], () => Rules.MSG.onYuzKapanmamis,
     'Frontmatter kapanmamış (ikinci "---" satırı yok). Alanlar okunamıyor, bu prompt yayınlanmayacak.',
     'The frontmatter is not closed (there is no second "---" line). The fields cannot be read, so this prompt will not be published.'],
@@ -125,6 +125,9 @@ const CASES = [
   [['rules.yayinDisi'], () => Rules.MSG.yayinDisi,
     'Tür seçilmemiş (yayın dışı).',
     'No type selected (not published).'],
+  [['rules.turPrompt'], () => Rules.MSG.turPrompt,
+    "Prompt türü: Claude Code'a yayınlanmaz.",
+    'Prompt type: not published to Claude Code.'],
   [['rules.surumGuncelDegil'], () => Rules.MSG.surumGuncelDegil('1.0.2'),
     'Son sürümden (v1.0.2) beri dosya değişti ama versiyon aynı. Yeni sürüm için +1\'e bas.',
     'The file has changed since the last version (v1.0.2) but "versiyon" is the same. Press +1 for a new version.'],
@@ -302,7 +305,7 @@ test('her ileti örneği: varsayılan bağlam ve tr Türkçe, en bağlamı İngi
 test('örnekler sözlükteki tüm rules.* anahtarlarını kapsar', () => {
   const used = [...new Set(CASES.flatMap(([keys]) => keys))].sort();
   assert.deepEqual(used, ruleKeys(TR));
-  assert.equal(used.length, 61);
+  assert.equal(used.length, 62);
 });
 
 test('tr ve en: rules.* anahtar kümesi, yer tutucular ve çoğul kategorileri eşit; değerler boş değil', () => {
@@ -349,9 +352,9 @@ test('API şekli: dışa açılan anahtarlar aynı; MSG ve LEVEL_LABEL anahtarla
   assert.deepEqual(Object.keys(Rules).sort(), EXPORTS);
   assert.deepEqual(Object.keys(Rules.MSG).sort(), [
     'adUretilemedi', 'anahtarTekrar', 'aygitAdi', 'dosyaBuyuk', 'durumHaric', 'onYuzKapanmamis', 'paketCokDegerli', 'paketUyusmuyor',
-    'surumArtirilmamis', 'surumGuncelDegil', 'turGecersiz', 'turYok', 'yayinDisi'
+    'surumArtirilmamis', 'surumGuncelDegil', 'turGecersiz', 'turPrompt', 'turYok', 'yayinDisi'
   ]);
-  const plain = ['onYuzKapanmamis', 'dosyaBuyuk', 'yayinDisi', 'paketCokDegerli'];
+  const plain = ['onYuzKapanmamis', 'dosyaBuyuk', 'yayinDisi', 'turPrompt', 'paketCokDegerli'];
   for (const key of Object.keys(Rules.MSG)) {
     assert.equal(typeof Rules.MSG[key], plain.includes(key) ? 'string' : 'function', key);
     const descriptor = Object.getOwnPropertyDescriptor(Rules.MSG, key);
@@ -394,6 +397,7 @@ test('tembel alıcılar: yayılım ve serileştirme okuma anındaki dili kullan�
     onYuzKapanmamis: 'The frontmatter is not closed (there is no second "---" line). The fields cannot be read, so this prompt will not be published.',
     dosyaBuyuk: 'The file is larger than 2 MB. It is not indexed or published.',
     yayinDisi: 'No type selected (not published).',
+    turPrompt: 'Prompt type: not published to Claude Code.',
     paketCokDegerli: '"paket" must be a single value.'
   }));
 });
@@ -416,10 +420,11 @@ test('publishCheck: reason dil bağlamında üretilir, nesne şekli ve kodlar ko
     [{ fmBroken: true }, 'onYuzKapanmamis', 'warn',
       'The frontmatter is not closed (there is no second "---" line). The fields cannot be read, so this prompt will not be published.'],
     [{ meta: { tur: 'komutt' } }, 'turGecersiz', 'warn',
-      'The "tur" value was not recognized: "komutt". Valid values: komut, ajan, skill. This prompt will not be published.'],
+      'The "tur" value was not recognized: "komutt". Valid values: prompt, komut, ajan, skill. This prompt will not be published.'],
     [{ meta: { komut_adi: 'x', aciklama: 'y' }, hasFm: true }, 'turYok', 'warn',
       'Publish fields are filled in (komut_adi, aciklama) but "tur" is missing. This prompt will not be published.'],
-    [{ meta: {} }, 'yayinDisi', 'info', 'No type selected (not published).']
+    [{ meta: {} }, 'yayinDisi', 'info', 'No type selected (not published).'],
+    [{ meta: { tur: 'prompt', aciklama: 'y' } }, 'yayinDisi', 'info', 'Prompt type: not published to Claude Code.']
   ];
   for (const [input, code, level, reasonEn] of cases) {
     const check = inEn(() => Rules.publishCheck(input));
@@ -440,9 +445,9 @@ test('publishCheck: reason dil bağlamında üretilir, nesne şekli ve kodlar ko
 test('ileti parametreleri çevrilmeden aynen görünür: alan adları, kullanıcı girdisi, veri değerleri, $ kalıpları', () => {
   inEn(() => {
     assert.equal(Rules.MSG.turGecersiz('{value} $& Çok'),
-      'The "tur" value was not recognized: "{value} $& Çok". Valid values: komut, ajan, skill. This prompt will not be published.');
+      'The "tur" value was not recognized: "{value} $& Çok". Valid values: prompt, komut, ajan, skill. This prompt will not be published.');
     assert.equal(Rules.publishCheck({ meta: { tur: '$1 {field}' } }).reason,
-      'The "tur" value was not recognized: "$1 {field}". Valid values: komut, ajan, skill. This prompt will not be published.');
+      'The "tur" value was not recognized: "$1 {field}". Valid values: prompt, komut, ajan, skill. This prompt will not be published.');
     assert.equal(Rules.checkVersion('{field} $1'), 'Version must be in X.Y.Z format (example: 1.0.0): "{field} $1"');
     assert.equal(Rules.checkMarketplaceName('$&-{name}'),
       'Marketplace name must start with a letter or digit and can contain only letters, digits, ".", "_" and "-": $&-{name}');

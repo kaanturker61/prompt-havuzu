@@ -651,7 +651,7 @@ test('B-19: içe aktarmada .txt BOM\'u önizlemeye ve oluşan prompta sızmaz', 
     assert.equal(r.data.created.length, 1);
     const out = fs.readFileSync(path.join(mk, ...r.data.created[0].to.split('/')), 'utf8');
     assert.ok(!out.includes('﻿'), 'oluşan prompta BOM girmedi');
-    assert.match(out, /\nilk satır\nikinci satır\n/);
+    assert.equal(out, 'ilk satır\nikinci satır\n');
   });
 });
 

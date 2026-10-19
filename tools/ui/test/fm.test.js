@@ -98,6 +98,30 @@ test('set son girdiyi günceller, silme tüm kopyaları siler; gövde ve diğer 
   assert.equal(FM.stringify(p6), '---\netiketler: [a]\nx: 1\netiketler: [b, c, d]\n---\ng');
 });
 
+test('rename biçimi korur, boolean tırnaksız yazılır, setBody "---" korumasını uygular', () => {
+  const bom = String.fromCharCode(0xFEFF);
+  const raw = bom + '---\r\naciklama: "Kod: inceleme"   # not\r\narguman_ipucu: [dosya]\r\naciklama: ikinci\r\ndescription: dolu\r\n---\r\ngövde\r\n';
+  const p = FM.parse(raw);
+  assert.equal(FM.rename(p, 'arguman_ipucu', 'argument-hint'), true);
+  assert.equal(FM.rename(p, 'aciklama', 'description'), false, 'hedef doluyken dokunulmaz');
+  assert.equal(FM.rename(p, 'yok', 'baska'), false);
+  assert.equal(FM.stringify(p), raw.replace('arguman_ipucu', 'argument-hint'));
+  FM.set(p, 'description', '');
+  assert.equal(FM.rename(p, 'aciklama', 'description'), true, 'yinelenen kopyalar birlikte taşınır');
+  assert.equal(FM.stringify(p), bom + '---\r\ndescription: "Kod: inceleme"   # not\r\nargument-hint: [dosya]\r\ndescription: ikinci\r\n---\r\ngövde\r\n');
+  const q = FM.parse('---\nbaslik: A\n---\ng');
+  FM.set(q, 'user-invocable', false); FM.set(q, 'background', true);
+  assert.equal(FM.stringify(q), '---\nbaslik: A\nuser-invocable: false\nbackground: true\n---\ng');
+  FM.set(q, 'background', true);
+  assert.equal(FM.meta(q).background, 'true');
+  assert.equal(FM.stringify(q), '---\nbaslik: A\nuser-invocable: false\nbackground: true\n---\ng');
+  assert.equal(FM.stringify(FM.setBody(FM.parse(''), 'düz\n')), 'düz\n');
+  assert.equal(FM.stringify(FM.setBody(FM.parse(''), '---\nçizgi\n')), '\n---\nçizgi\n');
+  assert.equal(FM.parse(FM.stringify(FM.setBody(FM.parse(''), '---\nçizgi\n'))).hasFm, false);
+  const r = FM.parse(''); FM.set(r, 'tur', 'komut'); FM.setBody(r, 'gövde\n');
+  assert.equal(FM.stringify(r), '---\ntur: komut\n---\n\ngövde\n');
+});
+
 test('BOM gidiş-dönüş: korunur, BOM yoksa eklenmez (B-19)', () => {
   const raw = '\uFEFF---\nbaslik: A\netiketler: [x]\n---\nGövde\n';
   const p = FM.parse(raw);

@@ -81,22 +81,23 @@ class PackageCatalog {
       const tur = Rules.normTur(meta.tur);
       if (!tur) {
         const s = exclude(it.check.code, it.check.level, it.check.reason, it.check.fields ? { fields: it.check.fields } : null);
-        if (s.level === 'warn') cands.push({ s, ad: FM.slug(str(meta.komut_adi) || baseName), paket: res.paket });
+        if (s.level === 'warn') cands.push({ s, ad: FM.slug(str(Rules.ccValue(meta, 'name', tur)) || baseName), paket: res.paket });
         if (BLOCKING_SKIP.has(s.code)) pkg.issues.push({ code: s.code, level: 'error', msg: s.reason, source: it.path });
         continue;
       }
 
-      const ad = FM.slug(str(meta.komut_adi) || baseName);
+      const nameVal = str(Rules.ccValue(meta, 'name', tur));
+      const ad = FM.slug(nameVal || baseName);
       const target = exporter.targetFor(tur, res.paket, ad);
       const expected = exporter.renderTarget(it, tur, ad);
       const cur = await this.readIfExists(path.join(this.root(), target));
       const issues = [];
       if (Rules.isDeviceName(ad)) issues.push({ code: 'aygitAdi', level: 'error', msg: Rules.MSG.aygitAdi(ad) });
       if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: tx('pkg.issue.icerikBos') });
-      if (str(meta.komut_adi) && FM.slug(str(meta.komut_adi)) === 'adsiz') {
-        issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(str(meta.komut_adi)) });
+      if (nameVal && FM.slug(nameVal) === 'adsiz') {
+        issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(nameVal) });
       }
-      if (!str(meta.aciklama)) {
+      if (!str(Rules.ccValue(meta, 'description', tur))) {
         issues.push({
           code: 'aciklamaBos',
           level: tur === 'komut' ? 'info' : 'warn',

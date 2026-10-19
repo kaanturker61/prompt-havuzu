@@ -74,7 +74,7 @@ function buildStack(mk, tmp, { git } = {}) {
     return path.relative(mk, dest).split(path.sep).join('/');
   };
   const readIfExists = async (abs) => { try { return decode(await fsp.readFile(abs)); } catch (e) { return null; } };
-  const exporter = new PackageExporter({ root, fsp, atomicWrite, toTrash, FM });
+  const exporter = new PackageExporter({ root, fsp, atomicWrite, toTrash, FM, Rules });
   const manifests = new ManifestWriter({ root, fsp, atomicWrite, FM, Rules });
   const catalog = new PackageCatalog({ listPrompts: (cfg) => index.listMd(mk, cfg.libraryDir, { includeBig: true }), exporter, readIfExists, root, Rules, FM });
   const advisor = new VersionAdvisor({ git: gitService, versions, exporter, Rules, FM });

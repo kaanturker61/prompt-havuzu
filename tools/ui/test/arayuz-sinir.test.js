@@ -567,7 +567,7 @@ function editCtx(raw) {
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v));
   const base = (p) => p.split('/').pop();
-  const ctx = load({ fns: ['editPaneHtml'] }, {
+  const ctx = load({ fns: ['editPaneHtml', 'pubFieldsHtml', 'ccFieldHtml', 'ccHint'], consts: ['CC_HINT_KEYS'] }, {
     S, esc, str, base, stem: (p) => base(p).replace(/\.[^.]+$/, ''), fold: FM.fold, normTur: Rules.normTur,
     toList: (v) => (Array.isArray(v) ? v : String(v == null ? '' : v).split(',')).map((x) => String(x).trim()).filter(Boolean),
     chipsHtml: () => '', curCheck: () => null, curNotice: () => null, pubPill: () => '', libDirOf: () => 'prompts', ls: { get: (k, d) => d }

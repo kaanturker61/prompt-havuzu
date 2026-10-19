@@ -10,40 +10,60 @@ const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v)
 
 class PackageExporter {
   // root: () => etkin marketplace klasörü; toTrash(rel, abs) => çöp yolu (rel)
-  constructor({ root, fsp, atomicWrite, toTrash, FM }) {
+  constructor({ root, fsp, atomicWrite, toTrash, FM, Rules }) {
     this.root = root;
     this.fsp = fsp;
     this.atomicWrite = atomicWrite;
     this.toTrash = toTrash;
     this.FM = FM;
+    this.Rules = Rules;
   }
 
   targetFor(tur, paket, ad) {
     return tur === 'skill' ? `plugins/${paket}/skills/${ad}/SKILL.md` : `plugins/${paket}/${TUR_DIR[tur]}/${ad}.md`;
   }
 
-  renderTarget(it, tur, ad) {
-    const FM = this.FM;
-    const m = it.meta;
-    const desc = str(m.aciklama) || it.title || ad;
-    const fm = [];
-    if (tur === 'komut') {
-      fm.push(['description', desc]);
-      if (m.arguman_ipucu) fm.push(['argument-hint', str(m.arguman_ipucu)]);
-      if (m.izinli_araclar) fm.push(['allowed-tools', str(m.izinli_araclar)]);
-      if (m.model) fm.push(['model', str(m.model)]);
-    } else if (tur === 'ajan') {
-      fm.push(['name', ad], ['description', desc]);
-      if (m.izinli_araclar) fm.push(['tools', str(m.izinli_araclar)]);
-      if (m.model) fm.push(['model', str(m.model)]);
-    } else {
-      fm.push(['name', ad], ['description', desc]);
-      if (m.arguman_ipucu) fm.push(['argument-hint', str(m.arguman_ipucu)]);
-      if (m.izinli_araclar) fm.push(['allowed-tools', str(m.izinli_araclar)]);
-      if (m.model) fm.push(['model', str(m.model)]);
+  /** Summary: Alanın frontmatter değer metni; değer boşsa null döner. */
+  _fmtCc(field, value) {
+    const { FM, Rules } = this;
+    if (field.kind === 'list') {
+      if (Array.isArray(value)) {
+        const items = Rules.ccList(field, value);
+        return items.length ? FM.fmtValue(items) : null;
+      }
+      if (str(value) === '') return null;
+      if (field.strForm) return FM.fmtScalar(str(value));
+      const items = Rules.ccList(field, value);
+      return items.length ? FM.fmtValue(items) : null;
     }
-    const head = fm.map(([k, v]) => `${k}: ${FM.fmtScalar(v)}`).join('\n');
-    return `---\n${head}\n---\n${it.body.replace(/^\n+/, '').replace(/\s+$/, '')}\n`;
+    const text = str(value);
+    if (text === '') return null;
+    if (field.kind === 'bool') {
+      const flag = Rules.ccBool(text);
+      return flag === null ? FM.fmtScalar(text) : String(flag);
+    }
+    return FM.fmtScalar(field.kind === 'int' ? text.trim() : text);
+  }
+
+  /** Summary: Promptun türüne göre plugin çıktı metnini üretir (yalnızca geçerli ve dolu alanlar, spec sırasıyla). */
+  renderTarget(it, tur, ad) {
+    const { Rules } = this;
+    const m = it.meta;
+    const blocks = it.fmBlocks || {};
+    const lines = [];
+    for (const field of Rules.ccFieldsFor(tur)) {
+      if (field.emit === false) continue;
+      if (field.kind === 'raw') {
+        if (blocks[field.key]) lines.push(blocks[field.key]);
+        continue;
+      }
+      let value = Rules.ccValue(m, field.key, tur);
+      if (field.key === 'name') value = ad;
+      else if (field.key === 'description') value = str(value) || it.title || ad;
+      const text = this._fmtCc(field, value);
+      if (text !== null) lines.push(`${field.key}: ${text}`);
+    }
+    return `---\n${lines.join('\n')}\n---\n${it.body.replace(/^\n+/, '').replace(/\s+$/, '')}\n`;
   }
 
   async _exists(p) { try { await this.fsp.access(p); return true; } catch (e) { return false; } }

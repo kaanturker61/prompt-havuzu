@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const FM = require('../public/fm.js');
 const I18n = require('../public/i18n.js');
 const DICT_TR = require('../public/lang/tr.js');
 const DICT_EN = require('../public/lang/en.js');
@@ -449,23 +448,21 @@ test('dil/sunucu: eşzamanlı en ve tr istekleri birbirinin dilini ezmez (git ve
   });
 });
 
-test('dil/sunucu: içe aktarma başlığı istek diline göre büyütülür (idea.txt -> Idea, ilk.txt -> İlk); atlanan dosya nedenleri dile göre', real, async () => {
+test('dil/sunucu: içe aktarma frontmatter yazmaz (istek dilinden bağımsız); "---" ile başlayan metin korunur; atlanan dosya nedenleri dile göre', real, async () => {
   await withMarketplace(async ({ call, mk, tmp }) => {
     const dir = path.join(tmp, 'metinler');
     fs.mkdirSync(dir, { recursive: true });
     const write = (name, text) => { const f = path.join(dir, name); fs.writeFileSync(f, text); return f; };
-    const files = [write('idea.txt', 'fikir'), write('ilk.txt', 'bir')];
-    const titleOf = (target, name) => FM.meta(FM.parse(fs.readFileSync(path.join(mk, target, name), 'utf8'))).baslik;
+    const files = [write('idea.txt', 'fikir'), write('ilk.txt', 'bir'), write('cizgi.txt', '---\nçizgi\n')];
+    const written = (target, name) => fs.readFileSync(path.join(mk, target, name), 'utf8');
 
-    let r = await call('POST', '/api/import/run', { dir, files, target: 'prompts/en' }, EN);
-    assert.equal(r.status, 200, r.text);
-    assert.equal(titleOf('prompts/en', 'idea.md'), 'Idea');
-    assert.equal(titleOf('prompts/en', 'ilk.md'), 'Ilk');
-    for (const [target, headers] of [['prompts/tr', TR_HDR], ['prompts/baslik-yok', undefined], ['prompts/fr', BAD_HDR]]) {
+    let r;
+    for (const [target, headers] of [['prompts/en', EN], ['prompts/tr', TR_HDR], ['prompts/baslik-yok', undefined], ['prompts/fr', BAD_HDR]]) {
       r = await call('POST', '/api/import/run', { dir, files, target }, headers);
       assert.equal(r.status, 200, r.text);
-      assert.equal(titleOf(target, 'idea.md'), 'İdea', target);
-      assert.equal(titleOf(target, 'ilk.md'), 'İlk', target);
+      assert.equal(written(target, 'idea.md'), 'fikir\n', target);
+      assert.equal(written(target, 'ilk.md'), 'bir\n', target);
+      assert.equal(written(target, 'cizgi.md'), '\n---\nçizgi\n', target);
     }
 
     const other = path.join(tmp, 'baska.txt');

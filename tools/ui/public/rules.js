@@ -10,15 +10,17 @@
   /** Summary: Geçerli dilde düz metin çevirisi (Node'da istek bağlamı, tarayıcıda setLanguage). */
   const tx = I18n.tx;
 
-  const PUBLISH_FIELDS = ['paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model'];
   const DEFAULT_VERSION = '1.0.0';
   // Her bileşen en çok 9 basamak (999999999): Number ile kayıpsız karşılaştırılır, BigInt gerekmez.
   const VERSION_PART_MAX = 999999999;
   const SEMVER_RE = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
   const SEMVER_ANY_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+  /** Summary: Claude Code'a yayınlanmayan düz prompt türünün değeri. */
+  const TUR_PROMPT = 'prompt';
+
   /** Summary: "tur" alanının kanonik değerleri (ileti parametresi). */
-  const TUR_VALUES = ['komut', 'ajan', 'skill'];
+  const TUR_VALUES = [TUR_PROMPT, 'komut', 'ajan', 'skill'];
 
   /** Summary: Kural iletileri; her değer çağrıldığı andaki dilde üretilir (düz metinler tembel alıcıdır). */
   const MSG = {
@@ -27,6 +29,7 @@
     get onYuzKapanmamis() { return tx('rules.onYuzKapanmamis'); },
     get dosyaBuyuk() { return tx('rules.dosyaBuyuk'); },
     get yayinDisi() { return tx('rules.yayinDisi'); },
+    get turPrompt() { return tx('rules.turPrompt'); },
     surumGuncelDegil: function (v) { return tx('rules.surumGuncelDegil', { version: v, field: 'versiyon' }); },
     adUretilemedi: function (v) { return tx('rules.adUretilemedi', { value: v, fallback: 'adsiz' }); },
     paketUyusmuyor: function (klasor, alan) {
@@ -57,6 +60,149 @@
     if (['ajan', 'agent', 'subagent'].includes(t)) return 'ajan';
     if (['skill', 'beceri'].includes(t)) return 'skill';
     return '';
+  }
+
+  /** Summary: Görünen tür (prompt, komut, ajan, skill); boş değer örtük prompt sayılır, tanınmayan değer için boş döner. */
+  function turOf(v) {
+    const raw = str(v).trim();
+    if (!raw || FM.fold(raw) === TUR_PROMPT) return TUR_PROMPT;
+    return normTur(raw);
+  }
+
+  /** Summary: Komut ve skill türleri. */
+  const KS = Object.freeze(['komut', 'skill']);
+
+  /** Summary: Yalnızca ajan türü. */
+  const AJAN = Object.freeze(['ajan']);
+
+  /** Summary: Yayınlanabilir üç tür. */
+  const ALL_TURS = Object.freeze(['komut', 'skill', 'ajan']);
+
+  /** Summary: Claude Code bileşen alanları spec'i, çıktı sırasıyla (key, kind, turs, group, legacy, values, min, max, maxLength, listSep, strForm, emit). */
+  const CC_FIELDS = Object.freeze([
+    { key: 'name', kind: 'text', turs: ['komut'], group: 'temel', legacy: 'komut_adi', emit: false },
+    { key: 'name', kind: 'text', turs: ['skill', 'ajan'], group: 'temel', legacy: 'komut_adi' },
+    { key: 'description', kind: 'text', turs: ALL_TURS, group: 'temel', legacy: 'aciklama' },
+    { key: 'argument-hint', kind: 'text', turs: KS, group: 'temel', legacy: 'arguman_ipucu' },
+    { key: 'allowed-tools', kind: 'text', turs: KS, group: 'temel', legacy: 'izinli_araclar' },
+    { key: 'tools', kind: 'text', turs: AJAN, group: 'temel', legacy: 'izinli_araclar' },
+    { key: 'model', kind: 'text', turs: ALL_TURS, group: 'temel' },
+    { key: 'when_to_use', kind: 'text', turs: KS, group: 'diger' },
+    { key: 'arguments', kind: 'list', turs: KS, group: 'diger', listSep: ' ', strForm: true },
+    { key: 'disable-model-invocation', kind: 'bool', turs: KS, group: 'diger' },
+    { key: 'user-invocable', kind: 'bool', turs: KS, group: 'diger' },
+    { key: 'disallowed-tools', kind: 'text', turs: KS, group: 'diger' },
+    { key: 'disallowedTools', kind: 'text', turs: AJAN, group: 'diger' },
+    { key: 'effort', kind: 'enum', turs: ALL_TURS, group: 'diger', values: ['low', 'medium', 'high', 'xhigh', 'max'] },
+    { key: 'context', kind: 'enum', turs: KS, group: 'diger', values: ['fork'] },
+    { key: 'agent', kind: 'text', turs: KS, group: 'diger' },
+    { key: 'maxTurns', kind: 'int', turs: AJAN, group: 'diger', min: 1 },
+    { key: 'autoCompactWindow', kind: 'int', turs: AJAN, group: 'diger', min: 100000, max: 1000000 },
+    { key: 'skills', kind: 'list', turs: AJAN, group: 'diger', listSep: ',' },
+    { key: 'memory', kind: 'enum', turs: AJAN, group: 'diger', values: ['user', 'project', 'local'] },
+    { key: 'background', kind: 'bool', turs: AJAN, group: 'diger' },
+    { key: 'omitClaudeMd', kind: 'bool', turs: AJAN, group: 'diger' },
+    { key: 'isolation', kind: 'enum', turs: AJAN, group: 'diger', values: ['worktree'] },
+    { key: 'color', kind: 'enum', turs: AJAN, group: 'diger', values: ['red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'cyan'] },
+    { key: 'background', kind: 'bool', turs: KS, group: 'diger' },
+    { key: 'paths', kind: 'list', turs: ['skill'], group: 'diger', listSep: ',', strForm: true },
+    { key: 'shell', kind: 'enum', turs: KS, group: 'diger', values: ['bash', 'powershell'] },
+    { key: 'license', kind: 'text', turs: KS, group: 'diger' },
+    { key: 'compatibility', kind: 'text', turs: KS, group: 'diger', maxLength: 500 },
+    { key: 'hooks', kind: 'raw', turs: KS, group: 'ham' },
+    { key: 'metadata', kind: 'raw', turs: KS, group: 'ham' },
+    { key: 'experimental', kind: 'raw', turs: AJAN, group: 'ham' }
+  ].map(function (f) {
+    if (!Object.isFrozen(f.turs)) Object.freeze(f.turs);
+    if (f.values) Object.freeze(f.values);
+    return Object.freeze(f);
+  }));
+
+  /** Summary: Plugin içinde Claude Code'un yok saydığı, bu yüzden sunulmayan ve yayınlanmayan alanlar (tür başına). */
+  const CC_PLUGIN_IGNORED = Object.freeze({ ajan: Object.freeze(['permissionMode', 'mcpServers', 'hooks', 'initialPrompt']) });
+
+  /** Summary: Tür -> o türün Claude Code alanları. */
+  const CC_BY_TUR = {};
+  ALL_TURS.forEach(function (t) {
+    CC_BY_TUR[t] = Object.freeze(CC_FIELDS.filter(function (f) { return f.turs.indexOf(t) >= 0; }));
+  });
+  /** Summary: Spec'teki tüm Claude Code anahtarları. */
+  const CC_KEYS = new Set(CC_FIELDS.map(function (f) { return f.key; }));
+  /** Summary: Spec'teki eski Türkçe karşılık anahtarları. */
+  const CC_LEGACY_KEYS = new Set(CC_FIELDS.filter(function (f) { return f.legacy; }).map(function (f) { return f.legacy; }));
+
+  /** Summary: Yayın alanları anahtarları: bilinen eski alanlar aynı sırada, ardından Claude Code anahtarları. */
+  const PUBLISH_FIELDS = ['paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model']
+    .concat(Array.from(CC_KEYS).filter(function (k) { return k !== 'model'; }));
+
+  /** Summary: Değer boşsa (yok, boş metin ya da boş dizi) true döner. */
+  function isBlank(v) { return v == null || v === '' || (Array.isArray(v) && v.length === 0); }
+
+  /** Summary: Türün Claude Code alanları, çıktı sırasıyla (tür yayınlanabilir değilse boş). */
+  function ccFieldsFor(tur) {
+    return Object.prototype.hasOwnProperty.call(CC_BY_TUR, tur) ? CC_BY_TUR[tur] : [];
+  }
+
+  /** Summary: Alanın değeri; İngilizce anahtar boşsa eski Türkçe karşılığına düşer, ikisi de boşsa boş metin döner. */
+  function ccValue(meta, key, tur) {
+    const m = meta || {};
+    if (!isBlank(m[key])) return m[key];
+    const f = ccFieldsFor(tur).find(function (x) { return x.key === key; }) || CC_FIELDS.find(function (x) { return x.key === key; });
+    if (f && f.legacy && !isBlank(m[f.legacy])) return m[f.legacy];
+    return '';
+  }
+
+  /** Summary: Boolean değeri (true/false/yes/no/on/off/1/0, harf duyarsız) okur; tanınmazsa null döner. */
+  function ccBool(v) {
+    const t = str(v).trim().toLowerCase();
+    if (['true', 'yes', 'on', '1'].includes(t)) return true;
+    if (['false', 'no', 'off', '0'].includes(t)) return false;
+    return null;
+  }
+
+  /** Summary: Liste alanı değerini öğe dizisine çevirir (dize ayraçla bölünür; süslü parantez içindeki ayraç korunur). */
+  function ccList(field, value) {
+    if (Array.isArray(value)) return value.map(function (x) { return String(x).trim(); }).filter(Boolean);
+    const sep = (field && field.listSep) || ',';
+    const out = []; let cur = ''; let depth = 0;
+    for (const ch of str(value)) {
+      if (ch === '{') depth++;
+      else if (ch === '}' && depth > 0) depth--;
+      if (ch === sep && depth === 0) { out.push(cur); cur = ''; } else cur += ch;
+    }
+    out.push(cur);
+    return out.map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  /** Summary: Dosyada dolu olup bu türde yayına girmeyen Claude Code ve eski alan anahtarları (başka türün alanları, gölgelenmiş eski anahtarlar, plugin'de yok sayılanlar). */
+  function ccUnusedKeys(meta, tur) {
+    const used = ccFieldsFor(tur);
+    if (!used.length) return [];
+    const m = meta || {};
+    const usedKeys = new Set(used.map(function (f) { return f.key; }));
+    const ignored = Object.prototype.hasOwnProperty.call(CC_PLUGIN_IGNORED, tur) ? CC_PLUGIN_IGNORED[tur] : [];
+    return Object.keys(m).filter(function (k) {
+      if (isBlank(m[k])) return false;
+      if (ignored.indexOf(k) >= 0) return true;
+      if (CC_LEGACY_KEYS.has(k)) {
+        const f = used.find(function (x) { return x.legacy === k; });
+        return !f || !isBlank(m[f.key]);
+      }
+      return CC_KEYS.has(k) && !usedKeys.has(k);
+    });
+  }
+
+  /** Summary: Eski Türkçe anahtarları satır bazlı İngilizce karşılığına taşır (only verilirse yalnızca o alanı); dolu hedefe dokunmaz, taşınanları döner. */
+  function migrateLegacyKeys(p, tur, only) {
+    const moved = [];
+    ccFieldsFor(tur).forEach(function (f) {
+      if (!f.legacy || (only && only !== f.key)) return;
+      const m = FM.meta(p);
+      if (isBlank(m[f.legacy]) || !isBlank(m[f.key])) return;
+      FM.set(p, f.key, '');
+      if (FM.rename(p, f.legacy, f.key)) moved.push({ from: f.legacy, to: f.key });
+    });
+    return moved;
   }
 
   // "---" ile açılmış ama kapanmamış frontmatter.
@@ -153,11 +299,9 @@
     if (o && o.fmBroken) return { code: 'onYuzKapanmamis', level: 'warn', get reason() { return MSG.onYuzKapanmamis; } };
     if (normTur(meta.tur)) return null;
     const rawTur = str(meta.tur).trim();
+    if (rawTur && turOf(rawTur) === TUR_PROMPT) return { code: 'yayinDisi', level: 'info', get reason() { return MSG.turPrompt; } };
     if (rawTur) return { code: 'turGecersiz', level: 'warn', get reason() { return MSG.turGecersiz(rawTur); } };
-    const fields = PUBLISH_FIELDS.filter(function (k) {
-      const v = meta[k];
-      return !(v == null || v === '' || (Array.isArray(v) && v.length === 0));
-    });
+    const fields = PUBLISH_FIELDS.filter(function (k) { return !isBlank(meta[k]); });
     if (fields.length) return { code: 'turYok', level: 'warn', get reason() { return MSG.turYok(fields); }, fields: fields };
     return { code: 'yayinDisi', level: 'info', get reason() { return MSG.yayinDisi; } };
   }
@@ -464,6 +608,8 @@
     MAX_NAME_BYTES: MAX_NAME_BYTES, isDeviceName: isDeviceName, checkEntryName: checkEntryName, isProtectedPath: isProtectedPath,
     pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
+    TUR_PROMPT: TUR_PROMPT, turOf: turOf, CC_FIELDS: CC_FIELDS, CC_PLUGIN_IGNORED: CC_PLUGIN_IGNORED, ccFieldsFor: ccFieldsFor,
+    ccValue: ccValue, ccBool: ccBool, ccList: ccList, ccUnusedKeys: ccUnusedKeys, migrateLegacyKeys: migrateLegacyKeys,
     DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, VERSION_PART_MAX: VERSION_PART_MAX, MAX_URL_LENGTH: MAX_URL_LENGTH, checkVersion: checkVersion,
     normalizeVersion: normalizeVersion, MSG: MSG,
     VERSION_LEVELS: VERSION_LEVELS, LEVEL_LABEL: LEVEL_LABEL, PROMPT_TAG_PREFIX: PROMPT_TAG_PREFIX,

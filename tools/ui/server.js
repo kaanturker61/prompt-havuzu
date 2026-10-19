@@ -89,7 +89,7 @@ const catalog = new LibraryCatalog({
 });
 const packages = new PackageService({ fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), settings, Rules, FM });
 const history = new PromptHistory({ git: gitService, FM, Rules });
-const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM });
+const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM, Rules });
 const manifests = new ManifestWriter({ root: () => root(), fsp, atomicWrite, FM, Rules });
 const packageCatalog = new PackageCatalog({
   listPrompts: (cfg) => index.listMd(root(), cfg.libraryDir, { includeBig: true }),
@@ -343,11 +343,6 @@ async function scanTxt(dirAbs, recursive) {
   return out.sort((a, b) => a.rel.localeCompare(b.rel, 'tr'));
 }
 
-function titleFromName(name) {
-  const t = name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return t.charAt(0).toLocaleUpperCase(I18n.current() === 'tr' ? 'tr' : 'en-US') + t.slice(1);
-}
-
 async function importFiles(dirAbs, files, targetRel) {
   const target = safePath(targetRel);
   const created = []; const skipped = [];
@@ -356,16 +351,12 @@ async function importFiles(dirAbs, files, targetRel) {
     const back = path.relative(dirAbs, abs);
     if (back.startsWith('..') || path.isAbsolute(back)) { skipped.push({ file: f, reason: tx('srv.import.outside') }); continue; }
     if (!/\.txt$/i.test(abs)) { skipped.push({ file: f, reason: tx('srv.import.notTxt') }); continue; }
-    let buf; let st;
-    try { buf = await fsp.readFile(abs); st = await fsp.stat(abs); } catch (e) { skipped.push({ file: f, reason: tx('srv.import.unreadable') }); continue; }
+    let buf;
+    try { buf = await fsp.readFile(abs); } catch (e) { skipped.push({ file: f, reason: tx('srv.import.unreadable') }); continue; }
     const text = decode(buf).replace(/^﻿/, '').replace(/\r\n/g, '\n').trim();
     if (!text) { skipped.push({ file: f, reason: tx('srv.import.empty') }); continue; }
     const base = path.basename(abs);
-    const p = FM.parse('');
-    FM.set(p, 'baslik', titleFromName(base));
-    FM.set(p, 'durum', 'taslak');
-    FM.set(p, 'olusturma', st.mtime.toISOString().slice(0, 10));
-    p.body = '\n' + text + '\n';
+    const p = FM.setBody(FM.parse(''), text + '\n');
     const stem = FM.slug(base.replace(/\.[^.]+$/, ''));
     if (Rules.isDeviceName(stem + '.md')) { skipped.push({ file: f, reason: tx('srv.import.deviceName', { name: stem }) }); continue; }
     const rel = await uniquePath(target.rel + '/' + stem + '.md');
