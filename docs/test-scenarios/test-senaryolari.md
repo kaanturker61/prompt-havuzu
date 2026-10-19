@@ -128,3 +128,110 @@ Beklenen: Düğme ve etiket metinleri taşmaz / kesilmez. Erişilebilirlik özni
 Adımlar:
 1. `npm test --prefix tools/ui` içindeki `i18n.test.js` çalıştırılır (motor testi `en` sözlüğünde olmayan bir anahtarı sorar).
 Beklenen: İleti Türkçe sözlükten döner, o da yoksa anahtar metni; kilitleme testi gerçek sözlüklerde eksik anahtar bulmaz.
+
+19. Yeni marketplace pp.config.json oluşturmaz
+Adımlar:
+1. Ağaçtaki "+ Marketplace" ile "deneme-10" adında boş bir marketplace oluştur.
+2. Dosya gezgininde marketplace klasörünü aç; Git panelini aç.
+Beklenen: Klasörde `pp.config.json` ve `library/` yok; `.claude-plugin/marketplace.json`, `prompts/.gitkeep`, `README.md`, `.gitignore`, `.gitattributes` var. Uyarı bandında `pp.config.json` ile ilgili uyarı yok.
+
+20. Paket yayını pp.config.json yazmaz
+Adımlar:
+1. "deneme-10"da "ornek" plugin'ini oluştur, içine `tur: komut` olan bir prompt ekle.
+2. Tüm değişiklikleri commit et.
+3. Paket sayfasında "Yayınla".
+4. `git log -1 --stat` çıktısına bak.
+Beklenen: Commit yalnızca `plugins/ornek/...` ve `.claude-plugin/marketplace.json` içerir. `pp.config.json` oluşmaz. `marketplace.json` içinde katalog sürümü `1.0.1` olur. `paket/ornek/v1.0.0` tag'i atılır.
+
+21. Katalog sürümü marketplace.json'dan okunur ve oraya yazılır
+Adımlar:
+1. Marketplace panelini aç.
+2. "Katalog sürümü" alanını `2.0.0` yap ve "Marketplace dosyalarını yaz".
+3. `marketplace.json` dosyasını aç; paneli kapatıp yeniden aç.
+Beklenen: `marketplace.json` `version` (ya da varsa `metadata.version`) `2.0.0` olur. `pp.config.json` oluşmaz. Panel `2.0.0` gösterir.
+
+22. Marketplace ayarlar formu sadeleşir
+Adımlar:
+1. Marketplace panelini aç.
+2. Ad, sahip ve açıklamayı değiştirip "Marketplace dosyalarını yaz".
+Beklenen: Formda yalnızca ad, sahip, katalog sürümü ve açıklama var; "Klasörsüz promptlar için paket" ve "Dışa aktarılacak durumlar" yok. `marketplace.json` `name`, `owner.name` ve `description` güncellenir. Kurulum komutundaki `@<ad>` yeni addır.
+
+23. Plugin açıklaması kaynak klasörde tutulur
+Adımlar:
+1. "+ Plugin" ile "kod-inceleme" plugin'ini "Kod inceleme komutları" açıklamasıyla oluştur.
+2. Ağaçta plugin'in üzerine gel; paket sayfasını aç.
+3. Açıklamayı paket sayfasından değiştir.
+Beklenen: `prompts/kod-inceleme/.claude-plugin/plugin.json` oluşur ve yalnızca `description` içerir. Ağaçta `.claude-plugin` klasörü görünmez. İpucunda ve paket sayfasında açıklama görünür; değişiklik aynı dosyaya yazılır. `pp.config.json` oluşmaz.
+
+24. Plugin açıklaması yayına yansır
+Adımlar:
+1. 23. senaryodaki plugin'e `tur: komut` olan bir prompt ekle ve commit et.
+2. "Yayınla".
+3. Açıklamayı değiştirip commit et, paket sayfasına bak.
+Beklenen: `plugins/kod-inceleme/.claude-plugin/plugin.json` `description` değeri kaynak açıklamayla aynıdır. 3. adımdan sonra paket sayfası yama artışı ve "açıklama değişti" nedenini gösterir.
+
+25. Açıklamasız plugin ek dosya yazmaz
+Adımlar:
+1. Açıklama vermeden "+ Plugin" ile "bos-aciklama" oluştur.
+Beklenen: `prompts/bos-aciklama/` altında yalnızca `.gitkeep` vardır; `.claude-plugin` oluşmaz.
+
+26. Plugin yeniden adlandırılınca açıklama korunur
+Adımlar:
+1. "kod-inceleme" plugin'ini "inceleme" olarak yeniden adlandır.
+Beklenen: Açıklama ağaçta ve paket sayfasında korunur. `prompts/inceleme/.claude-plugin/plugin.json` yeni klasördedir.
+
+27. Eski pp.config.json uyarısı ve çöpe taşıma
+Adımlar:
+1. `pp.config.json` dosyası olan bir marketplace'i etkinleştir.
+2. Uyarı bandındaki "Sil (çöp kutusuna taşı)" düğmesine bas ve onayla.
+3. Git panelinden yalnızca silinen `pp.config.json`'u seçip commit et.
+Beklenen: Uyarı, dosyanın artık kullanılmadığını ve ayarların nereden okunduğunu anlatır. Dosya `.pp/trash` altına taşınır, uyarı bandı kalkar. Commit yalnızca silmeyi içerir.
+
+28. Eski pp.config.json değerleri yok sayılır
+Adımlar:
+1. Bir marketplace'in `pp.config.json` dosyasına elle `libraryDir: "library"`, `export.durumlar: ["taslak"]`, `marketplace.version: "9.9.9"` yaz.
+2. Sayfayı yenile; ağaca, durumu "taslak" olan bir komut promptunun yayın notuna ve Marketplace paneline bak.
+Beklenen: Ağaç `prompts/` içeriğini gösterir, `library/` oluşmaz. Taslak prompt "yalnızca kararlı ve (boş) durumlar dışa aktarılır" bilgisini gösterir. Katalog sürümü `marketplace.json` değerini gösterir (`9.9.9` değil). Eski dosya uyarısı görünür.
+
+29. pp.config.json teknik dosya olarak silinebilir
+Adımlar:
+1. Teknik dosyalar altında `pp.config.json`'a sağ tıkla.
+Beklenen: Menüde "Yeniden adlandır" ve "Sil (çöp kutusuna taşı)" görünür. `plugins/`, `.claude-plugin/`, `.gitignore` için bu menü öğeleri hâlâ gizlidir.
+
+30. Klonlanan depo ayar dosyası istemez
+Adımlar:
+1. `pp.config.json` içermeyen bir marketplace deposunu "Uzak depodan klonla" ile ekle ve etkinleştir.
+2. Klon sonucu penceresine ve dosya gezginine bak; `git status` çalıştır.
+Beklenen: "Ayar dosyası oluştur" düğmesi ve ayar dosyası uyarısı yok. `pp.config.json` ve `library/` oluşmaz; `git status` temiz kalır. Marketplace adı `marketplace.json`'daki addır (klasör adı farklı olsa bile).
+
+31. Ayar dosyası olmayan marketplace'e taşıma
+Adımlar:
+1. 30. senaryodaki klonda `prompts/p` klasörünü oluştur.
+2. Etkin marketplace'ten bir promptu "Taşı" ile bu hedefin `p` plugin'ine taşı.
+Beklenen: Taşıma başarılı olur, ayar dosyası hatası çıkmaz. Hedefte commit atılmaz, kaynakta dosya `.pp/trash`'e gider.
+
+32. Bozuk marketplace.json yazmayı engeller
+Adımlar:
+1. Etkin marketplace'in `.claude-plugin/marketplace.json` içeriğini `garip{` yap.
+2. Sayfayı yenile; Marketplace panelini aç; "Yayınla", "Marketplace'i güncelle" ve "Marketplace dosyalarını yaz" dene.
+3. Yeni bir plugin oluştur.
+4. Dosyayı Teknik dosyalardan düzelt.
+Beklenen: Uyarı bandında ve panelde "marketplace.json okunamadı" uyarısı çıkar. Üç yazma işlemi 409 ile reddedilir, dosya bayt bayt aynı kalır. Plugin oluşturma çalışır. Düzeltince uyarı kalkar.
+
+33. Dışarıyı gösteren prompts bağlantısı
+Adımlar:
+1. (Windows) Etkin marketplace'te `prompts/` klasörünü kaldırıp marketplace dışındaki bir klasöre junction olarak yeniden oluştur (`mklink /J`).
+2. Sayfayı yenile; ara; plugin oluşturmayı dene.
+Beklenen: `libraryDirGecersiz` uyarısı çıkar. Dış klasördeki dosyalar ağaçta ve aramada görünmez. Plugin oluşturma 409 ile reddedilir; dış klasöre hiçbir şey yazılmaz.
+
+34. Ayar uyarıları iki dilde
+Adımlar:
+1. 27, 32 ve 33. senaryolardaki uyarıları TR/EN kısayoluyla iki dilde görüntüle.
+Beklenen: `ppConfigEski`, `manifestBozuk`, `libraryDirGecersiz` ve `pluginJsonBozuk` iletileri iki dilde tam cümledir. Düğme etiketi "Sil (çöp kutusuna taşı)" / "Delete (move to trash)". İngilizce metinde Türkçe harf yoktur.
+
+35. Mevcut marketplace'lerin geçişi
+Adımlar:
+1. `pp.config.json`'u olan mevcut marketplace'leri sırayla etkinleştir; ağaç, arama ve paket sayfalarını kontrol et.
+2. `pp.config.json`'daki katalog sürümü `marketplace.json`'dakinden farklı olan marketplace'te Marketplace panelinden doğru sürümü yazıp "Marketplace dosyalarını yaz"; değişikliği commit et.
+3. Her marketplace'te `pp.config.json`'u uyarı düğmesiyle çöpe taşı ve (izleniyorsa) commit et.
+Beklenen: Promptlar, plugin'ler ve yayın durumları değişmeden görünür. Yayınlanmış plugin'lerin açıklaması paket sayfasında görünür. 3. adımdan sonra hiçbir marketplace'te uyarı kalmaz.
