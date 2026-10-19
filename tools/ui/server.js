@@ -1106,7 +1106,7 @@ route('POST', '/api/marketplace/unpublish', async ({ body }) => {
 
 /* ----------------------------------------------------------------- HTTP sunucusu */
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2' };
 
 function send(res, status, data, headers) {
   const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data);
@@ -1133,7 +1133,10 @@ async function readBody(req) {
 }
 
 /** Summary: Statik olarak servis edilen public dosyaları (başka yol 404). */
-const STATIC_FILES = new Set(['index.html', 'fm.js', 'rules.js', 'i18n.js', 'lang/tr.js', 'lang/en.js']);
+const STATIC_FILES = new Set(['index.html', 'fm.js', 'rules.js', 'i18n.js', 'lang/tr.js', 'lang/en.js',
+  'fonts/bricolage-grotesque-latin-standard-normal.woff2', 'fonts/bricolage-grotesque-latin-ext-standard-normal.woff2',
+  'fonts/figtree-latin-wght-normal.woff2', 'fonts/figtree-latin-ext-wght-normal.woff2',
+  'fonts/fragment-mono-latin-400-normal.woff2', 'fonts/fragment-mono-latin-ext-400-normal.woff2']);
 
 const CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
 
@@ -1178,7 +1181,9 @@ async function handleRequest(req, res) {
     if (!STATIC_FILES.has(name)) return send(res, 404, tx('err.static.notFound'));
     let data;
     try { data = await fsp.readFile(path.join(PUBLIC, name)); } catch (e) { return send(res, 404, tx('err.static.fileNotFound', { name })); }
-    return send(res, 200, data, { 'Content-Type': MIME[path.extname(name)] || 'text/plain', 'Content-Security-Policy': CSP });
+    // Fontlar değişmez: her sayfa yüklemesinde yeniden indirilip yazı tipi titremesine yol açmasın.
+    const cache = path.extname(name) === '.woff2' ? { 'Cache-Control': 'public, max-age=604800' } : {};
+    return send(res, 200, data, { 'Content-Type': MIME[path.extname(name)] || 'text/plain', 'Content-Security-Policy': CSP, ...cache });
   } catch (e) {
     // Ham fs hataları (ENOENT vb.) mutlak sunucu yolu taşır: Türkçe, yolsuz iletiye çevrilir; tam hata günlüğe yazılır.
     const raw = mapRawError(e);

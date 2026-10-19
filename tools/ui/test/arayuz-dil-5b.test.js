@@ -94,7 +94,7 @@ function mainCtx(raw = SAMPLE, curExtra = {}, sExtra = {}) {
     cur: c, git: { isRepo: true, files: [] }, facets: { total: 0 }, recent: [], ...sExtra
   };
   const ctx = load({
-    fns: ['editPaneHtml', 'chipsHtml', 'curCheck', 'exportCheck', 'pubPill', 'bodyInfoText', 'rawPaneHtml', 'histPaneHtml', 'histModeBar', 'histCommitHtml', 'histVerHtml',
+    fns: ['editPaneHtml', 'chipsHtml', 'hueOf', 'curCheck', 'exportCheck', 'pubPill', 'bodyInfoText', 'rawPaneHtml', 'histPaneHtml', 'histModeBar', 'histCommitHtml', 'histVerHtml',
       'crumbsHtml', 'renderMainInner', 'startHtml', 'fieldLabel', 'verTimelineHtml', 'verCardHtml', 'verViewHtml', 'fieldCellsHtml', 'wordDiffHtml', 'verCompareHtml', 'verMainHtml'],
     consts: ['esc', 'str', 'toList', 'base', 'stem', 'fold', 'normTur', 'curNotice', 'HIST_STALE', 'verLabel', 'verByTag', 'FIELD_LABEL_KEYS', 'fmtDate', 'activeName', 'whereOf', 'durumClass'],
     expose: ['verLabel', 'fmtDate']
@@ -886,7 +886,7 @@ test('refreshChips: yer tutucu etiket ve proje alanı için dile göre değişir
   const S = { cur: c };
   let captured = '';
   const holder = { querySelector: () => null, parentNode: {}, replaceWith() {} };
-  const ctx = load({ fns: ['refreshChips', 'chipsHtml'], consts: ['esc', 'toList'] }, {
+  const ctx = load({ fns: ['refreshChips', 'chipsHtml', 'hueOf'], consts: ['esc', 'toList'] }, {
     ...g, S, $: () => holder, document: { createElement: () => ({ set innerHTML(v) { captured = v; this.firstElementChild = {}; } }) }
   });
   const placeholder = (key) => { ctx.refreshChips(key); return /placeholder="([^"]*)"/.exec(captured)[1]; };

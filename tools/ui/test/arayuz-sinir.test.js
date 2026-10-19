@@ -664,7 +664,7 @@ function chipsCtx(raw = '---\nbaslik: A\netiketler: [eski]\n---\nGövde') {
     if (!m || !dom.root || dom.root.key !== m[2]) return null;
     return m[1] === 'chips' ? dom.root : dom.root.input;
   };
-  const ctx = load({ fns: ['refreshChips', 'addChips', 'removeChip', 'setField', 'chipsHtml'], extra: listenerSrc('keydown') + listenerSrc('focusout') }, {
+  const ctx = load({ fns: ['refreshChips', 'addChips', 'removeChip', 'setField', 'chipsHtml', 'hueOf'], extra: listenerSrc('keydown') + listenerSrc('focusout') }, {
     S, esc, $, fold: FM.fold, str: (v) => String(v == null ? '' : v), trapTab: () => false,
     toList: (v) => (Array.isArray(v) ? v : String(v == null ? '' : v).split(',')).map((x) => String(x).trim()).filter(Boolean),
     leadOf: () => '', updateDirty() {}, refreshPubWarn() {}, paintPaketHint() {}, paintVerHint() {},

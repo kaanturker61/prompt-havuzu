@@ -27,7 +27,8 @@
 
 ## Features
 
-- **Marketplace, Plugin, Prompt tree** across several marketplaces at once, with keyboard navigation and context menus.
+- **Home dashboard:** prompt counts by status and by type, a clickable tag cloud that filters the list, and recent changes.
+- **Marketplace, Plugin, Prompt tree** across several marketplaces at once, with keyboard navigation and context menus. Each marketplace, plugin and tag keeps the same color everywhere, so you can spot them at a glance.
 - **Search** that ignores case and Turkish diacritics, plus filters (press `Ctrl+K`).
 - **Frontmatter editor** that preserves unknown keys and formatting, so git diffs stay small.
 - **Save and commit in one step:** fill the commit message box (**Commit mesajı**) and save; only that file is committed. A Git panel handles the rest.
@@ -186,7 +187,7 @@ Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (n
 
 - The server binds to `127.0.0.1` only and rejects requests whose `Host` is not `127.0.0.1`, `localhost` or `[::1]`.
 - Every non-GET request to `/api/*` needs the `X-PP: 1` header, and an `Origin` header, if present, must match the host.
-- The served page carries a strict Content-Security-Policy (`default-src 'self'`, no framing); only three static files are served.
+- The served page carries a strict Content-Security-Policy (`default-src 'self'`, no framing); only an explicit allowlist of static files is served (the page, its scripts, the two language files and the bundled fonts). Fonts are local, so the page loads nothing from other hosts.
 - File access is confined to the active marketplace and refuses `.git`. Git runs via `execFile` without a shell.
 - There is no telemetry and no HTTP client in the code. The only network traffic is git talking to remotes **you** configure: clone, check, push and update. The startup remote check only runs when a remote exists and can be switched to manual.
 
@@ -219,7 +220,9 @@ This runs `node --test` with no dependencies. Tests use temporary folders and `P
 tools/ui/
   server.js       HTTP server and routes
   lib/            server-side services
-  public/         index.html, fm.js, rules.js
+  public/         index.html, fm.js, rules.js, i18n.js
+    lang/         tr.js, en.js (dictionaries)
+    fonts/        bundled OFL fonts (see OFL.txt)
   test/           node:test suites
 start.bat, start.sh     launchers
 ```

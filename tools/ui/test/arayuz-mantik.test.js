@@ -192,7 +192,7 @@ test('rowHtml: plugin yayın adı ipucunu küçük harfe geçerli dilin yerel ay
   const ctx = vm.createContext({
     console, ...g, S: { cur: null, sel: null }, ICON: {}, menuItemsFor: () => [], mpByName: () => null, durumClass: () => ''
   });
-  vm.runInContext([constSrc('esc'), constSrc('isFileKind'), fnSrc('rowHtml'), 'this.rowHtml = rowHtml;'].join('\n'), ctx);
+  vm.runInContext([constSrc('esc'), constSrc('isFileKind'), fnSrc('rowHtml'), fnSrc('hueOf'), 'this.rowHtml = rowHtml;'].join('\n'), ctx);
   const plugin = (issue) => ({
     kind: 'plugin', level: 2, posinset: 1, setsize: 1, key: 'mp:p', mp: 'mp', path: 'prompts/p', expandable: false, expanded: false,
     node: { name: 'p', count: 1, nameIssue: issue }

@@ -95,7 +95,7 @@ function treeCtx(lib = fixtureLib(), stateExtra = {}) {
     mpOpen: new Set(['mp1', 'bos', 'klasoryok']), gitlessOpen: true, exp: new Set(['prompts/alfa', '#gelen', '#klasorsuz', '#teknik']), ...stateExtra
   };
   const ctx = load({
-    fns: ['rowHtml', 'treeHtml', 'treeModel', 'menuItemsFor', 'turLabel'],
+    fns: ['rowHtml', 'hueOf', 'treeHtml', 'treeModel', 'menuItemsFor', 'turLabel'],
     consts: ['esc', 'isFileKind', 'PROTECTED_ACTS', 'isProtectedItem', 'durumClass', 'nodeKey']
   }, {
     ...g, S, fold: FM.fold, ICON: {}, libDirOf: () => 'prompts', expOf: () => S.exp,
@@ -294,7 +294,7 @@ test('arama sonuçları: boş durum, tür rozeti ve konum etiketi dile göre; ba
   const g = uiGlobals({ browser: true });
   const S = { results: [], cur: null, f: { q: 'kod' } };
   const ctx = load({
-    fns: ['resultsHtml', 'hl', 'turLabel'], consts: ['esc', 'durumClass', 'whereOf', 'base']
+    fns: ['resultsHtml', 'hueOf', 'hl', 'turLabel'], consts: ['esc', 'durumClass', 'whereOf', 'base']
   }, { ...g, S, fold: FM.fold });
   const empty = inLangs(g, () => ctx.resultsHtml());
   assert.equal(empty.tr, '<div class="empty">Eşleşen prompt yok. Filtreleri veya arama sözcüklerini değiştir.</div>');
@@ -326,7 +326,7 @@ test('filtre çubuğu: etiket düğmeleri "Tüm etiketler (N)" / "Daha az göste
   const dom = fakeDom();
   const tags = Array.from({ length: 16 }, (_, i) => ({ name: i === 0 ? XSS : 't' + i, count: i + 1 }));
   const S = { facets: { tags, projeler: [] }, tagsAll: false, f: { tags: [] }, info: { config: { marketplace: { plugin: 'vp' } } } };
-  const ctx = load({ fns: ['renderFilters'], consts: ['esc'] }, { ...g, S, $: dom.$, fold: FM.fold, activeMp: () => null, pluginsOf: () => [] });
+  const ctx = load({ fns: ['renderFilters', 'hueOf'], consts: ['esc'] }, { ...g, S, $: dom.$, fold: FM.fold, activeMp: () => null, pluginsOf: () => [] });
   const last = () => /<button class="tagbtn" data-act="tags-all">([^<]*)<\/button>/.exec(dom.els['#tagbar'].innerHTML)[1];
   const more = inLangs(g, () => { ctx.renderFilters(); return last(); });
   assert.equal(more.tr, 'Tüm etiketler (16)');

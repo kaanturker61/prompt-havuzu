@@ -434,6 +434,15 @@ test('sunucu: i18n çekirdeği ve sözlükler servis edilir, izin listesi dış�
     const srcs = [...index.text.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
     assert.deepEqual(srcs, ['/lang/tr.js', '/lang/en.js', '/i18n.js', '/fm.js', '/rules.js']);
     for (const src of srcs) assert.equal((await rawGet(srv.base, src)).status, 200, src);
+    // index.html'deki her @font-face dosyası izin listesinde ve woff2 olarak servis edilir.
+    const fonts = [...index.text.matchAll(/url\("(\/fonts\/[^"]+)"\)/g)].map((m) => m[1]);
+    assert.ok(fonts.length > 0, 'yerel yazı tipleri');
+    for (const f of new Set(fonts)) {
+      const r = await rawGet(srv.base, f);
+      assert.equal(r.status, 200, f);
+      assert.equal(r.headers['content-type'], 'font/woff2', f);
+    }
+    assert.equal((await rawGet(srv.base, '/fonts/OFL.txt')).status, 404, 'lisans dosyası servis edilmez');
 
     const denied = [
       '/lib/git-service.js', '/lib/', '/lang', '/lang/', '/lang/de.js', '/lang/tr.js.map', '/lang/tr.js/', '/lang//tr.js',
