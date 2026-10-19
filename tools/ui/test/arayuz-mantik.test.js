@@ -179,7 +179,7 @@ test('mkRowHtml: araç reposu satırı reasonCode ile tanınır, ileti metni bel
   assert.match(plain, /<span class="pill warn">Git deposu değil<\/span>/);
   assert.match(plain, /data-act="mk-git-init"/);
 
-  const item = row({ name: 'a', path: '/l/a', valid: true, reason: null, reasonCode: null, active: false, hasManifest: true, hasPpConfig: true }, 'item');
+  const item = row({ name: 'a', path: '/l/a', valid: true, reason: null, reasonCode: null, active: false, hasManifest: true }, 'item');
   assert.match(item, /data-act="mk-activate"/);
   assert.doesNotMatch(item, /mk-git-init|dim/);
   const bad = row({ name: 'c', path: '/l/c', valid: false, reason: 'Git deposu okunamadı', reasonCode: 'gitOkunamadi', active: false, hasManifest: true }, 'item');

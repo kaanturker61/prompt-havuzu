@@ -95,7 +95,7 @@ function loadBrowser() {
 
 /** Summary: rules.js'in dışa açtığı anahtarlar (Aşama 3 öncesiyle aynı olmalı). */
 const EXPORTS = [
-  'DEFAULT_VERSION', 'INBOX_DIR', 'LEVEL_LABEL', 'LIBRARY_DIR_RESERVED',
+  'DEFAULT_VERSION', 'INBOX_DIR', 'LEVEL_LABEL', 'LIBRARY_DIR', 'LIBRARY_DIR_RESERVED',
   'MAX_NAME_BYTES', 'MAX_URL_LENGTH', 'MSG', 'PACKAGE_TAG_PREFIX',
   'PROMPT_TAG_PREFIX', 'PUBLISH_FIELDS', 'RESERVED_DIRS', 'SEMVER_RE',
   'VERSION_LEVELS', 'VERSION_PART_MAX', 'bumpVersion', 'checkEntryName',

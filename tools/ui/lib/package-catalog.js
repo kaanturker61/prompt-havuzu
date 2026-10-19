@@ -42,7 +42,7 @@ class PackageCatalog {
   // plans/skipped/orphans biçimi publishPlan'ınkiyle aynıdır.
   async build(cfg) {
     const { Rules, FM, exporter } = this;
-    const items = await this.listPrompts(cfg);
+    const items = cfg.libraryOk === false ? [] : await this.listPrompts(cfg);
     const exp = cfg.export || { durumlar: ['kararlı', ''], haricKlasorler: [Rules.INBOX_DIR] };
     const plans = []; const skipped = []; const cands = [];
     const packages = new Map();

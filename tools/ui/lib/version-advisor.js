@@ -51,7 +51,7 @@ class VersionAdvisor {
     return out;
   }
 
-  /* pkg: PackageCatalog paketi; cfg: pp.config. Dönüş: analiz (yayın ekranı ve publish bunu kullanır). */
+  /* pkg: PackageCatalog paketi; cfg: marketplace ayarları. Dönüş: analiz (yayın ekranı ve publish bunu kullanır). */
   async analyze(root, pkg, cfg) {
     const { Rules, git, FM } = this;
     const base = await this.base(root, pkg.name);

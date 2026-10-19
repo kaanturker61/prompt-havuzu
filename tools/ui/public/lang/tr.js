@@ -172,7 +172,7 @@
     'setup.marketplaceBulunamadi': 'Seçili marketplace bulunamadı: {name}',
     'setup.marketplaceGitYok': "Seçili marketplace'te git başlatılmamış: {name}",
     'setup.marketplaceGitYokNeden': "Seçili marketplace'te git başlatılmamış: {name} ({reason})",
-    'setup.ppConfigYok': "Bu marketplace'te pp.config.json yok. Prompt Havuzu ayarlarını oluştur.",
+    'setup.ppConfigEski': 'pp.config.json artık kullanılmıyor ve içindeki değerler yok sayılıyor. Ayarlar .claude-plugin/marketplace.json dosyasından ve plugin klasörlerindeki plugin.json dosyalarından okunuyor, bu dosyayı silebilirsin.',
 
     'cfg.type.array': 'dizi',
     'cfg.type.string': 'metin',
@@ -183,11 +183,9 @@
     'cfg.reason.unreadable': 'dosya okunamadı',
     'cfg.reason.unreadableCode': 'dosya okunamadı ({code})',
     'cfg.reason.notObject': 'kök bir nesne değil, {type}',
-    'cfg.outsideMarketplace': 'marketplace klasörünün dışına çıkıyor (bir bağlantı olabilir)',
-    'cfg.bozuk': 'pp.config.json okunamadı ({reason}). Geçici olarak varsayılan ayarlar kullanılıyor ve yazma işlemleri kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.',
-    'cfg.libraryDirGecersiz': 'pp.config.json içindeki "{field}" geçersiz ({reason}). Geçici olarak "{fallback}" kullanılıyor ve yazma işlemleri kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.',
-    'cfg.exportAlanGecersiz': 'pp.config.json içindeki "{field}" dizi olmalı (şu an: {type}). Bu alan için varsayılan kullanılıyor: {fallback}. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).',
-    'cfg.exportGecersiz': 'pp.config.json içindeki "{field}" nesne olmalı (şu an: {type}). Dışa aktarma için varsayılanlar kullanılıyor: {defaults}. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).',
+    'cfg.manifestBozuk': '.claude-plugin/marketplace.json okunamadı ({reason}). Ad klasör adından, sürüm 1.0.0 olarak alınıyor ve marketplace.json yazan işlemler kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.',
+    'cfg.promptsDisarida': '"{dir}" klasörü marketplace klasörünün dışına çıkıyor (bir bağlantı olabilir). Promptlar okunmuyor ve prompt yazan işlemler kapalı. Bağlantıyı kaldırıp gerçek bir klasör oluştur, sonra yeniden dene.',
+    'cfg.pluginBozuk': '{file} okunamadı ({reason}). Plugin açıklaması yazılamıyor. Dosyayı düzelt ya da sil, sonra yeniden dene.',
 
     'mp.reason.aracReposu': 'Araç reposu',
     'mp.reason.gitDegil': 'Git deposu değil',
@@ -203,7 +201,6 @@
     'mp.err.folderNotFound': 'Klasör bulunamadı: {name}',
     'mp.err.alreadyGit': 'Bu klasör zaten bir git deposu: {name}',
     'mp.err.initFailed': 'Git başlatılamadı: {reason}. Yapılan değişiklikler geri alındı.',
-    'mp.warn.ppConfigYok': 'Bu depoda pp.config.json yok. Prompt Havuzu ayarlarını oluştur.',
     'mp.warn.manifestYok': '.claude-plugin/marketplace.json yok.',
     'mp.warn.bosDepo': 'Depo boş (henüz commit yok).',
 
@@ -342,9 +339,7 @@
 
     'err.marketplace.toolRepoUnusable': 'Araç reposu marketplace olarak kullanılamaz',
     'err.marketplace.toolRepoNotSelectable': 'Araç reposu marketplace olarak seçilemez',
-    'err.marketplace.ppConfigExists': "Bu marketplace'te pp.config.json zaten var",
     'err.marketplace.notFound': 'Marketplace bulunamadı: {name}',
-    'err.marketplace.statusRequired': 'En az bir durum seçilmeli',
 
     'srv.marketplace.addNoteLocal': "Yerel yol: plugin'ler yerinde yüklenir, sürüm takibi yapılmaz",
     'srv.marketplace.pinRef': '<dal-veya-etiket>',
@@ -379,7 +374,6 @@
     'err.transfer.targetRequired': 'Hedef marketplace gerekli',
     'err.transfer.sameMarketplace': 'Hedef marketplace kaynakla aynı. Aynı marketplace içinde taşımak için yeniden adlandırma kullan',
     'err.transfer.targetInvalid': 'Hedef marketplace geçerli bir git deposu değil: {name}',
-    'err.transfer.targetNoPpConfig': 'Hedefte Prompt Havuzu ayarı (pp.config.json) yok. Önce hedef marketplace için ayar dosyasını oluştur.',
     'err.transfer.pluginRequired': 'Hedef plugin gerekli',
     'err.transfer.invalidPlugin': 'Geçersiz plugin adı',
     'err.transfer.pluginOutside': 'Hedef plugin klasörü hedef marketplace dışına çıkıyor',
@@ -783,7 +777,6 @@
 
     'ui.common.openSettings': 'Ayarları aç',
     'ui.common.initGit': "Git'i başlat",
-    'ui.common.createPpConfig': 'Ayar dosyası oluştur',
 
     'ui.git.badgePending': { other: '{count} değişiklik commit bekliyor' },
     'ui.git.title': 'Git: {name}',
@@ -879,21 +872,17 @@
     'ui.remote.bandUpdate': 'Güncelle',
     'ui.remote.bandCloseLabel': 'Bildirimi kapat',
 
-    'ui.clone.ppConfigCreated': 'pp.config.json oluşturuldu. Git panelinden commit atabilirsin.',
     'ui.clone.doneTitle': 'Klonlama tamamlandı',
     'ui.clone.added': '<b>{name}</b> eklendi.',
 
     'ui.mp.title': 'Marketplace: {name}',
     'ui.mp.update': "Marketplace'i güncelle",
     'ui.mp.writeFiles': 'Marketplace dosyalarını yaz',
-    'ui.mp.noPpConfig': "Bu marketplace'te Prompt Havuzu ayarı (pp.config.json) yok.",
     'ui.mp.fieldName': 'Marketplace adı',
     'ui.mp.fieldOwner': 'Sahip',
     'ui.mp.ownerPlaceholder': 'Adın',
-    'ui.mp.fieldLoosePackage': 'Klasörsüz promptlar için paket',
     'ui.mp.catalogVersion': 'Katalog sürümü',
     'ui.mp.catalogVersionHint': 'Her paket yayınında bir yama artar; yayın ekranında değiştirebilirsin.',
-    'ui.mp.exportStatuses': 'Dışa aktarılacak durumlar',
     'ui.mp.statusEmpty': 'Durumu boş',
     'ui.mp.fileExists': 'marketplace.json mevcut: {packages}',
     'ui.mp.fileExistsNoPackages': 'marketplace.json mevcut: paket yok',
@@ -1020,7 +1009,6 @@
     'ui.settings.noMarketplaces': 'Bu kökte henüz marketplace yok.',
     'ui.settings.newMarketplace': 'Yeni marketplace…',
     'ui.settings.pillNoManifest': 'manifest yok',
-    'ui.settings.pillNoPpConfig': 'Prompt Havuzu ayarı yok',
     'ui.settings.rootSaved': 'Library kökü kaydedildi',
     'ui.settings.folderMissingTitle': 'Klasör yok',
     'ui.settings.folderMissingText': 'Klasör yok: {path}. Oluşturulsun mu?',
@@ -1031,7 +1019,6 @@
     'ui.events.reloadedFromDisk': 'Dosya diskte değişmişti, yenilendi',
     'ui.delete.pluginText': { other: '"{name}" plugin\'i ve içindeki {count} prompt çöp kutusuna (.pp/trash) taşınır.' },
     'ui.identity.saved': 'Kimlik kaydedildi',
-    'ui.mp.statusRequired': 'En az bir durum seçilmeli',
     'ui.mp.filesWritten': 'Marketplace dosyaları yazıldı: {packages}',
 
     'ui.init.serverDownTitle': 'Sunucuya ulaşılamadı',

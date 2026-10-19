@@ -36,14 +36,14 @@ test('klonlama: bare repodan klonlar, registry geçerli listeler, uyarı yok', r
     assert.equal(r.name, 'kaynak'); assert.deepEqual(r.warnings, []);
     assert.ok(fs.existsSync(path.join(lib, 'kaynak', 'prompts', 'ornek', 'a.md')));
     const found = (await registry.discover(lib, 'kaynak')).items.find((i) => i.name === 'kaynak');
-    assert.equal(found.valid, true); assert.equal(found.hasPpConfig, true);
+    assert.equal(found.valid, true); assert.equal(found.hasManifest, true);
     // ad verilebilir
     const r2 = await factory.cloneRemote(lib, bare, { name: 'Başka Ad' });
     assert.equal(r2.name, 'baska-ad');
   } finally { rmrf(tmp); }
 });
 
-test('klonlama: pp.config.json ve manifest yoksa uyarı; boş depo uyarısı', real, async () => {
+test('klonlama: manifest yoksa uyarı; boş depo uyarısı; pp.config.json ve library/ oluşmaz', real, async () => {
   const tmp = tmpDir();
   try {
     const { g, lib, factory } = setup(tmp);
@@ -53,9 +53,9 @@ test('klonlama: pp.config.json ve manifest yoksa uyarı; boş depo uyarısı', r
     const bare = makeBare(tmp, 'ayarsiz.git');
     await g.addRemote(src, 'origin', bare); await g.push(src, { remote: 'origin', branch: 'main' });
     const r = await factory.cloneRemote(lib, bare, {});
-    assert.deepEqual(r.warnings.map((w) => w.code), ['ppConfigYok', 'manifestYok']);
-    assert.equal(r.warnings[0].message, 'Bu depoda pp.config.json yok. Prompt Havuzu ayarlarını oluştur.');
+    assert.deepEqual(r.warnings.map((w) => w.code), ['manifestYok']);
     assert.equal(fs.existsSync(path.join(lib, 'ayarsiz', 'pp.config.json')), false, 'otomatik dosya yazılmaz');
+    assert.equal(fs.existsSync(path.join(lib, 'ayarsiz', 'library')), false);
     const empty = makeBare(tmp, 'bos.git');
     const r2 = await factory.cloneRemote(lib, empty, {});
     assert.ok(r2.warnings.some((w) => w.code === 'bosDepo'));

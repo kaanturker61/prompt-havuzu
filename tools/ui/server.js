@@ -26,7 +26,7 @@ const { MarketplaceFactory } = require('./lib/marketplace-factory');
 const { SetupService, ROOT_BLOCKERS } = require('./lib/setup-service');
 const templates = require('./lib/templates');
 const paths = require('./lib/paths');
-const ppConfig = require('./lib/pp-config');
+const { MarketplaceSettings } = require('./lib/marketplace-settings');
 const { resolveSafe, checkNewPath } = require('./lib/safe-path');
 const { PromptIndex } = require('./lib/prompt-index');
 const { LibraryCatalog } = require('./lib/library-catalog');
@@ -75,7 +75,8 @@ const configStore = new ConfigStore({ file: ConfigStore.defaultFile(process.env)
 const gitService = new GitService({ forbiddenRoots: [TOOL_DIR] });
 const registry = new MarketplaceRegistry({ git: gitService, toolRoot: TOOL_DIR });
 const factory = new MarketplaceFactory({ git: gitService, templates, atomicWrite: (abs, data) => atomicWrite(abs, data, { mkdir: true }) });
-const setup = new SetupService({ configStore, registry, git: gitService, toolRoot: TOOL_DIR });
+const settings = new MarketplaceSettings({ fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), Rules, FM });
+const setup = new SetupService({ configStore, registry, git: gitService, toolRoot: TOOL_DIR, settings });
 const index = new PromptIndex({ decode, FM, Rules, ignore: IGNORE });
 const versions = new VersionService({
   git: gitService,
@@ -84,12 +85,9 @@ const versions = new VersionService({
   listPrompts: (r, lib) => index.listMd(r, lib)
 });
 const catalog = new LibraryCatalog({
-  registry, index, loadConfigAt: ppConfig.loadConfigAt, versions, Rules, FM, ignore: IGNORE, editable: EDITABLE
+  registry, index, loadConfigAt: (dir) => settings.load(dir), versions, Rules, FM, ignore: IGNORE, editable: EDITABLE
 });
-const packages = new PackageService({
-  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt,
-  assertHealthy: ppConfig.assertHealthy, Rules, FM
-});
+const packages = new PackageService({ fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), settings, Rules, FM });
 const history = new PromptHistory({ git: gitService, FM, Rules });
 const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM });
 const manifests = new ManifestWriter({ root: () => root(), fsp, atomicWrite, FM, Rules });
@@ -106,17 +104,7 @@ const remoteSync = new RemoteSync({ git: gitService, state: stateStore, lock: op
 const publisher = new PackagePublisher({
   git: gitService, catalog: packageCatalog, exporter, manifests, advisor, state: stateStore, lock: opLock, remoteSync, Rules, FM,
   guard: (rels) => guardOutputDirs(rels),
-  config: {
-    // Yayın yazan bir işlemdir: bozuk pp.config.json ya da geçersiz libraryDir hiçbir şey yazılmadan 409 verir.
-    load: () => loadConfigStrict(),
-    // pp.config.json'u yazar; özgün baytlarını geri yazacak adımı ekler.
-    save: async (cfg, undo) => {
-      const file = ppConfig.configFileAt(root());
-      const prev = await fsp.readFile(file).catch(() => null);
-      undo.push(async () => { if (prev === null) await fsp.rm(file, { force: true }); else await fsp.writeFile(file, prev); });
-      await saveConfig(cfg);
-    }
-  },
+  config: { load: () => loadConfigStrict({ manifest: true }) },
   onChanged: afterGitChange
 });
 const histErr = (e) => (e instanceof HistoryError ? httpErr(e.status, e.message, { code: e.code }) : e);
@@ -136,11 +124,10 @@ function httpErr(status, message, data) {
 
 // Etkin marketplace klasörü (çalışma kökü). Kurulum eksikse null.
 function root() { return setup.current.root; }
-// Okuma: bozuk ayar uyarıya düşer, varsayılanla sürer (setup.issues / configIssues). Yazan ve üreten rotalar loadConfigStrict kullanır.
-const loadConfig = () => ppConfig.loadConfigAt(root());
-// Bozuk pp.config.json ya da geçersiz libraryDir varsa PpConfigError (409 ppConfigBozuk / libraryDirGecersiz) fırlatır.
-const loadConfigStrict = async () => (await ppConfig.assertHealthy(root())).cfg;
-const saveConfig = (c) => ppConfig.saveConfigAt(root(), c, atomicWrite);
+// Okuma: bozuk marketplace.json uyarıya düşer, türetilmiş değerlerle sürer (setup.issues / configIssues). Yazan ve üreten rotalar loadConfigStrict kullanır.
+const loadConfig = () => settings.load(root());
+// prompts/ dışarı çıkıyorsa (opts.library) ya da marketplace.json bozuksa (opts.manifest) SettingsError (409) fırlatır.
+const loadConfigStrict = (opts) => settings.loadStrict(root(), opts);
 
 /* --------------------------------------------------------------- dosya araçları */
 
@@ -263,7 +250,7 @@ async function primaryRemote() {
 }
 
 async function marketplaceStatus() {
-  const insp = await ppConfig.inspectConfigAt(root());
+  const insp = await settings.inspect(root());
   const cfg = insp.cfg;
   const plan = await publishPlan(cfg);
   const mkFile = path.join(root(), '.claude-plugin', 'marketplace.json');
@@ -271,7 +258,7 @@ async function marketplaceStatus() {
   const mkName = FM.slug(cfg.marketplace.name);
   const packages = Array.from(new Set(plan.plans.map((p) => p.paket)));
   const listed = (await manifests.listed()).map((l) => l.name);
-  const configIssues = insp.issues.slice(); // ppConfigBozuk / libraryDirGecersiz / exportAlanGecersiz
+  const configIssues = insp.issues.map(({ code, level, message }) => ({ code, level, message }));
   const verErr = Rules.checkVersion(cfg.marketplace.version);
   if (verErr) configIssues.push({ code: 'surumGecersiz', level: 'warn', message: verErr });
   const skipped = plan.skipped.filter((x) => x.level === 'warn');
@@ -528,27 +515,6 @@ route('POST', '/api/marketplaces/clone', async ({ body }) => {
   return { ok: true, marketplace: view.items.find((i) => i.name === made.name) || null, setup: view.setup, warnings: made.warnings };
 }, { open: true });
 
-// pp.config.json yoksa marketplace.json'dan oluşturur. Commit atılmaz.
-route('POST', '/api/marketplaces/pp-config', async ({ body }) => {
-  const st = await requireRootOk();
-  const name = String(body.name || '');
-  const dir = await registry.folderOf(st.libraryRoot, name);
-  if (!dir) throw httpErr(404, tx('mp.err.folderNotFound', { name }));
-  if (paths.samePath(dir, TOOL_DIR)) throw httpErr(400, tx('err.marketplace.toolRepoUnusable'));
-  const file = ppConfig.configFileAt(dir);
-  if (await exists(file)) throw httpErr(409, tx('err.marketplace.ppConfigExists'));
-  let mj = {};
-  try { mj = JSON.parse(await fsp.readFile(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8')); } catch (e) { /* manifest yok */ }
-  const slug = FM.slug(str(mj.name) || name);
-  const owner = str(mj.owner && mj.owner.name) || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })();
-  const description = str(mj.description) || templates.defaultDescription(slug);
-  await atomicWrite(file, templates.ppConfig({ name: slug, description, owner }));
-  setup.invalidate();
-  catalog.invalidate();
-  const view = await marketplacesView();
-  return { ok: true, marketplace: view.items.find((i) => i.name === name) || null, setup: view.setup };
-}, { open: true });
-
 route('POST', '/api/marketplaces/activate', async ({ body }) => {
   await requireRootOk();
   const name = String(body.name || '');
@@ -580,12 +546,12 @@ route('POST', '/api/marketplaces/git-init', async ({ body }) => {
 route('GET', '/api/tree', async () => {
   const st = await requireRootOk();
   // Prompt klasörü yalnızca etkin marketplace için oluşturulur; diğer depolara hiçbir şey yazılmaz.
-  // Ayar bozuksa ya da libraryDir geçersizse (varsayılana düşüldü) diske hiçbir şey açılmaz.
+  // prompts/ marketplace dışına çıkıyorsa ya da bağlantısı kırıksa diske hiçbir şey açılmaz.
   if (st.ok) {
-    const insp = await ppConfig.inspectConfigAt(root());
-    let usable = insp.issues.length === 0;
-    if (usable) { try { safePath(insp.cfg.libraryDir); } catch (e) { usable = false; } } // kırık bağlantı vb.
-    if (usable) await fsp.mkdir(path.join(root(), insp.cfg.libraryDir), { recursive: true });
+    const cfg = await loadConfig();
+    let usable = cfg.libraryOk;
+    if (usable) { try { safePath(cfg.libraryDir); } catch (e) { usable = false; } }
+    if (usable) await fsp.mkdir(path.join(root(), cfg.libraryDir), { recursive: true });
   }
   return catalog.tree(st.libraryRoot, st.activeMarketplace);
 }, { open: true });
@@ -733,12 +699,17 @@ route('POST', '/api/package/rename', async ({ body }) => {
 
 const lastTagOf = (base) => (base.tags[0] ? { name: base.tags[0].name, version: base.tags[0].version, commit: base.tags[0].commit, date: base.tags[0].date } : null);
 
-function packageSummary(cfg, pkg, analysis, pending, listed) {
-  const pk = cfg.packages || {};
+/** Summary: Paket açıklaması; kaynak plugin.json'da yoksa yayınlanmış plugins/<ad> açıklaması. */
+async function packageDescription(cfg, name) {
+  const own = str(((cfg.packages || {})[name] || {}).description);
+  return own || str((await manifests.readPluginJson(name)).description);
+}
+
+function packageSummary(pkg, analysis, pending, listed, description) {
   const changedCount = analysis.prompts.filter((p) => p.change !== 'ayni').length + analysis.removed.length + (analysis.descChanged ? 1 : 0);
   return {
     name: pkg.name,
-    description: str((pk[pkg.name] || {}).description),
+    description,
     version: analysis.base.headVersion || null,
     baseVersion: analysis.base.version || null,
     lastTag: lastTagOf(analysis.base),
@@ -760,7 +731,7 @@ route('GET', '/api/packages', async () => {
   const out = [];
   for (const name of Array.from(built.packages.keys()).sort((a, b) => a.localeCompare(b, 'tr'))) {
     const pkg = built.packages.get(name);
-    out.push(packageSummary(cfg, pkg, await advisor.analyze(root(), pkg, cfg), st.pendingTags, listed));
+    out.push(packageSummary(pkg, await advisor.analyze(root(), pkg, cfg), st.pendingTags, listed, await packageDescription(cfg, name)));
   }
   return { packages: out, export: cfg.export };
 });
@@ -774,7 +745,7 @@ route('GET', '/api/package', async ({ q }) => {
   const listed = new Set((await manifests.listed()).map((l) => l.name));
   const remotes = await gitService.remotes(root()).catch(() => []);
   return {
-    ...packageSummary(cfg, d.pkg, d.analysis, d.pending, listed),
+    ...packageSummary(d.pkg, d.analysis, d.pending, listed, await packageDescription(cfg, name)),
     prompts: d.analysis.prompts,
     removed: d.analysis.removed,
     excluded: d.pkg.excluded.map((x) => ({ source: x.source, baslik: x.baslik, code: x.code, level: x.level, reason: x.reason })),
@@ -809,11 +780,9 @@ route('POST', '/api/prompts/transfer', async ({ body }) => {
   const target = items.find((m) => m.name === toMp);
   if (!target) throw httpErr(404, tx('err.marketplace.notFound', { name: toMp }));
   if (!target.valid) throw httpErr(400, tx('err.transfer.targetInvalid', { name: toMp }));
-  if (!target.hasPpConfig) throw httpErr(400, tx('err.transfer.targetNoPpConfig'), { code: 'hedefPpConfigYok' });
   const toPlugin = String(body.toPlugin || '');
   if (!toPlugin) throw httpErr(400, tx('err.transfer.pluginRequired'));
   if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, tx('err.transfer.invalidPlugin'));
-  await ppConfig.assertHealthy(target.path); // hedefin ayarı da bozuksa yanlış (varsayılan) klasöre yazılmaz
   const tLib = target.cfg.libraryDir;
   const tDir = path.join(target.path, tLib, toPlugin);
   // Hedef plugin klasörü (bağlantı çözülerek) hedef marketplace'in dışına çıkıyorsa yazılmaz.
@@ -965,7 +934,7 @@ route('GET', '/api/history/changes', async ({ q }) => {
   const cfg = await loadConfig();
   try {
     if (group === 'version') {
-      const currentPaths = (await index.listMd(root(), cfg.libraryDir, { includeBig: true })).map((i) => i.path);
+      const currentPaths = cfg.libraryOk ? (await index.listMd(root(), cfg.libraryDir, { includeBig: true })).map((i) => i.path) : [];
       return { mp, ...(await history.versionsByPrompt(root(), { libraryDir: cfg.libraryDir, currentPaths })) };
     }
     const raw = q.get('limit');
@@ -1023,13 +992,14 @@ route('POST', '/api/import/run', async ({ body }) => {
 route('GET', '/api/marketplace/status', async () => marketplaceStatus());
 
 route('POST', '/api/marketplace/init', async ({ body }) => {
-  const cfg = await loadConfigStrict();
+  const cfg = await loadConfigStrict({ library: false, manifest: true });
   const m = body.config || {};
+  const name = FM.slug(m.name || cfg.marketplace.name);
   cfg.marketplace = {
     ...cfg.marketplace,
-    name: FM.slug(m.name || cfg.marketplace.name),
+    name,
     owner: String(m.owner != null ? m.owner : cfg.marketplace.owner).trim(),
-    plugin: FM.slug(m.plugin || cfg.marketplace.plugin),
+    plugin: FM.slug(name),
     description: String(m.description != null ? m.description : cfg.marketplace.description).trim(),
     version: String(m.version != null ? m.version : cfg.marketplace.version).trim()
   };
@@ -1038,15 +1008,6 @@ route('POST', '/api/marketplace/init', async ({ body }) => {
   const nameErr = Rules.checkMarketplaceName(cfg.marketplace.name);
   if (nameErr) throw httpErr(400, nameErr, { field: 'name' });
   guardOutputDirs(); // .claude-plugin/ bağlantı yoluyla kök dışına yazamasın
-  if (m.export !== undefined) {
-    const ex = m.export || {};
-    if (!Array.isArray(ex.durumlar) || !ex.durumlar.length) throw httpErr(400, tx('err.marketplace.statusRequired'), { field: 'export' });
-    cfg.export = {
-      durumlar: ex.durumlar.map((x) => String(x == null ? '' : x).trim()),
-      haricKlasorler: Array.isArray(ex.haricKlasorler) ? ex.haricKlasorler.map((x) => String(x).trim()).filter(Boolean) : cfg.export.haricKlasorler
-    };
-  }
-  await saveConfig(cfg);
   // plugin.json dosyalarına dokunulmaz; yalnızca marketplace.json üst alanları (ve katalog sürümü) yazılır.
   const undo = new UndoStack();
   await manifests.writeMarketplace(cfg, { version: cfg.marketplace.version }, undo);
@@ -1060,7 +1021,7 @@ route('POST', '/api/marketplace/update', async () => publisher.updateAll(root())
 
 // Kullanımdan kalktı: arayüz paket yayını için /api/package/publish kullanır. Geriye uyum için korunur.
 route('POST', '/api/marketplace/publish', async ({ body }) => {
-  const cfg = await loadConfigStrict();
+  const cfg = await loadConfigStrict({ manifest: true });
   guardOutputDirs();
   const plan = await publishPlan(cfg);
   const paths = (Array.isArray(body.paths) ? body.paths : []).map(String);
@@ -1093,7 +1054,7 @@ route('POST', '/api/marketplace/unpublish', async ({ body }) => {
   const { abs, rel } = safePath(body.target);
   if (!/^plugins\//.test(rel)) throw httpErr(400, tx('err.unpublish.onlyPlugins'));
   if (!(await exists(abs))) throw httpErr(404, tx('err.unpublish.fileMissing'));
-  const cfg = await loadConfigStrict(); // bozuk ayarda hiçbir şey taşınmadan 409
+  const cfg = await loadConfigStrict({ manifest: true }); // bozuk marketplace.json'da hiçbir şey taşınmadan 409
   guardOutputDirs();
   const trash = await toTrash(rel, abs);
   if (path.basename(rel) === 'SKILL.md') {

@@ -178,7 +178,7 @@
     'setup.marketplaceBulunamadi': 'The selected marketplace was not found: {name}',
     'setup.marketplaceGitYok': 'Git is not initialized in the selected marketplace: {name}',
     'setup.marketplaceGitYokNeden': 'Git is not initialized in the selected marketplace: {name} ({reason})',
-    'setup.ppConfigYok': 'This marketplace has no pp.config.json. Create the Prompt Havuzu settings.',
+    'setup.ppConfigEski': 'pp.config.json is no longer used and the values in it are ignored. Settings are read from .claude-plugin/marketplace.json and from the plugin.json files in the plugin folders, so you can delete this file.',
 
     'cfg.type.array': 'array',
     'cfg.type.string': 'string',
@@ -189,11 +189,9 @@
     'cfg.reason.unreadable': 'the file could not be read',
     'cfg.reason.unreadableCode': 'the file could not be read ({code})',
     'cfg.reason.notObject': 'the root is not an object, found: {type}',
-    'cfg.outsideMarketplace': 'points outside the marketplace folder (it may be a link)',
-    'cfg.bozuk': 'pp.config.json could not be read ({reason}). Default settings are used temporarily and write operations are disabled. Fix the file (you can open it from the Technical files section), then try again.',
-    'cfg.libraryDirGecersiz': 'The "{field}" value in pp.config.json is invalid ({reason}). "{fallback}" is used temporarily and write operations are disabled. Fix the file (you can open it from the Technical files section), then try again.',
-    'cfg.exportAlanGecersiz': 'The "{field}" value in pp.config.json must be an array (currently: {type}). The default is used for this field: {fallback}. Fix the file (you can open it from the Technical files section).',
-    'cfg.exportGecersiz': 'The "{field}" value in pp.config.json must be an object (currently: {type}). Defaults are used for export: {defaults}. Fix the file (you can open it from the Technical files section).',
+    'cfg.manifestBozuk': '.claude-plugin/marketplace.json could not be read ({reason}). The name falls back to the folder name, the version to 1.0.0, and operations that write marketplace.json are disabled. Fix the file (you can open it from the Technical files section), then try again.',
+    'cfg.promptsDisarida': 'The "{dir}" folder points outside the marketplace folder (it may be a link). Prompts are not read and operations that write prompts are disabled. Remove the link and create a real folder, then try again.',
+    'cfg.pluginBozuk': '{file} could not be read ({reason}). The plugin description cannot be saved. Fix or delete the file, then try again.',
 
     'mp.reason.aracReposu': 'Tool repository',
     'mp.reason.gitDegil': 'Not a git repository',
@@ -209,7 +207,6 @@
     'mp.err.folderNotFound': 'Folder not found: {name}',
     'mp.err.alreadyGit': 'This folder is already a git repository: {name}',
     'mp.err.initFailed': 'Could not initialize git: {reason}. The changes were rolled back.',
-    'mp.warn.ppConfigYok': 'This repository has no pp.config.json. Create the Prompt Havuzu settings.',
     'mp.warn.manifestYok': '.claude-plugin/marketplace.json is missing.',
     'mp.warn.bosDepo': 'The repository is empty (no commits yet).',
 
@@ -351,9 +348,7 @@
 
     'err.marketplace.toolRepoUnusable': 'The tool repository cannot be used as a marketplace',
     'err.marketplace.toolRepoNotSelectable': 'The tool repository cannot be selected as a marketplace',
-    'err.marketplace.ppConfigExists': 'This marketplace already has a pp.config.json',
     'err.marketplace.notFound': 'Marketplace not found: {name}',
-    'err.marketplace.statusRequired': 'Select at least one status',
 
     'srv.marketplace.addNoteLocal': 'Local path: plugins are installed in place and versions are not tracked',
     'srv.marketplace.pinRef': '<branch-or-tag>',
@@ -388,7 +383,6 @@
     'err.transfer.targetRequired': 'Target marketplace is required',
     'err.transfer.sameMarketplace': 'The target marketplace is the same as the source. To move within the same marketplace, use rename',
     'err.transfer.targetInvalid': 'The target marketplace is not a valid git repository: {name}',
-    'err.transfer.targetNoPpConfig': 'The target has no Prompt Havuzu settings (pp.config.json). First create the settings file for the target marketplace.',
     'err.transfer.pluginRequired': 'Target plugin is required',
     'err.transfer.invalidPlugin': 'Invalid plugin name',
     'err.transfer.pluginOutside': 'The target plugin folder points outside the target marketplace',
@@ -801,7 +795,6 @@
 
     'ui.common.openSettings': 'Open Settings',
     'ui.common.initGit': 'Initialize git',
-    'ui.common.createPpConfig': 'Create settings file',
 
     'ui.git.badgePending': { one: '{count} change is waiting to be committed', other: '{count} changes are waiting to be committed' },
     'ui.git.title': 'Git: {name}',
@@ -897,21 +890,17 @@
     'ui.remote.bandUpdate': 'Update',
     'ui.remote.bandCloseLabel': 'Dismiss the notification',
 
-    'ui.clone.ppConfigCreated': 'pp.config.json created. You can make the commit from the Git panel.',
     'ui.clone.doneTitle': 'Cloning complete',
     'ui.clone.added': '<b>{name}</b> was added.',
 
     'ui.mp.title': 'Marketplace: {name}',
     'ui.mp.update': 'Update marketplace',
     'ui.mp.writeFiles': 'Write marketplace files',
-    'ui.mp.noPpConfig': 'This marketplace has no Prompt Havuzu settings (pp.config.json).',
     'ui.mp.fieldName': 'Marketplace name',
     'ui.mp.fieldOwner': 'Owner',
     'ui.mp.ownerPlaceholder': 'Your name',
-    'ui.mp.fieldLoosePackage': 'Package for loose prompts',
     'ui.mp.catalogVersion': 'Catalog version',
     'ui.mp.catalogVersionHint': 'Each package publish bumps it by one patch; you can change it on the publish screen.',
-    'ui.mp.exportStatuses': 'Statuses to export',
     'ui.mp.statusEmpty': 'No status',
     'ui.mp.fileExists': 'marketplace.json exists: {packages}',
     'ui.mp.fileExistsNoPackages': 'marketplace.json exists: no packages',
@@ -1038,7 +1027,6 @@
     'ui.settings.noMarketplaces': 'There are no marketplaces in this root yet.',
     'ui.settings.newMarketplace': 'New marketplace…',
     'ui.settings.pillNoManifest': 'no manifest',
-    'ui.settings.pillNoPpConfig': 'no Prompt Havuzu settings',
     'ui.settings.rootSaved': 'Library root saved',
     'ui.settings.folderMissingTitle': 'Folder does not exist',
     'ui.settings.folderMissingText': 'The folder does not exist: {path}. Create it?',
@@ -1049,7 +1037,6 @@
     'ui.events.reloadedFromDisk': 'The file had changed on disk and was reloaded',
     'ui.delete.pluginText': { one: 'The "{name}" plugin and its {count} prompt are moved to the trash (.pp/trash).', other: 'The "{name}" plugin and its {count} prompts are moved to the trash (.pp/trash).' },
     'ui.identity.saved': 'Identity saved',
-    'ui.mp.statusRequired': 'Select at least one status',
     'ui.mp.filesWritten': 'Marketplace files written: {packages}',
 
     'ui.init.serverDownTitle': 'Cannot reach the server',

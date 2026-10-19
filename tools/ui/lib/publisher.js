@@ -54,7 +54,7 @@ class PackagePublisher {
     this.state = state;
     this.lock = lock;
     this.remoteSync = remoteSync;
-    this.config = config; // { load(), save(cfg, undo) }
+    this.config = config; // { load() }
     this.Rules = Rules;
     this.FM = FM;
     this.guard = guard;
@@ -63,7 +63,7 @@ class PackagePublisher {
 
   _dirtyPaths(cfg, pkgName, pkg) {
     const paths = Array.from(pkg ? pkg.paths : []);
-    return paths.concat([`plugins/${pkgName}`, '.claude-plugin/marketplace.json', 'pp.config.json']);
+    return paths.concat([`plugins/${pkgName}`, '.claude-plugin/marketplace.json']);
   }
 
   // Ham git hataları Türkçe özete çevrilir (gitCode); git stderr'i arındırılmış olarak gitDetail'de kalır (hook çıktısı kaybolmaz).
@@ -146,10 +146,9 @@ class PackagePublisher {
         ({ written, removed } = await this.exporter.apply(plan, undo));
         await this.manifests.writePluginJson(name, cfg, { version: v }, undo);
         const next = { ...cfg, marketplace: { ...cfg.marketplace, version: catV } };
-        await this.config.save(next, undo);
         await this.manifests.writeMarketplace(next, { version: catV }, undo);
 
-        const paths = [`plugins/${name}`, '.claude-plugin/marketplace.json', 'pp.config.json'];
+        const paths = [`plugins/${name}`, '.claude-plugin/marketplace.json'];
         undo.push(() => git.unstage(root, paths)); // commit başarısız olsa da gerekir; idempotent
         const parent = await git.headCommit(root);
         if ((await git.isClean(root, paths)).length) {

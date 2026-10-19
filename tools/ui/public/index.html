@@ -792,7 +792,7 @@ const activeMp = () => { const m = mpByName(activeName()); return m && m.state =
 const pluginsOf = (mp) => { const m = typeof mp === 'string' ? mpByName(mp) : mp; return m ? m.plugins : []; };
 const libDirOf = (mp) => {
   const m = mpByName(mp || activeName());
-  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || 'library';
+  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || Rules.LIBRARY_DIR;
 };
 const pathSep = () => ((S.lib && S.lib.libraryRoot) || (S.info && S.info.libraryRoot) || '').includes('\\') ? '\\' : '/';
 
@@ -1241,7 +1241,7 @@ function showMenu(x, y, items, returnKey) {
   const first = $('.mi', m); if (first) first.focus();
 }
 
-// Marketplace yapısının parçası olan yollar (pp.config.json, plugins/, .claude-plugin/, libraryDir ...) silinemez ya da taşınamaz:
+// Marketplace yapısının parçası olan yollar (plugins/, .claude-plugin/, prompts/ ...) silinemez ya da taşınamaz:
 // sunucu 403 korunanYol döner, menüde de bu işlemler gösterilmez. Kural Rules.isProtectedPath'te (sunucuyla ortak).
 const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-delete-plugin'];
 const isProtectedItem = (it) => !!it.path && Rules.isProtectedPath(it.path, libDirOf(it.mp));
@@ -2803,9 +2803,6 @@ async function gitCommit() {
 /* -------------------------------------------------------------- marketplace */
 const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">${esc(tx('ui.main.copy'))}</button></div>`;
 
-/** Summary: Dışa aktarma durumu seçenekleri: [kanonik durum değeri, görünen etiket anahtarı]. */
-const DURUM_OPTS = [['kararlı', 'ui.static.statusStable'], ['taslak', 'ui.static.statusDraft'], ['arşiv', 'ui.static.statusArchived'], ['', 'ui.mp.statusEmpty']];
-
 function mkListHtml(st) {
   const skipped = st.skipped || [];
   const stPill = (s) => s === 'guncel' ? `<span class="pill ok">${esc(tx('ui.mp.stateCurrent'))}</span>` : s === 'eski' ? `<span class="pill warn">${esc(tx('ui.mp.stateStale'))}</span>` : `<span class="pill warn">${esc(tx('ui.mp.stateMissing'))}</span>`;
@@ -2860,23 +2857,15 @@ function mkStateText(st) {
 
 function marketHtml(st) {
   const c = st.config;
-  const mpn = mpByName(activeName());
-  const noCfg = mpn && mpn.hasPpConfig === false;
   const cfgIssues = (st.configIssues || []).map((x) => `<div class="issue ${esc(x.level)}" role="status">${esc(x.message)}</div>`).join('');
-  const ex = st.export || { durumlar: ['kararlı', ''] };
-  return `${noCfg ? `<div class="issue warn" role="status">${th('ui.mp.noPpConfig')} <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(tx('ui.common.createPpConfig'))}</button></div>` : ''}
-    <h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
+  return `<h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
     <form class="grid2" id="mkForm">
       <label>${esc(tx('ui.mp.fieldName'))}<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.fieldOwner'))}<input name="owner" value="${esc(c.owner)}" placeholder="${esc(tx('ui.mp.ownerPlaceholder'))}" autocomplete="off"></label>
-      <label>${esc(tx('ui.mp.fieldLoosePackage'))}<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.catalogVersion'))}<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
         <div id="mkVerHint" class="hint">${esc(tx('ui.mp.catalogVersionHint'))}</div>
         <div id="mkVerErr" class="issue error" role="alert" hidden></div></label>
       <label class="span2">${esc(tx('ui.fields.description'))}<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
-      <fieldset class="span2" aria-describedby="mkExpErr"><legend>${esc(tx('ui.mp.exportStatuses'))}</legend>
-        <div class="inline">${DURUM_OPTS.map(([v, k]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${esc(tx(k))}</label>`).join(' ')}</div>
-        <div id="mkExpErr" class="issue error" role="alert" hidden></div></fieldset>
       <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">${esc(tx('ui.mp.writeFiles'))}</button>
         <span class="hint" id="mkState">${esc(mkStateText(st))}</span></div>
     </form>
@@ -3268,14 +3257,12 @@ function paintRemoteBand() {
   $('#main').prepend(band);
 }
 
-/* klonlama sonucu ve pp.config.json oluşturma */
-async function mkCreatePpConfig(name) {
+/** Summary: Eski ayar dosyasını onay sonrası çöp kutusuna taşır ve kurulum uyarılarını yeniler. */
+async function removeLegacyConfig() {
+  await deleteItem('pp.config.json');
   try {
-    await api('POST', '/api/marketplaces/pp-config', { name });
     S.info = await get('/api/info');
-    toast(tx('ui.clone.ppConfigCreated'), 'ok', 5000);
-    await refreshAll(); applySetupUi();
-    if (!$('#overlay').hidden && $('#mkForm')) await openMarket();
+    applySetupUi();
     paintWarnBand();
   } catch (e) { fail(e); }
 }
@@ -3284,14 +3271,14 @@ function cloneResultModal(r) {
   openModal({
     title: tx('ui.clone.doneTitle'),
     html: `<p>${th('ui.clone.added', { name: r.marketplace ? r.marketplace.name : '' })}</p>
-      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">${esc(tx('ui.common.createPpConfig'))}</button>` : ''}</div>`).join('')}
+      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)}</div>`).join('')}
       <div class="foot"><button class="btn primary" data-act="close" autofocus>${esc(tx('ui.common.ok'))}</button></div>`
   });
 }
 
 /* ------------------------------------------------- kurulum durumu, marketplace geçişi */
 /** Summary: Kurulum sorunu eylem kodu -> düğme etiketi sözlük anahtarı. */
-const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigOlustur: 'ui.common.createPpConfig' };
+const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigSil: 'ui.menu.deleteToTrash' };
 
 /** Summary: Kurulum sorunu eylem kodunun düğme etiketi; bilinmeyen kod için boş döner. */
 function actionLabel(code) {
@@ -3306,7 +3293,7 @@ function issueButton(i) {
   if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + label + '</button>';
   if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + label + '</button>';
   if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${label}</button>`;
-  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + label + '</button>';
+  if (i.action === 'ppConfigSil') return '<button class="btn sm" data-act="mk-ppconfig-sil">' + label + '</button>';
   return '';
 }
 
@@ -3337,7 +3324,7 @@ function paintWarnBand() {
   if (!warns.length) return;
   const band = document.createElement('div');
   band.id = 'warnBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
-  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigOlustur' ? `<button class="link" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(actionLabel('ppConfigOlustur'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
+  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigSil' ? `<button class="link" data-act="mk-ppconfig-sil">${esc(actionLabel('ppConfigSil'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
   $('#main').prepend(band);
 }
 
@@ -3512,12 +3499,10 @@ function mkRowHtml(i, kind) {
     if (i.active) pills.push(`<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>`);
     if (!i.valid) pills.push(`<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: i.reason || '' }))}</span>`);
     if (!i.hasManifest) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoManifest'))}</span>`);
-    if (i.valid && i.hasPpConfig === false) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoPpConfig'))}</span>`);
   } else pills.push(`<span class="pill ${tool ? '' : 'warn'}">${esc(i.reason)}</span>`);
   const btns = [];
   if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">${esc(tx('ui.menu.activate'))}</button>`);
   // Geçerli olmayan ama .git içeren klasörde sunucu git başlatmayı reddeder; yalnızca git deposu olmayanlarda göster.
-  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">${esc(tx('ui.common.createPpConfig'))}</button>`);
   if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">${esc(tx('ui.common.initGit'))}</button>`);
   return `<div class="mkrow ${tool ? 'dim' : ''}"><div><b>${esc(i.name)}</b> ${pills.join(' ')}<div class="hint mono">${esc(i.path)}</div></div><div></div><div class="mkbtns">${btns.join('')}</div></div>`;
 }
@@ -3799,7 +3784,7 @@ document.addEventListener('click', async (ev) => {
     case 'pk-esitle': await pkAlignField(p); break;
     case 'pk-git': closeModal(); openGit(); break;
     case 'mk-update': await mkUpdate(); break;
-    case 'mk-ppconfig': await mkCreatePpConfig(el.dataset.name || activeName()); break;
+    case 'mk-ppconfig-sil': await removeLegacyConfig(); break;
     case 'remote-add': ev.preventDefault(); await remoteAdd(); break;
     case 'remote-edit': await remoteEdit(el.dataset.name, el.dataset.url); break;
     case 'remote-push': await remotePush(); break;
@@ -3835,13 +3820,7 @@ document.addEventListener('click', async (ev) => {
       verBox.hidden = true; verBox.textContent = ''; verIn.removeAttribute('aria-invalid');
       const verErr = Rules.checkVersion(f.get('version'));
       if (verErr) { showVerErr(verErr); break; }
-      const durumlar = f.getAll('exdurum');
-      showFieldErr('mkExpErr', '');
-      if (!durumlar.length) { showFieldErr('mkExpErr', tx('ui.mp.statusRequired')); break; }
-      const cfgBody = Object.fromEntries(f.entries()); delete cfgBody.exdurum;
-      const oldEx = (S.mk && S.mk.export) || { durumlar: [] };
-      const extra = oldEx.durumlar.filter((d) => !DURUM_OPTS.some(([v]) => fold(v).trim() === fold(d).trim()));
-      cfgBody.export = { durumlar: durumlar.concat(extra), haricKlasorler: oldEx.haricKlasorler };
+      const cfgBody = { name: f.get('name'), owner: f.get('owner'), version: f.get('version'), description: f.get('description') };
       try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast(tx('ui.mp.filesWritten', { packages: r.packages.join(', ') })); await mkReload(); }
       catch (e) { if (e.status === 400 && e.data && e.data.field === 'version') showVerErr(e.message); else fail(e); }
       break;

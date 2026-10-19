@@ -6,7 +6,7 @@ const fsp = fs.promises;
 const path = require('path');
 const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
-const ppConfig = require('../lib/pp-config');
+const { MarketplaceSettings } = require('../lib/marketplace-settings');
 const { GitService } = require('../lib/git-service');
 const { VersionService } = require('../lib/version-service');
 const { PromptIndex } = require('../lib/prompt-index');
@@ -41,12 +41,8 @@ const cmd = (baslik, extra = '') => `---\nbaslik: ${baslik}\ntur: komut\n${extra
 function seed(tmp, name = 'mk') {
   const mk = makeRepo(tmp, name);
   write(mk, '.gitignore', '.pp/\n');
-  write(mk, 'pp.config.json', JSON.stringify({
-    libraryDir: 'prompts',
-    marketplace: { name, owner: 'tester', plugin: name, description: 'Deneme', version: '1.0.0' },
-    packages: { ornek: { description: 'Örnek paket' } }
-  }, null, 2) + '\n');
   write(mk, '.claude-plugin/marketplace.json', JSON.stringify({ name, description: 'Deneme', owner: { name: 'tester' }, plugins: [] }, null, 2) + '\n');
+  write(mk, 'prompts/ornek/.claude-plugin/plugin.json', JSON.stringify({ description: 'Örnek paket' }, null, 2) + '\n');
   write(mk, 'prompts/ornek/a.md', cmd('A', 'komut_adi: aa\n'));
   write(mk, 'prompts/ornek/b.md', cmd('B', 'komut_adi: bb\n'));
   const env = gitEnv(tmp);
@@ -86,19 +82,12 @@ function buildStack(mk, tmp, { git } = {}) {
   const state = new StateStore();
   const changed = [];
   const remoteSync = new RemoteSync({ git: gitService, state, lock, Rules, onChanged: (d) => { changed.push(d); index.clear(d); } });
-  const config = {
-    load: () => ppConfig.loadConfigAt(mk),
-    save: async (cfg, undo) => {
-      const file = ppConfig.configFileAt(mk);
-      const prev = await fsp.readFile(file).catch(() => null);
-      undo.push(async () => { if (prev === null) await fsp.rm(file, { force: true }); else await fsp.writeFile(file, prev); });
-      await ppConfig.saveConfigAt(mk, cfg, atomicWrite);
-    }
-  };
+  const settings = new MarketplaceSettings({ fsp, atomicWrite, Rules, FM });
+  const config = { load: () => settings.loadStrict(mk, { manifest: true }) };
   const publisher = new PackagePublisher({
     git: gitService, catalog, exporter, manifests, advisor, state, lock, remoteSync, config, Rules, FM, onChanged: (d) => { changed.push(d); index.clear(d); }
   });
-  return { mk, git: gitService, index, versions, exporter, manifests, catalog, advisor, lock, state, remoteSync, publisher, config, changed, toTrash };
+  return { mk, git: gitService, index, versions, exporter, manifests, catalog, advisor, lock, state, remoteSync, publisher, settings, config, changed, toTrash };
 }
 
 // Dizin ağacını { rel: içerik } olarak okur (.git ve .pp hariç); bayt bayt karşılaştırma için.

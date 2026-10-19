@@ -165,6 +165,8 @@
   /* ---- plugin (klasör) adı kuralları ---- */
 
   const INBOX_DIR = 'gelen-kutusu';
+  /** Summary: Marketplace içindeki sabit prompt klasörü adı. */
+  const LIBRARY_DIR = 'prompts';
   // server.js IGNORE kümesiyle aynı içerikte olmalı (testle denetlenir).
   const RESERVED_DIRS = ['tools', 'node_modules', '.pp', '.git'];
   const BAD_PREFIXES = ['claude-', 'anthropic-', 'anthropics-', 'cc-plugin-'];
@@ -219,9 +221,9 @@
   }
 
   // Marketplace yapısının parçası olan, silinemez ve taşınamaz yollar (marketplace köküne göreli, büyük-küçük harf duyarsız).
-  const PROTECTED_ROOT = ['pp.config.json', 'plugins', '.claude-plugin', '.gitignore', '.gitattributes'];
+  const PROTECTED_ROOT = ['plugins', '.claude-plugin', '.gitignore', '.gitattributes'];
 
-  /* rel silinemez/taşınamaz mı? Kök düzeyinde tam eşleşme: libraryDir (iç içeyse üst klasörleri de), pp.config.json, plugins,
+  /* rel silinemez/taşınamaz mı? Kök düzeyinde tam eşleşme: libraryDir (iç içeyse üst klasörleri de), plugins,
    * .claude-plugin, .gitignore, .gitattributes; .pp altındaki her yol. İçerikleri (plugins/<paket>, prompts/x.md) korunmaz.
    * Windows'ta sondaki nokta/boşluk yok sayıldığı için bileşenlerden atılır. */
   function isProtectedPath(rel, libraryDir) {
@@ -238,14 +240,14 @@
     return false;
   }
 
-  /* ---- libraryDir (pp.config.json) kuralları ---- */
+  /* ---- libraryDir kuralları ---- */
 
   // libraryDir olarak kullanılamayan ad parçaları (RESERVED_DIRS'ten ayrı: o küme ağaç/arama yürüyüşünün yok saydıklarıdır).
   const LIBRARY_DIR_RESERVED = ['.git', '.pp', '.claude-plugin', 'plugins'];
 
   /* Ham `libraryDir` değerini marketplace köküne göreli kanonik yola çevirir.
    * Dönüş: { value, error }. Geçerliyse error null; değilse value null ve error kısa bir Türkçe neden.
-   * Yalnızca sözdizimi denetlenir; gerçek yol (bağlantı) denetimi lib/pp-config.js'te yapılır. */
+   * Yalnızca sözdizimi denetlenir; gerçek yol (bağlantı) denetimi lib/marketplace-settings.js'te yapılır. */
   function parseLibraryDir(v) {
     const bad = function (why) { return { value: null, error: why }; };
     if (typeof v !== 'string') return bad(tx('rules.libDirMetin'));
@@ -457,7 +459,7 @@
     packageTag: packageTag, parsePackageTag: parsePackageTag, resolvePackage: resolvePackage, durumAllowed: durumAllowed,
     checkMarketplaceName: checkMarketplaceName, checkRemoteName: checkRemoteName, checkRemoteUrl: checkRemoteUrl,
     normalizeRepoUrl: normalizeRepoUrl, repoProvider: repoProvider, marketplaceAddCommand: marketplaceAddCommand,
-    INBOX_DIR: INBOX_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
+    INBOX_DIR: INBOX_DIR, LIBRARY_DIR: LIBRARY_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
     LIBRARY_DIR_RESERVED: LIBRARY_DIR_RESERVED, parseLibraryDir: parseLibraryDir,
     MAX_NAME_BYTES: MAX_NAME_BYTES, isDeviceName: isDeviceName, checkEntryName: checkEntryName, isProtectedPath: isProtectedPath,
     pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,

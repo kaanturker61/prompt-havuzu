@@ -281,9 +281,9 @@ test('dil/sunucu: 403 korunan yol iletisi dile göre; code korunanYol, dosya yer
       tr: 'Bu yol marketplace yapısının parçası; silinemez veya taşınamaz',
       en: 'This path is part of the marketplace structure and cannot be deleted or moved'
     };
-    await expectBothLanguages(call, 'DELETE', '/api/file?path=pp.config.json', undefined, want);
-    await expectBothLanguages(call, 'POST', '/api/rename', { from: 'pp.config.json', to: 'baska.json' }, want);
-    assert.ok(fs.existsSync(path.join(mk, 'pp.config.json')));
+    await expectBothLanguages(call, 'DELETE', '/api/file?path=.gitignore', undefined, want);
+    await expectBothLanguages(call, 'POST', '/api/rename', { from: '.gitignore', to: 'baska.txt' }, want);
+    assert.ok(fs.existsSync(path.join(mk, '.gitignore')));
   });
 });
 
@@ -413,7 +413,7 @@ test('dil/sunucu: bağlam öncesi yanıtlar (host, başlık, origin, JSON gövde
 
 test('dil/sunucu: git\'e gidip dönen rotalarda ileti İngilizce bağlamda kalır (execFile geri çağrısından sonra)', real, async () => {
   await withMarketplace(async ({ call }) => {
-    const show = '/api/git/show?hash=' + '0'.repeat(40) + '&path=pp.config.json';
+    const show = '/api/git/show?hash=' + '0'.repeat(40) + '&path=README.md';
     await expectBothLanguages(call, 'GET', show, undefined, { status: 404, tr: 'Bu sürümde dosya yok', en: 'The file does not exist in this version' });
     await expectBothLanguages(call, 'POST', '/api/package/publish', { name: 'x' }, {
       status: 409, extra: { code: 'commitYok' },
@@ -423,7 +423,7 @@ test('dil/sunucu: git\'e gidip dönen rotalarda ileti İngilizce bağlamda kalı
       status: 400, extra: { gitCode: 'bilinmiyor' }, tr: 'Git işlemi başarısız oldu.', en: 'The git operation failed.'
     });
     assert.equal(typeof en.data.gitDetail, 'string', 'git ayrıntısı olduğu gibi (çevrilmeden) taşınır');
-    await expectBothLanguages(call, 'GET', '/api/git/show?hash=zz&path=pp.config.json', undefined, { status: 400, tr: 'Geçersiz commit', en: 'Invalid commit' });
+    await expectBothLanguages(call, 'GET', '/api/git/show?hash=zz&path=README.md', undefined, { status: 400, tr: 'Geçersiz commit', en: 'Invalid commit' });
     await expectBothLanguages(call, 'GET', '/api/history/changes?limit=0', undefined, { status: 400, tr: 'Geçersiz limit', en: 'Invalid limit' });
     await expectBothLanguages(call, 'GET', '/api/history/changes?group=x', undefined, { status: 400, tr: 'Geçersiz gruplama', en: 'Invalid grouping' });
   });
@@ -431,7 +431,7 @@ test('dil/sunucu: git\'e gidip dönen rotalarda ileti İngilizce bağlamda kalı
 
 test('dil/sunucu: eşzamanlı en ve tr istekleri birbirinin dilini ezmez (git ve dosya sistemi dönüşleri karışık)', real, async () => {
   await withMarketplace(async ({ call }) => {
-    const show = '/api/git/show?hash=' + '0'.repeat(40) + '&path=pp.config.json';
+    const show = '/api/git/show?hash=' + '0'.repeat(40) + '&path=README.md';
     const kinds = [
       { req: ['GET', show], en: 'The file does not exist in this version', tr: 'Bu sürümde dosya yok' },
       { req: ['GET', '/api/file?path=prompts%2Fyok.md'], en: 'File not found', tr: 'Dosya bulunamadı' },
@@ -487,7 +487,7 @@ test('dil/sunucu: içe aktarma başlığı istek diline göre büyütülür (ide
 });
 
 test('dil/sunucu: marketplace durumu notu ve sabitleme ipucu dile göre; marketplace ve git doğrulama hataları dile göre', real, async () => {
-  await withMarketplace(async ({ call, name }) => {
+  await withMarketplace(async ({ call }) => {
     let en = await call('GET', '/api/marketplace/status', undefined, EN);
     assert.equal(en.data.commands.addNote, 'Local path: plugins are installed in place and versions are not tracked');
     let tr = await call('GET', '/api/marketplace/status');
@@ -502,17 +502,11 @@ test('dil/sunucu: marketplace durumu notu ve sabitleme ipucu dile göre; marketp
 
     await expectBothLanguages(call, 'POST', '/api/marketplaces/activate', { name: 'yok' }, { status: 404, tr: 'Marketplace bulunamadı: yok', en: 'Marketplace not found: yok' });
     await expectBothLanguages(call, 'POST', '/api/marketplaces/git-init', { name: 'yok' }, { status: 404, tr: 'Klasör bulunamadı: yok', en: 'Folder not found: yok' });
-    await expectBothLanguages(call, 'POST', '/api/marketplaces/pp-config', { name }, {
-      status: 409, tr: "Bu marketplace'te pp.config.json zaten var", en: 'This marketplace already has a pp.config.json'
-    });
     await expectBothLanguages(call, 'POST', '/api/prompts/transfer', { path: 'prompts/a.txt' }, {
       status: 400, tr: 'Yalnızca prompt dosyaları taşınabilir', en: 'Only prompt files can be moved'
     });
     await expectBothLanguages(call, 'POST', '/api/git/commit', { message: '', paths: [] }, { status: 400, tr: 'Commit mesajı gerekli', en: 'Commit message is required' });
     await expectBothLanguages(call, 'POST', '/api/git/identity', { name: '' }, { status: 400, tr: 'Ad ve e-posta gerekli', en: 'Name and email are required' });
-    await expectBothLanguages(call, 'POST', '/api/marketplace/init', { config: { export: { durumlar: [] } } }, {
-      status: 400, extra: { field: 'export' }, tr: 'En az bir durum seçilmeli', en: 'Select at least one status'
-    });
   });
 });
 
@@ -544,7 +538,7 @@ test('dil/sunucu: server.js ad uzayı anahtarları tr ve en için eşit, yer tut
   const owned = (dictionary) => Object.keys(dictionary).filter((key) => SERVER_PREFIXES.some((prefix) => key.startsWith(prefix))).sort();
   const keys = owned(DICT_TR);
   assert.deepEqual(owned(DICT_EN), keys);
-  assert.ok(keys.length >= 88, 'beklenen anahtar sayısı: ' + keys.length);
+  assert.ok(keys.length >= 85, 'beklenen anahtar sayısı: ' + keys.length);
   for (const key of keys) {
     assert.equal(typeof DICT_TR[key], 'string', 'tr düz metin ' + key);
     assert.equal(typeof DICT_EN[key], 'string', 'en düz metin ' + key);
@@ -557,7 +551,7 @@ test('dil/sunucu: server.js ad uzayı anahtarları tr ve en için eşit, yer tut
 test('dil/sunucu: server.js kaynağı: kullanılan her anahtar iki sözlükte var, ölü anahtar yok, çevrilmemiş Türkçe ileti yok (konsol çıktısı hariç)', () => {
   const code = stripComments(fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8'));
   const used = new Set([...code.matchAll(/['"]((?:err|srv|git|mp)\.[A-Za-z]+(?:\.[A-Za-z]+)*)['"]/g)].map((m) => m[1]));
-  assert.ok(used.size >= 91, 'kullanılan anahtar sayısı: ' + used.size);
+  assert.ok(used.size >= 88, 'kullanılan anahtar sayısı: ' + used.size);
   for (const key of used) {
     assert.ok(key in DICT_TR, 'tr sözlükte var: ' + key);
     assert.ok(key in DICT_EN, 'en sözlükte var: ' + key);

@@ -58,7 +58,7 @@ test('sunucu: kurulum akışı uçtan uca', { skip: !gitAvailable && 'git yok' }
     assert.equal(r.data.setup.issues[0].code, 'kokAyarlanmadi');
     assert.equal(r.data.root, null); assert.equal(r.data.isRepo, false);
     assert.equal(r.data.configPath, srv.cfg);
-    assert.equal(r.data.config.libraryDir, 'library');
+    assert.equal(r.data.config.libraryDir, 'prompts');
 
     r = await srv.call('GET', '/api/tree');
     assert.equal(r.status, 409); assert.equal(r.data.setupRequired, true);
@@ -104,7 +104,8 @@ test('sunucu: kurulum akışı uçtan uca', { skip: !gitAvailable && 'git yok' }
     assert.equal(r.status, 200); assert.equal(r.data.libraryDir, 'prompts');
     r = await srv.call('GET', '/api/git/status');
     assert.equal(r.data.isRepo, true); assert.equal(r.data.branch, 'main'); assert.equal(r.data.hasCommits, false);
-    assert.ok(r.data.files.some((f) => f.path === 'pp.config.json'));
+    assert.ok(!r.data.files.some((f) => f.path === 'pp.config.json'));
+    assert.ok(r.data.files.some((f) => f.path === '.claude-plugin/marketplace.json'));
 
     // dosya + git commit akışı
     r = await srv.call('POST', '/api/file', { path: 'prompts/a.md', raw: '---\nbaslik: A\n---\nmerhaba\n' });
@@ -211,9 +212,9 @@ test('sunucu: sürüm kuralları (D1)', { skip: !gitAvailable && 'git yok' }, as
   const srv = await start(tmp);
   try {
     const mk = await setupMk(srv, tmp);
-    const ppFile = path.join(mk, 'pp.config.json');
+    const ppFile = path.join(mk, '.claude-plugin', 'marketplace.json');
     const writeCfg = (v) => {
-      const c = JSON.parse(fs.readFileSync(ppFile, 'utf8')); c.marketplace.version = v;
+      const c = JSON.parse(fs.readFileSync(ppFile, 'utf8')); c.version = v;
       fs.writeFileSync(ppFile, JSON.stringify(c, null, 2) + '\n');
     };
 
@@ -222,7 +223,7 @@ test('sunucu: sürüm kuralları (D1)', { skip: !gitAvailable && 'git yok' }, as
     let r = await srv.call('GET', '/api/marketplace/status');
     assert.equal(r.data.config.version, '1.0.0');
     assert.deepEqual(r.data.configIssues, []);
-    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).marketplace.version, '');
+    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).version, '');
     assert.equal((await srv.call('GET', '/api/info')).data.config.marketplace.version, '1.0.0');
 
     // b) init doğrulaması
@@ -230,10 +231,11 @@ test('sunucu: sürüm kuralları (D1)', { skip: !gitAvailable && 'git yok' }, as
     assert.equal(r.status, 400); assert.equal(r.data.field, 'version'); assert.equal(r.data.error, 'Sürüm boş olamaz (örnek: 1.0.0)');
     r = await srv.call('POST', '/api/marketplace/init', { config: { version: '1.0' } });
     assert.equal(r.status, 400); assert.equal(r.data.error, 'Sürüm X.Y.Z biçiminde olmalı (örnek: 1.0.0): "1.0"');
-    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).marketplace.version, '', 'hata durumunda yazılmamalı');
+    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).version, '', 'hata durumunda yazılmamalı');
     r = await srv.call('POST', '/api/marketplace/init', { config: { version: '1.2.3' } });
     assert.equal(r.status, 200, JSON.stringify(r.data));
-    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).marketplace.version, '1.2.3');
+    assert.equal(JSON.parse(fs.readFileSync(ppFile, 'utf8')).version, '1.2.3');
+    assert.equal(fs.existsSync(path.join(mk, 'pp.config.json')), false, 'init pp.config.json yazmaz');
 
     // c) eski yayın rotası plugin.json'a sürüm yazmaz (sürüm paket yayınıyla gelir: server.paket.test.js)
     await srv.call('POST', '/api/file', { path: 'prompts/k.md', raw: '---\ntur: komut\n---\ngovde\n' });
@@ -290,7 +292,7 @@ test('sunucu: yayına girmeyen promptlar nedeniyle raporlanır (D2)', { skip: !g
     assert.equal(r.data.publishCheck, null);
     r = await srv.call('GET', '/api/file?path=' + E);
     assert.equal(r.data.publishCheck.code, 'yayinDisi');
-    r = await srv.call('GET', '/api/file?path=pp.config.json');
+    r = await srv.call('GET', '/api/file?path=.claude-plugin/marketplace.json');
     assert.equal(r.data.publishCheck, null);
     r = await srv.call('GET', '/api/tree');
     assert.equal(findNode(r.data.marketplaces, 'mk', B).meta.uyari, 'turYok');
@@ -393,9 +395,9 @@ test('sunucu: kaydet-commit ve sürüm (Aşama 2)', { skip: !gitAvailable && 'gi
     assert.equal(r.status, 400); assert.equal(r.data.field, 'versiyon');
     r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: '' });
     assert.equal(r.status, 400); assert.equal(r.data.field, 'note');
-    r = await srv.call('POST', '/api/version/bump', { path: 'pp.config.json', level: 'yama', note: 'n' });
+    r = await srv.call('POST', '/api/version/bump', { path: '.claude-plugin/marketplace.json', level: 'yama', note: 'n' });
     assert.equal(r.status, 400);
-    r = await srv.call('GET', '/api/version?path=pp.config.json');
+    r = await srv.call('GET', '/api/version?path=.claude-plugin/marketplace.json');
     assert.equal(r.status, 400);
     r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'n', baseMtime: 12345 });
     assert.equal(r.status, 409); assert.equal(r.data.conflict, true);

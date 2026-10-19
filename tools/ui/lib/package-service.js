@@ -1,10 +1,10 @@
 'use strict';
-/* Plugin (prompt klasörü) oluşturma, yeniden adlandırma ve açıklama. Git komutu bilmez.
+/* Plugin (prompt klasörü) oluşturma, yeniden adlandırma ve açıklama (prompts/<klasör>/.claude-plugin/plugin.json). Git komutu bilmez.
  * Her yan etkiden sonra bir geri alma adımı eklenir; hata olursa dosya sistemi eski haline döner. */
 
 const path = require('path');
 const { UndoStack } = require('./undo');
-const { PpConfigError } = require('./pp-config');
+const { SettingsError } = require('./marketplace-settings');
 const I18n = require('../public/i18n.js');
 
 /** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
@@ -23,13 +23,10 @@ class PackageError extends Error {
 }
 
 class PackageService {
-  // assertHealthy(dir): isteğe bağlı ön koşul; bozuk pp.config.json ya da geçersiz libraryDir'de PpConfigError fırlatır.
-  constructor({ fsp, atomicWrite, loadConfigAt, saveConfigAt, assertHealthy, Rules, FM }) {
+  constructor({ fsp, atomicWrite, settings, Rules, FM }) {
     this.fsp = fsp;
     this.atomicWrite = atomicWrite;
-    this.loadConfigAt = loadConfigAt;
-    this.saveConfigAt = saveConfigAt;
-    this.assertHealthy = assertHealthy || (async () => {});
+    this.settings = settings;
     this.Rules = Rules;
     this.FM = FM;
   }
@@ -54,10 +51,6 @@ class PackageService {
     try { return (await this.fsp.stat(abs)).isDirectory(); } catch (e) { return false; }
   }
 
-  async _exists(abs) {
-    try { await this.fsp.access(abs); return true; } catch (e) { return false; }
-  }
-
   // libraryDir altında, slug'ı aynı olan (büyük/küçük harf dahil) bir girdi var mı. except: yok sayılacak ad.
   async _clash(libAbs, slug, except) {
     let ents = [];
@@ -65,30 +58,16 @@ class PackageService {
     return ents.some((e) => e.name !== except && (e.name.toLowerCase() === slug.toLowerCase() || (e.isDirectory() && this.FM.slug(e.name) === slug)));
   }
 
-  async _readBytes(file) {
-    try { return await this.fsp.readFile(file); } catch (e) { return null; }
-  }
-
-  // pp.config.json'u özgün baytlarıyla geri yazacak adımı ekler.
-  async _protectConfig(undo, dir) {
-    const file = path.join(dir, 'pp.config.json');
-    const orig = await this._readBytes(file);
-    undo.push(async () => {
-      if (orig === null) await this.fsp.rm(file, { force: true });
-      else await this.atomicWrite(file, orig);
-    });
-  }
-
-  // Geri alır. PpConfigError (bozuk ayar) 500'e çevrilmez, aynen döner (409 ppConfigBozuk / libraryDirGecersiz).
+  // Geri alır. SettingsError (409) 500'e çevrilmez, aynen döner.
   _fail(e, undo, op = 'create') {
     return undo.rollback().then(
-      () => (e instanceof PpConfigError ? e : new PackageError(500, tx(FAIL_LABEL[op], { reason: e.message }))),
+      () => (e instanceof SettingsError ? e : new PackageError(500, tx(FAIL_LABEL[op], { reason: e.message }))),
       (agg) => new PackageError(500, tx('pkg.err.rollbackFailed', { reason: (agg.errors || [agg]).map((x) => x.message).join('; ') }), { rollbackFailed: true })
     );
   }
 
   async create(dir, libraryDir, { name, description }) {
-    await this.assertHealthy(dir);
+    await this.settings.loadStrict(dir);
     const slug = this._slugOf(name);
     const libAbs = path.join(dir, libraryDir);
     const abs = path.join(libAbs, slug);
@@ -104,16 +83,13 @@ class PackageService {
       // Klasörü yalnızca biz oluşturduk; geri alırken silmek güvenlidir.
       undo.push(() => this.fsp.rm(abs, { recursive: true, force: true }));
       await this.atomicWrite(path.join(abs, '.gitkeep'), '');
-      if (desc) {
-        await this._protectConfig(undo, dir);
-        const cfg = await this.loadConfigAt(dir);
-        cfg.packages[slug] = { ...(cfg.packages[slug] || {}), description: desc };
-        await this.saveConfigAt(dir, cfg, this.atomicWrite);
+      if (desc && !(await this.settings.setPluginDescription(dir, libraryDir, slug, desc))) {
+        throw new PackageError(404, tx('pkg.err.notFound', { name: slug }));
       }
       undo.clear();
       return { name: slug, slug, path: libraryDir + '/' + slug };
     } catch (e) {
-      if (e instanceof PackageError && e.status === 409) { await undo.rollback().catch(() => {}); throw e; }
+      if (e instanceof PackageError) { await undo.rollback().catch(() => {}); throw e; }
       throw await this._fail(e, undo);
     }
   }
@@ -130,7 +106,7 @@ class PackageService {
   }
 
   async rename(dir, libraryDir, { from, to }) {
-    await this.assertHealthy(dir);
+    await this.settings.loadStrict(dir);
     const libAbs = path.join(dir, libraryDir);
     if (!this._safeFolder(from) || !(await this._isDir(path.join(libAbs, from)))) {
       throw new PackageError(404, tx('pkg.err.notFound', { name: from }));
@@ -150,20 +126,8 @@ class PackageService {
         await this.fsp.rename(src, tmp);
         undo.push(() => this.fsp.rename(tmp, src));
         await this.fsp.rename(tmp, dst);
-        undo.clear();
-        undo.push(() => this.fsp.rename(dst, src));
       } else {
         await this.fsp.rename(src, dst);
-        undo.push(() => this.fsp.rename(dst, src));
-      }
-      const cfg = await this.loadConfigAt(dir);
-      const keys = Array.from(new Set([this.FM.slug(from), from])).filter((k) => cfg.packages[k] !== undefined);
-      if (keys.length) {
-        await this._protectConfig(undo, dir);
-        const val = cfg.packages[keys[0]];
-        for (const k of keys) delete cfg.packages[k];
-        cfg.packages[slug] = val;
-        await this.saveConfigAt(dir, cfg, this.atomicWrite);
       }
       undo.clear();
       return { name: slug, slug, path: libraryDir + '/' + slug, moved };
@@ -173,16 +137,15 @@ class PackageService {
   }
 
   async setDescription(dir, libraryDir, { name, description }) {
-    await this.assertHealthy(dir);
+    await this.settings.loadStrict(dir);
     if (!this._safeFolder(name) || !(await this._isDir(path.join(dir, libraryDir, name)))) {
       throw new PackageError(404, tx('pkg.err.notFound', { name }));
     }
     const desc = String(description == null ? '' : description).trim();
     if (!desc) throw new PackageError(400, tx('pkg.err.descriptionEmpty'));
-    const cfg = await this.loadConfigAt(dir);
-    const key = cfg.packages[name] !== undefined ? name : this.FM.slug(name);
-    cfg.packages[key] = { ...(cfg.packages[key] || {}), description: desc };
-    await this.saveConfigAt(dir, cfg, this.atomicWrite); // tek atomik yazma
+    if (!(await this.settings.setPluginDescription(dir, libraryDir, name, desc))) {
+      throw new PackageError(404, tx('pkg.err.notFound', { name }));
+    }
     return { ok: true };
   }
 }

@@ -103,7 +103,7 @@ test('sunucu: plugin rotaları, X-PP-MP koruması, taşıma ve etkin marketplace
     assert.equal((await T({ path: P, toMp: 'yok', toPlugin: 'kod' })).status, 404);
     assert.equal((await T({ path: P, toMp: 'ikinci', toPlugin: 'yokplugin' })).status, 404);
     assert.equal((await T({ path: P, toMp: 'ikinci', toPlugin: '../x' })).status, 400);
-    assert.equal((await T({ path: 'pp.config.json', toMp: 'ikinci', toPlugin: 'yeni-yer' })).status, 400);
+    assert.equal((await T({ path: 'README.md', toMp: 'ikinci', toPlugin: 'yeni-yer' })).status, 400);
     assert.equal((await T({ path: P, toMp: 'ikinci', toPlugin: 'yeni-yer' }, { 'X-PP-MP': 'baska' })).status, 409);
     assert.ok(fs.existsSync(path.join(OP, P)), 'koruma devredeyken kaynak yerinde');
     r = await T({ path: P, toMp: 'ikinci', toPlugin: 'yeni-yer' }, { 'X-PP-MP': 'ornek-promptlar' });

@@ -129,7 +129,7 @@ test('bump: ön kontroller yan etkisizdir', real, async () => {
     await attempt('level', call({ level: 'x' }), (e) => { assert.equal(e.data.field, 'level'); });
     await attempt('kapanmamis', call({ raw: '---\nbaslik: x\n\ngovde\n' }), (e) => { assert.equal(e.data.code, 'onYuzKapanmamis'); });
     await attempt('conflict', call({ baseMtime: 12345 }), (e) => { assert.equal(e.status, 409); assert.equal(e.data.conflict, true); });
-    await attempt('prompt degil', () => s.svc.bump(s.root, LIB, { rel: 'pp.config.json', abs: s.a, level: 'yama', note: 'n' }), (e) => { assert.equal(e.status, 400); });
+    await attempt('prompt degil', () => s.svc.bump(s.root, LIB, { rel: 'README.md', abs: s.a, level: 'yama', note: 'n' }), (e) => { assert.equal(e.status, 400); });
     // adCakisiyor
     fs.writeFileSync(s.a, body().replace(/versiyon: .*/, 'versiyon: 1.1.0'));
     fs.writeFileSync(path.join(s.root, LIB, 'ornek', 'a_.md'), 'x');

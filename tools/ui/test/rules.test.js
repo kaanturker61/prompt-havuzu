@@ -155,12 +155,12 @@ test('parseLibraryDir tablosu', () => {
 
 test('isProtectedPath tablosu (iç içe libraryDir dahil)', () => {
   const p = (rel, lib = 'prompts') => Rules.isProtectedPath(rel, lib);
-  for (const rel of ['prompts', 'Prompts', 'PROMPTS', 'prompts/', '/prompts', 'prompts.', 'prompts ', 'pp.config.json', 'PP.Config.JSON', 'plugins', 'Plugins',
+  for (const rel of ['prompts', 'Prompts', 'PROMPTS', 'prompts/', '/prompts', 'prompts.', 'prompts ', 'plugins', 'Plugins',
     '.claude-plugin', '.CLAUDE-PLUGIN', '.gitignore', '.gitattributes', '.pp', '.pp/trash', '.pp/trash/2026/x.md', '.PP/x', '.pp.', 'prompts\\']) {
     assert.equal(p(rel), true, rel);
   }
   for (const rel of ['prompts/x', 'prompts/x/a.md', 'prompts/gelen-kutusu', 'plugins/mk', 'plugins/mk/commands/a.md', '.claude-plugin/marketplace.json',
-    'README.md', 'x/pp.config.json', 'x/plugins', 'x/.pp', 'prompts2', 'tools', '', '.ppx', '.gitignore/x']) {
+    'README.md', 'pp.config.json', 'PP.Config.JSON', 'x/pp.config.json', 'x/plugins', 'x/.pp', 'prompts2', 'tools', '', '.ppx', '.gitignore/x']) {
     assert.equal(p(rel), false, rel);
   }
   // iç içe libraryDir: üst klasörler de korunur
@@ -170,7 +170,8 @@ test('isProtectedPath tablosu (iç içe libraryDir dahil)', () => {
   assert.equal(p('prompts', './prompts/'), true);
   assert.equal(Rules.isProtectedPath('prompts', undefined), false);
   assert.equal(p('prompts', '../x'), false);
-  assert.equal(Rules.isProtectedPath('pp.config.json', undefined), true);
+  assert.equal(Rules.isProtectedPath('pp.config.json', undefined), false);
+  assert.equal(Rules.isProtectedPath('plugins', undefined), true);
   assert.equal(p('library', 'library'), true);
 });
 
