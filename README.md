@@ -69,7 +69,8 @@ On first run the app shows a setup screen (**Kuruluma devam et**, continue setup
 - Special nodes: **Klasörsüz promptlar** (loose prompts directly in `prompts/`), **Gelen kutusu** (inbox, `prompts/gelen-kutusu`, never published) and **Teknik dosyalar** (technical files such as `plugins/`, `.claude-plugin/` and `README.md`).
 - Plugin names cannot start with reserved prefixes such as `claude-` or `anthropic-`.
 - Folders without a git repository are listed separately and can be initialized with **Git'i başlat** (Initialize git).
-- Moving a prompt to another marketplace leaves its history and tags in the source repository; the target sees a new, uncommitted file.
+- **Drag and drop:** drag a prompt onto a plugin, a marketplace (its loose prompts), **Gelen kutusu** or **Klasörsüz promptlar**, in the same or another marketplace; drag a plugin onto another marketplace. A hint under the tree tells you where the item will go or why it cannot be dropped there, and a confirmation lists the consequences before anything moves. The same moves are available from the context menu (**Taşı…**, and **Başka marketplace'e taşı…** for plugins), with the keyboard (Shift+F10) or on touch screens.
+- Moving never commits. Only the `paket` field of a prompt is adjusted to its new plugin; everything else stays byte for byte the same. A plugin's description moves with its folder. Moving to another marketplace puts the source in that marketplace's trash (`.pp/trash`) and leaves its history, version tags and any published output in the source repository; the target sees new, uncommitted files.
 
 </details>
 

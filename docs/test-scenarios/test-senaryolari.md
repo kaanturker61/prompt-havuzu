@@ -353,3 +353,168 @@ Adımlar:
 1. Yayında olan bir komut promptunu "Prompt (yayınlanmaz)" yap, kaydet, commit'le.
 2. Paket sayfasını aç.
 Beklenen: Çıktı dosyası "kaldırılacak" olarak görünür ve büyük sürüm önerilir.
+
+Senaryo 54-79 için ortak hazırlık: `PP_CONFIG` ile geçici bir library kökünde iki marketplace oluştur: `alfa` (etkin) ve `beta`. `alfa`'da `kod` ve `yazi` plugin'leri, `beta`'da `notlar` plugin'i olsun. Bazı promptlar `paket` alanı içersin, bazıları içermesin. Her senaryodan sonra Git panelinden ve dosya gezgininden diske bak.
+
+54. Aynı marketplace'te prompt başka plugin'e sürüklenir
+Adımlar:
+1. `alfa/kod` altındaki `paket: kod` içeren `inceleme.md` satırını tut ve `yazi` plugin satırının üzerine getir.
+2. Vurguyu ve listenin altındaki ipucunu gözle, sonra bırak.
+3. Onay penceresindeki maddeleri oku ve "Taşı"ya bas.
+4. Git panelini aç ve dosyayı düzenleyicide aç.
+Beklenen: Sürüklerken `yazi` satırı mürekkep çerçeveli ve sert gölgeli vurgulanır; ipucu "Bırak: alfa › yazi" der. Onayda paket alanı, tag, çıktı ve commit maddeleri vardır. Dosya `prompts/yazi/inceleme.md` olur, ağaçta seçili ve görünürdür. Commit atılmamıştır. `paket: yazi` yazılmıştır, "p" uyarısı yoktur; diğer alanlar ve gövde aynıdır.
+
+55. Açık ve kaydedilmemiş prompt taşınırken değişiklik sorulur
+Adımlar:
+1. `alfa/kod/a.md` dosyasını aç, gövdeyi değiştir, kaydetme.
+2. Aynı satırı `yazi` plugin'ine sürükle-bırak ve onayla; çıkan soruda "Vazgeç"i seç.
+3. Aynı işlemi tekrarla, bu kez "Kaydet ve devam et"i seç.
+Beklenen: "Vazgeç"te dosya taşınmaz ve düzenleme korunur. "Kaydet ve devam et"te önce kaydedilir, sonra taşınır; düzenleyici yeni yoldan yeniden açılır, Kaydet düğmesi pasiftir, sekme başlığında "•" yoktur, `pp.alfa.last` yeni yolu gösterir.
+
+56. Prompt marketplace satırına bırakılınca klasörsüze gider
+Adımlar:
+1. `paket: kod` içeren `alfa/kod/b.md` satırını `alfa` marketplace satırına bırak.
+2. Onay maddelerini oku, onayla, dosyayı aç.
+Beklenen: Dosya `prompts/b.md` olur. "Klasörsüz promptlar" düğümü görünür ve açıktır, satır seçilidir. `paket` alanı kaldırılmıştır, diğer alanlar değişmemiştir. Onayda "paket alanı yoksa yayında `alfa` plugin'ine gider" maddesi vardır.
+
+57. Klasörsüz prompt plugin'e bırakılınca paket alanı eşitlenir
+Adımlar:
+1. `paket: eski-ad` içeren `alfa/prompts/serbest.md` satırını `kod` plugin'ine bırak ve onayla.
+Beklenen: Dosya `prompts/kod/serbest.md` olur ve `paket: kod` içerir. Bildirimde "paket alanı 'kod' olarak güncellendi" yazar. Ağaçta "p" uyarısı yoktur.
+
+58. Prompt gelen kutusuna taşınır
+Adımlar:
+1. `alfa/kod/c.md` satırını `alfa` altındaki "Gelen kutusu" düğümüne bırak.
+2. Onay maddelerini oku ve onayla.
+Beklenen: Dosya `prompts/gelen-kutusu/c.md` olur. Onayda "Gelen kutusundaki promptlar yayınlanmaz." maddesi vardır. `paket` alanı değişmez.
+
+59. Prompt başka marketplace'in plugin'ine taşınır
+Adımlar:
+1. `alfa` etkinken `alfa/kod/d.md` satırını `beta` altındaki `notlar` plugin'ine bırak ve onayla.
+2. Önce `alfa`'nın, sonra `beta`'nın Git panelini aç.
+Beklenen: Onay penceresi sonuç maddeleriyle dolu açılır, "Taşı"dan sonra kapanır. `beta/prompts/notlar/d.md` commit edilmemiş yeni dosya olarak oluşur. Kaynak `alfa/.pp/trash/<zaman>/prompts/kod/d.md` altındadır. `alfa` etkin kalır. `beta` düğümü açılır ve taşınan satır odaktadır. Bildirim iki depoda da commit bekleyen değişiklik olduğunu söyler.
+
+60. Kapalı başka marketplace'in satırına bırakınca köke gider
+Adımlar:
+1. `beta` düğümünü kapat.
+2. `alfa/kod/e.md` satırını `beta` satırına bırak ve onayla.
+Beklenen: Dosya `beta/prompts/e.md` olur. `beta` açılır, "Klasörsüz promptlar" düğümü görünür ve taşınan satır odaktadır.
+
+61. Etkin olmayan marketplace'ten sürükleme önce onay ister, sonra etkinleştirir
+Adımlar:
+1. `alfa` etkinken bir prompt açıp kaydetmeden değiştir.
+2. `beta/notlar/n.md` satırını `alfa` altındaki `kod` plugin'ine bırak; onayda "Vazgeç"e bas.
+3. Aynı işlemi tekrarla; onayda "Taşı"ya, çıkan kaydedilmemiş değişiklik sorusunda "Kaydet ve devam et"e bas.
+Beklenen: İlk denemede etkin marketplace ve açık dosya değişmez. Onayda "Önce 'beta' etkin marketplace yapılır; açık düzenleyici kapanır." maddesi vardır. İkinci denemede önce dosya kaydedilir, `beta` etkin olur, `alfa/prompts/kod/n.md` oluşur ve kaynak `beta/.pp/trash` altına gider.
+
+62. Hedefte aynı adlı dosya varken prompt taşıma
+Adımlar:
+1. `yazi` altında `f.md` varken `kod/f.md` satırını `yazi` plugin'ine bırak ve onayla.
+Beklenen: Dosya `prompts/yazi/f-2.md` olarak taşınır. Bildirim yeni adı söyler. Var olan `yazi/f.md` değişmez.
+
+63. Geçersiz hedefler ipucu gösterir ve bırakmayı kabul etmez
+Adımlar:
+1. Bir promptu sırayla şunların üzerine getir: kendi plugin'i, "Teknik dosyalar" düğümü, teknik bir dosya, plugin altındaki bir alt klasör, "Git deposu olmayan klasörler" öğesi, geçersiz bir marketplace satırı.
+2. Bunlardan birinin üzerinde bırak.
+Beklenen: Her satır kırmızı çizgili çerçeveyle gösterilir, imleç "bırakılamaz" olur, ipucu nedeni yazar ("Zaten burada.", "Teknik dosyalara taşınamaz.", "Alt klasöre bırakılamaz; plugin'in üzerine bırak.", "Bu konum kullanılamıyor."). Bırakınca onay penceresi açılmaz, hiçbir istek gitmez.
+
+64. Plugin başka marketplace'e taşınır
+Adımlar:
+1. `alfa/kod` plugin'inin açıklamasını doldur. Plugin'de 3 prompt ve `.gitkeep` olsun, düğüm açık ve son seçilen plugin olsun.
+2. `kod` satırını `beta` satırına bırak; onay maddelerini oku ve onayla.
+3. Tarayıcı geliştirici araçlarında `pp.alfa.expanded`, `pp.alfa.sonPlugin` ve `pp.beta.expanded` değerlerine bak.
+Beklenen: Onayda prompt sayısı, paket tag'lerinin "alfa"da kaldığı, `plugins/kod` çıktısının "Marketplace'i güncelle"ye kadar kaldığı ve açıklamanın taşındığı yazar. `beta/prompts/kod/` tüm dosyalarla (`.claude-plugin/plugin.json` dahil) oluşur, `alfa/prompts/kod` `.pp/trash` altına gider. `beta` altında `kod` açık ve seçilidir, açıklaması görünür. `pp.alfa.expanded` içinde `prompts/kod` yoktur, `pp.alfa.sonPlugin` artık `kod` değildir, `pp.beta.expanded` içinde `prompts/kod` vardır. Promptların frontmatter'ı değişmemiştir. Commit atılmamıştır.
+
+65. Plugin aynı marketplace içinde bırakılamaz
+Adımlar:
+1. `alfa/kod` satırını sırayla `alfa` satırının, `yazi` plugin'inin ve "Klasörsüz promptlar" düğümünün üzerine getir; bırak.
+Beklenen: Her hedefte ipucu "Plugin'ler yalnızca başka bir marketplace'e taşınabilir. Yeniden adlandırmak için F2'ye bas." der. Bırakma etkisizdir.
+
+66. Hedefte aynı adlı plugin varken plugin taşınamaz
+Adımlar:
+1. `beta`'da `kod` adlı bir plugin oluştur.
+2. `alfa/kod` satırını `beta` satırına sürükle.
+3. Bağlam menüsünden "Başka marketplace'e taşı…" penceresini aç.
+Beklenen: Sürüklerken ipucu "Hedefte aynı adlı bir plugin var: kod" der ve bırakılamaz. Pencerede `beta` seçeneği pasiftir ve nedeni yazar. Diskte hiçbir şey değişmez.
+
+67. Açık dosya taşınan plugin'in içindeyken plugin taşıma
+Adımlar:
+1. `alfa/kod/a.md` dosyasını aç ve kaydetmeden değiştir.
+2. `kod` plugin'ini `beta` satırına bırak ve onayla; çıkan soruda "Değişiklikleri at"ı seç.
+Beklenen: Taşıma diskteki sürümle yapılır. Düzenleyici kapanır ve ön sayfa gösterilir. `pp.alfa.last` boşalır. Sekme başlığında "•" kalmaz.
+
+68. Klavyeyle prompt taşıma
+Adımlar:
+1. Ağaçta ok tuşlarıyla bir prompt satırına gel, Shift+F10 ile menüyü aç, "Taşı…" seç.
+2. Marketplace listesinden `beta`'yı seç; Hedef listesinde "Klasörsüz promptlar" ve "Gelen kutusu" seçeneklerinin de bulunduğunu doğrula.
+3. "Gelen kutusu"nu seç ve Enter'a bas.
+Beklenen: Penceredeki sonuç maddeleri sürükle-bırak onayındakilerle aynıdır ve hedef değiştikçe güncellenir. Taşıma yapılır, pencere kapanır, odak taşınan satıra gelir. Hata olursa bildirim olarak görünür, kaybolmaz.
+
+69. Klavyeyle plugin taşıma
+Adımlar:
+1. Bir plugin satırında Shift+F10 ile menüyü aç, "Başka marketplace'e taşı…" seç.
+2. Hedef seç ve "Taşı"ya bas.
+3. Yalnızca tek marketplace olan bir library'de aynı menü öğesini dene.
+Beklenen: Taşıma sürükle-bırak ile aynı sonucu verir. Tek marketplace'te pencere "Taşınabilecek başka marketplace yok." der ve taşıma düğmesi yoktur.
+
+70. Sürükleme Esc ile iptal edilir
+Adımlar:
+1. Bir promptu sürüklemeye başla, geçerli bir hedefin üzerindeyken Esc'e bas.
+Beklenen: Vurgu, ipucu ve kaynak satırın soluk görünümü kaybolur. Onay penceresi açılmaz, istek gitmez.
+
+71. Başka sekmede etkin marketplace değişince taşıma reddedilir
+Adımlar:
+1. Uygulamayı iki sekmede aç. İkinci sekmede `beta`'yı etkinleştir.
+2. Birinci sekmede (hâlâ `alfa` etkin görünürken) `alfa` içindeki bir promptu `yazi` plugin'ine taşı ve onayla.
+Beklenen: Sunucu 409 `etkinDegil` döner ve dosya taşınmaz. Birinci sekme etkin marketplace'i eşler ve bilgilendirir.
+
+72. Taşıma hatasında her şey geri alınır
+Adımlar:
+1. Sunucu açıkken `alfa/.pp/trash` klasörünü sil, aynı adla boş bir dosya oluştur.
+2. `alfa/kod/g.md` satırını `beta/notlar` plugin'ine taşımayı dene.
+3. `alfa/yazi` plugin'ini `beta`'ya taşımayı dene.
+4. `.pp/trash` dosyasını sil.
+Beklenen: İki işlem de "… geri alındı" türünde bir hata verir. `beta`'da yeni dosya ya da klasör kalmaz; `alfa`'daki kaynaklar yerinde ve değişmemiştir.
+
+73. Yayınlanmış prompt taşınınca eski çıktı kaynaksız kalır
+Adımlar:
+1. `tur: komut` ve `durum: kararlı` olan `alfa/kod/k.md`'yi commit et ve `kod` paketini yayınla.
+2. `k.md`'yi `yazi`'ya taşı ve commit et.
+3. Marketplace panelini aç, "Marketplace'i güncelle"yi çalıştır.
+Beklenen: Panelde `plugins/kod/commands/k.md` "Kaynağı kalmayan dosyalar" altında görünür; güncellemeden sonra çöpe taşınır. `yazi` paket sayfasında `k` "yeni" olarak listelenir.
+
+74. Taşıma sonrası +1 yeni yolda tag atar
+Adımlar:
+1. `versiyon: 1.0.0` ve `prompt/kod/s/v1.0.0` tag'i olan `alfa/kod/s.md`'yi `yazi`'ya taşı ve commit et.
+2. Dosyayı açıp +1 (yama) yap.
+Beklenen: Eski tag silinmez. +1 `prompt/yazi/s/v1.0.1` tag'ini atar ve dosyada `versiyon: 1.0.1` yazar.
+
+75. İngilizce arayüzde sürükle-bırak metinleri
+Adımlar:
+1. Üst çubuktan EN'i seç.
+2. 54, 63 ve 64. senaryoları hızlıca tekrarla.
+Beklenen: İpuçları, onay maddeleri, menü öğesi ve bildirimler İngilizcedir. Diske yazılan `paket` anahtarı ve değeri dilden bağımsızdır.
+
+76. Hareket azaltma ve koyu tema
+Adımlar:
+1. İşletim sisteminde "animasyonları azalt" seçeneğini aç, koyu temaya geç.
+2. Bir promptu geçerli ve geçersiz hedeflerin üzerinde gezdir.
+Beklenen: Vurgu ve ipucu görünür, yaylı geçiş ya da zıplama yoktur. Koyu temada metin ve çerçeveler okunur.
+
+77. Arama ya da filtre etkinken sürükleme yapılamaz
+Adımlar:
+1. Arama kutusuna bir sözcük yaz.
+2. Bir sonuç satırını sürüklemeyi dene.
+Beklenen: Sonuç satırları sürüklenmez. Filtre temizlenince ağaçta sürükleme yeniden çalışır.
+
+78. Dokunmatik ekranda menüyle taşıma (doğrulanmadı)
+Adımlar:
+1. Dokunmatik ekranlı bir Windows cihazında Edge ile uygulamayı aç.
+2. Bir prompt satırına dokun, ardından "⋯" düğmesine dokun ve "Taşı…"yı seç.
+3. Bir satıra uzun basıp sürüklemeyi dene.
+Beklenen: Menü yolu sorunsuz çalışır. Uzun basarak sürüklemenin çalışıp çalışmadığı tarayıcıya bağlıdır; çalışmazsa hata oluşmaz, yalnızca sürükleme başlamaz.
+
+79. Dışarıdan dosya ağaca bırakılınca uygulamadan çıkılmaz
+Adımlar:
+1. Dosya gezgininden bir `.txt` dosyasını ağacın üzerine sürükleyip bırak.
+Beklenen: İmleç "bırakılamaz" olur. Tarayıcı dosyayı açmaz, uygulama sayfası yerinde kalır.
