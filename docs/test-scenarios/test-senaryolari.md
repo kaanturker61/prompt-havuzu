@@ -196,7 +196,7 @@ Beklenen: Ağaç `prompts/` içeriğini gösterir, `library/` oluşmaz. Taslak p
 29. pp.config.json teknik dosya olarak silinebilir
 Adımlar:
 1. Teknik dosyalar altında `pp.config.json`'a sağ tıkla.
-Beklenen: Menüde "Yeniden adlandır" ve "Sil (çöp kutusuna taşı)" görünür. `plugins/`, `.claude-plugin/`, `.gitignore` için bu menü öğeleri hâlâ gizlidir.
+Beklenen: Menüde "Yeniden adlandır veya taşı" ve "Sil (çöp kutusuna taşı)" görünür. Kökteki `plugins/`, `.claude-plugin/` klasörleri ve `.gitignore` için bu menü öğeleri hâlâ gizlidir (koruma yalnızca kök düzeyindedir).
 
 30. Klonlanan depo ayar dosyası istemez
 Adımlar:
