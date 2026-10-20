@@ -992,7 +992,7 @@ function rowHtml(it, focusKey) {
     return `<div class="empty note" style="--d:${d}" data-note>${esc(it.text)}${it.action ? ` <button class="btn sm" data-act="${it.action}" data-mp="${esc(it.mp)}">${esc(it.actionLabel)}</button>` : ''}</div>`;
   }
   const cur = S.cur && isFileKind(it.kind) && S.cur.mp === it.mp && S.cur.path === it.path;
-  const selected = cur || (S.sel && S.sel.key === it.key);
+  const selected = S.sel && S.modelMap && S.modelMap.has(S.sel.key) ? S.sel.key === it.key : cur;
   const isEtkin = it.kind === 'mp' && it.node.active;
   let icon = ICON[it.kind] || ''; let label = ''; let pills = ''; let sr = ''; let acts = ''; let cls = ''; let hue = null;
   const btn = (act, txt, aria) => `<button class="${act === 'plus' ? 'plus' : 'more'}" data-act="${act}" data-key="${esc(it.key)}" tabindex="-1" aria-label="${esc(aria)}">${txt}</button>`;
@@ -1304,8 +1304,7 @@ function menuItemsFor(it) {
       break;
     case 'file': {
       if (/\.(md|markdown)$/i.test(it.path)) {
-        const loose = Rules.classifyPromptPath(it.path, libDirOf(it.mp)).kind === 'klasorsuz';
-        items.push(mk(loose ? tx('ui.menu.moveToPlugin') : tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
+        items.push(mk(tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
       } else items.push(mk(tx('ui.menu.renameOrMove'), 'rename'));
       items.push(mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
@@ -1467,6 +1466,13 @@ function pubPill() {
   return `<span class="pill warn">${esc(tx('ui.edit.pillNotYetPublished'))}</span>`;
 }
 
+/** Summary: "Claude Code'da çağır" kullanım satırı (HTML); sunucu yayın bilgisi yoksa ya da seçili tür yayınlanmayan bir değerdeyse (prompt, boş) boş döner. */
+function pubUsageHtml() {
+  const c = S.cur; const p = c && c.publish;
+  if (!p || !normTur(FM.meta(c.parsed).tur)) return '';
+  return p.tur === 'ajan' ? th('ui.edit.usageAgent', { name: p.ad }) : th('ui.edit.usageCommand', { paket: p.paket, name: p.ad });
+}
+
 function editPaneHtml() {
   const c = S.cur; const m = FM.meta(c.parsed);
   const tur = normTur(m.tur);
@@ -1481,9 +1487,6 @@ function editPaneHtml() {
   const dOpt = [['taslak', tx('ui.static.statusDraft')], ['kararlı', tx('ui.static.statusStable')], ['arşiv', tx('ui.static.statusArchived')]];
   const known = dOpt.some((d) => fold(d[0]) === durumVal);
   const mk = S.info.config.marketplace;
-  const usage = c.publish ? (c.publish.tur === 'ajan'
-    ? th('ui.edit.usageAgent', { name: c.publish.ad })
-    : th('ui.edit.usageCommand', { paket: c.publish.paket, name: c.publish.ad })) : '';
   // Aynı anahtar birden fazla yazılmışsa sonuncusu geçerlidir; yayını engellemez, yalnızca uyarır.
   const dup = FM.duplicateKeys(c.parsed);
   const dupWarn = dup.length ? `<div id="fmWarn" class="issue warn" role="status">${esc(Rules.MSG.anahtarTekrar(dup))}</div>` : '';
@@ -1516,7 +1519,7 @@ function editPaneHtml() {
       </select>
     </div>
     <div id="pubFields">${pubFieldsHtml()}</div>
-    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${usage}</span></div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${pubUsageHtml()}</span></div>
   </details>
   <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="${esc(tx('ui.edit.bodyLabel'))}" placeholder="${esc(tx('ui.edit.bodyPlaceholder', { example: '{{' + tx('ui.edit.exampleVar') + '}}' }))}">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
@@ -1580,9 +1583,16 @@ function pubFieldsHtml(forceOpen) {
     ${notes ? `<div class="ccnotes">${notes}</div>` : ''}`;
 }
 
-/** Summary: Açık dosyanın türündeki Claude Code alanı tanımı; yoksa null döner. */
+/** Summary: Claude Code alanının tanımı (önce açık dosyanın türünün alanı, yoksa spec'teki kendi tanımı, böylece değer o anki türe bağlı yorumlanmaz); alan değilse null döner. */
 function ccFieldOf(key) {
-  return Rules.ccFieldsFor(Rules.normTur(FM.meta(S.cur.parsed).tur)).find((f) => f.key === key) || null;
+  return Rules.ccField(key, Rules.normTur(FM.meta(S.cur.parsed).tur)) || null;
+}
+
+/** Summary: Odaktaki yayın alanı girdisinin değerini, tür değişip bölme yeniden çizilmeden önce açık dosyaya yazar. */
+function flushFocusedField() {
+  const ae = document.activeElement;
+  if (!S.cur || !ae || !ae.dataset || !ae.dataset.f || ae.dataset.f === 'tur' || !ae.closest('#pubFields')) return;
+  setField(ae.dataset.f, ae.value);
 }
 
 /** Summary: Girdi metnini alanın yazılacak değerine çevirir (bool -> boolean, liste -> satır dizisi, diğerleri kırpılmış metin). */
@@ -1603,6 +1613,7 @@ function paintPubFields() {
   box.innerHTML = pubFieldsHtml(!!(more && more.open));
   sizeCcLists(box);
   paintPaketHint();
+  const u = $('#pubUsage'); if (u) u.innerHTML = pubUsageHtml();
 }
 
 function bodyInfoText() {
@@ -2033,6 +2044,7 @@ async function save(force) {
       if (chk && (chk.code === 'turYok' || chk.code === 'turGecersiz')) toast(chk.reason, 'warn', 7000);
     }
     updateDirty();
+    if (!c.isPrompt) refreshSetupState().catch(() => { /* sessiz */ });
     const aw = afterWrite();
     if (needId) { await aw; if (await askIdentity()) await commitOnly(); }
     return true;
@@ -2700,10 +2712,20 @@ function moveTouchesOpenFile(plan) {
   return plan.op === 'plugin' ? c.path.startsWith(plan.path + '/') : c.path === plan.path;
 }
 
-/** Summary: Taşıma yanıtını arayüze işler: açık dosya, açık düğümler, son plugin kaydı, seçim ve bildirimler. */
+/** Summary: Kaynak marketplace'in "son açılan" kaydı taşınan yolu gösteriyorsa yeni yola (aynı marketplace) günceller, başka marketplace'e gidiyorsa siler. */
+function moveLastOpened(plan, r) {
+  const key = lsKey('last', plan.fromMp);
+  const last = ls.get(key, null);
+  if (typeof last !== 'string') return;
+  const hit = plan.op === 'plugin' ? last.startsWith(plan.path + '/') : last === plan.path;
+  if (hit) ls.set(key, plan.same ? r.to.path : null);
+}
+
+/** Summary: Taşıma yanıtını arayüze işler: açık dosya, açık düğümler, son açılan ve son plugin kaydı, seçim ve bildirimler. */
 async function applyMoveResult(plan, r) {
   const { fromMp, toMp } = plan;
   const touched = moveTouchesOpenFile(plan);
+  if (!touched) moveLastOpened(plan, r);
   const tab = touched ? S.cur.tab : undefined;
   let reopen = false; let key;
   if (plan.op === 'plugin') {
@@ -2729,7 +2751,11 @@ async function applyMoveResult(plan, r) {
   focusKey(key);
   if (plan.op === 'plugin') { toast(tx('ui.move.donePlugin', { name: plan.name, mp: toMp, count: r.moved }), 'ok', 6000); return; }
   const to = dropLabel(plan);
-  toast(r.renamed ? tx('ui.move.doneRenamed', { to, name: base(r.to.path) }) : tx('ui.move.done', { to }), 'ok', plan.same ? 4500 : 6000);
+  const name = base(r.to.path);
+  const msg = plan.same
+    ? (r.renamed ? tx('ui.move.doneRenamed', { to, name }) : tx('ui.move.done', { to }))
+    : (r.renamed ? tx('ui.move.doneRenamedCross', { to, name }) : tx('ui.move.doneCross', { to }));
+  toast(msg, 'ok', plan.same ? 4500 : 6000);
   if (r.paket && r.paket.action === 'set') toast(tx('ui.move.paketSet', { value: r.paket.value }), 'ok', 5000);
   else if (r.paket && r.paket.action === 'remove') toast(tx('ui.move.paketRemoved'), 'ok', 5000);
 }
@@ -2747,6 +2773,16 @@ async function runMove(plan, o) {
   } catch (e) { fail(e); return false; }
   await applyMoveResult(plan, r);
   return true;
+}
+
+/** Summary: Formdaki seçim listelerinde Enter'a basınca (liste kapalıyken) formun varsayılan düğmesine basar; tarayıcı bunu kendiliğinden yapmaz. Düğme pasifse hiçbir şey olmaz. */
+function submitOnEnter(form) {
+  $$('select', form).forEach((sel) => sel.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' || ev.isComposing || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    ev.preventDefault();
+    const go = $('button:not([type="button"])', form);
+    if (go && !go.disabled) go.click();
+  }));
 }
 
 async function openMove(path) {
@@ -2799,6 +2835,7 @@ async function openMove(path) {
       $('#mvMp', b).addEventListener('change', fill);
       $('#mvTarget', b).addEventListener('change', paint);
       $('#mvName', b).addEventListener('input', paint);
+      submitOnEnter($('#moveForm', b));
       $('#moveForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const er = $('#mvErr', b);
@@ -2829,7 +2866,7 @@ function openMovePlugin(name) {
   openModal({
     title,
     html: `<form class="stack" id="movePlForm">
-      <label>${esc(tx('ui.static.marketplace'))}<select id="mpvTarget">${targets.map((x) => { const plan = planFor(x.name); return `<option value="${esc(x.name)}"${plan.ok ? '' : ' disabled'}${firstOk && firstOk.name === x.name ? ' selected' : ''}>${esc(plan.ok ? x.name : `${x.name} (${dropReason(plan)})`)}</option>`; }).join('')}</select></label>
+      <label>${esc(tx('ui.static.marketplace'))}<select id="mpvTarget" autofocus>${targets.map((x) => { const plan = planFor(x.name); return `<option value="${esc(x.name)}"${plan.ok ? '' : ' disabled'}${firstOk && firstOk.name === x.name ? ' selected' : ''}>${esc(plan.ok ? x.name : `${x.name} (${dropReason(plan)})`)}</option>`; }).join('')}</select></label>
       <ul class="consq" id="mpvConsq" aria-live="polite" style="margin:0"></ul>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary" id="mpvGo"${firstOk ? '' : ' disabled'}>${esc(tx('ui.move.submit'))}</button></div></form>`,
     onMount: (b) => {
@@ -2840,6 +2877,7 @@ function openMovePlugin(name) {
       };
       paint();
       $('#mpvTarget', b).addEventListener('change', paint);
+      submitOnEnter($('#movePlForm', b));
       $('#movePlForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const plan = planFor($('#mpvTarget', b).value);
@@ -3587,14 +3625,19 @@ function paintRemoteBand() {
   $('#main').prepend(band);
 }
 
+/** Summary: Kurulum durumunu (/api/info) sunucudan yeniden okuyup düğmeleri ve uyarı bandını günceller; teknik/ayar dosyası değişince kullanılır. Etkin marketplace bu arada değiştiyse dokunmaz (geçişi yeniden eşleme akışları yapar). */
+async function refreshSetupState() {
+  const info = await get('/api/info');
+  if (info.activeMarketplace !== activeName()) return;
+  S.info = info;
+  applySetupUi();
+  paintWarnBand();
+}
+
 /** Summary: Eski ayar dosyasını onay sonrası çöp kutusuna taşır ve kurulum uyarılarını yeniler. */
 async function removeLegacyConfig() {
   await deleteItem('pp.config.json');
-  try {
-    S.info = await get('/api/info');
-    applySetupUi();
-    paintWarnBand();
-  } catch (e) { fail(e); }
+  try { await refreshSetupState(); } catch (e) { fail(e); }
 }
 
 function cloneResultModal(r) {
@@ -4320,7 +4363,10 @@ document.addEventListener('change', (ev) => {
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
   else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
-  else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
+  else if (t.dataset && t.dataset.f && S.cur) {
+    if (t.dataset.f === 'tur') flushFocusedField();
+    setField(t.dataset.f, t.value);
+  }
 });
 
 document.addEventListener('toggle', (ev) => {

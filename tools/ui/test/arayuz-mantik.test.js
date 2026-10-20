@@ -207,6 +207,22 @@ test('rowHtml: plugin yayın adı ipucunu küçük harfe geçerli dilin yerel ay
   assert.match(ctx.rowHtml(plugin({ level: 'error', message: 'Hata' }), ''), /<span class="pill bad" title="Hata">!<\/span>/);
 });
 
+test('rowHtml: tek aria-selected satırı; seçim (S.sel) ağaçta varsa açık dosya yalnızca active olur, yoksa açık dosya seçili sayılır', () => {
+  const g = uiGlobals({ browser: true });
+  const S = { cur: { mp: 'mp', path: 'prompts/p/a.md' }, sel: null, modelMap: new Map() };
+  const ctx = vm.createContext({ console, ...g, S, ICON: {}, menuItemsFor: () => [], mpByName: () => null, durumClass: () => '' });
+  vm.runInContext([constSrc('esc'), constSrc('isFileKind'), fnSrc('rowHtml'), fnSrc('hueOf'), 'this.rowHtml = rowHtml;'].join('\n'), ctx);
+  const file = { kind: 'file', level: 3, posinset: 1, setsize: 2, key: 'mp:prompts/p/a.md', mp: 'mp', path: 'prompts/p/a.md', expandable: false, expanded: false, node: { name: 'a.md', meta: null } };
+  const moved = { ...file, key: 'mp:prompts/p/b.md', path: 'prompts/p/b.md', node: { name: 'b.md', meta: null } };
+  const selected = (it) => /aria-selected="true"/.test(ctx.rowHtml(it, ''));
+  assert.equal(selected(file), true, 'seçim yoksa açık dosya seçili');
+  S.sel = { mp: 'mp', key: moved.key }; S.modelMap = new Map([[file.key, file], [moved.key, moved]]);
+  assert.deepEqual([selected(file), selected(moved)], [false, true], 'tek seçili satır');
+  assert.match(ctx.rowHtml(file, ''), /class="row file active"/, 'açık dosya yine active işaretli');
+  S.modelMap = new Map([[file.key, file]]);
+  assert.deepEqual([selected(file), selected(moved)], [true, false], 'seçili satır ağaçta yoksa açık dosya seçili sayılır');
+});
+
 /** Summary: Taşıma planı işlevlerini örnek kütüphaneyle yükler (alfa etkin: kod, yazi; beta: notlar, Kod; bozuk geçersiz). */
 function moveCtx(extra = {}) {
   const plugin = (name, count = 1, description = '') => ({ name, slug: require('../public/fm.js').slug(name), path: 'prompts/' + name, count, description });
@@ -225,7 +241,7 @@ function moveCtx(extra = {}) {
     nodeKey: (mp, rel) => mp + ':' + rel, base: (p) => p.split('/').pop(), ...extra
   });
   const src = [
-    ...['moveTargetKey', 'moveTargetDir', 'movePlan', 'dropPlan', 'dropReason', 'placeLabel', 'dropLabel', 'moveFromLabel', 'moveConsequences', 'moveTouchesOpenFile', 'applyMoveResult', 'runMove'].map(fnSrc),
+    ...['moveTargetKey', 'moveTargetDir', 'movePlan', 'dropPlan', 'dropReason', 'placeLabel', 'dropLabel', 'moveFromLabel', 'moveConsequences', 'moveTouchesOpenFile', 'moveLastOpened', 'applyMoveResult', 'runMove'].map(fnSrc),
     constSrc('DND_REASON'), constSrc('lsKey')
   ];
   vm.runInContext(src.join('\n') + '\nthis.fns = { movePlan, dropPlan, dropReason, dropLabel, moveConsequences, runMove, applyMoveResult };', ctx);
@@ -293,7 +309,7 @@ test('runMove: onay, kaynağı etkinleştirme, açık dosya kararı ve API sıra
     focusKey: (k) => log.push('focus:' + k), toast: (m) => log.push('toast:' + m), openFile: async (p, o) => { log.push('open:' + p + ':' + o.reload + ':' + o.tab); },
     clearCur: () => { log.push('clearCur'); calls.x.S.cur = null; }, expandParents: (p, mp) => log.push('expand:' + mp + ':' + p),
     expOf: (mp) => (calls.exp[mp] = calls.exp[mp] || new Set()), saveExp: (mp) => log.push('saveExp:' + mp), saveMpOpen: () => {},
-    ls: { get: () => 'yazi', set: (k, v) => log.push('ls:' + k + '=' + v) }, exp: {}, answer: true, keep: true, reply: {}
+    ls: { get: (k) => (calls.lsStore ? calls.lsStore[k] : 'yazi'), set: (k, v) => log.push('ls:' + k + '=' + v) }, exp: {}, answer: true, keep: true, reply: {}
   };
   const x = moveCtx(calls);
   calls.x = x;
@@ -314,6 +330,19 @@ test('runMove: onay, kaynağı etkinleştirme, açık dosya kararı ve API sıra
   assert.ok(log.includes('expand:alfa:prompts/yazi/a.md') && log.includes('focus:alfa:prompts/yazi/a.md'));
   assert.ok(log.includes('toast:Taşındı: alfa › yazi') && log.includes('toast:"paket" alanı "yazi" olarak güncellendi.'));
 
+  log.length = 0; x.S.cur = null; calls.lsStore = { 'pp.alfa.last': 'prompts/kod/a.md' };
+  assert.equal(await x.runMove(plan, { confirmed: true }), true);
+  assert.ok(log.includes('ls:pp.alfa.last=prompts/yazi/a.md'), 'açık olmayan taşınan prompt aynı marketplace içinde son açılan kaydını yeni yola çeker');
+  log.length = 0; calls.lsStore = { 'pp.alfa.last': 'prompts/kod/baska.md' };
+  await x.runMove(plan, { confirmed: true });
+  assert.ok(!log.some((l) => l.startsWith('ls:pp.alfa.last=')), 'başka dosyayı gösteren kayda dokunulmaz');
+  log.length = 0; calls.lsStore = { 'pp.alfa.last': 'prompts/kod/a.md' };
+  calls.reply = { ok: true, same: false, to: { mp: 'beta', path: 'prompts/a.md', kind: 'klasorsuz' }, renamed: false, paket: { action: 'keep' } };
+  await x.runMove(x.dropPlan(PROMPT('prompts/kod/a.md'), ROW('mp', 'beta')), { confirmed: true });
+  assert.ok(log.includes('ls:pp.alfa.last=null'), 'başka marketplace\'e taşınınca son açılan kaydı temizlenir');
+  assert.ok(log.some((l) => /^toast:Taşındı: beta › .+\. İki depoda da commit bekleyen değişiklik var\.$/.test(l)), 'marketplace\'ler arası bildirim iki depoyu söyler');
+  calls.lsStore = null;
+
   log.length = 0; calls.keep = false;
   x.S.cur = { mp: 'alfa', path: 'prompts/kod/a.md', tab: 'edit', dirty: true };
   assert.equal(await x.runMove(plan, { confirmed: true }), false);
@@ -330,7 +359,11 @@ test('runMove: onay, kaynağı etkinleştirme, açık dosya kararı ve API sıra
   assert.deepEqual([...calls.exp.alfa], ['prompts/kod'], 'taşınan plugin ve altındaki açık düğümler kaynaktan düşer');
   assert.deepEqual([...calls.exp.beta].sort(), ['prompts/yazi', 'prompts/yazi/alt']);
   assert.ok(log.includes('ls:pp.alfa.sonPlugin=') && log.includes('focus:beta:prompts/yazi'));
-  assert.ok(log.includes('toast:Plugin taşındı: yazi → beta (1 prompt).'));
+  assert.ok(log.includes('toast:Plugin taşındı: yazi → beta (1 prompt). İki depoda da commit bekleyen değişiklik var.'));
+  log.length = 0; x.S.info.activeMarketplace = 'alfa'; x.S.cur = null; calls.lsStore = { 'pp.alfa.last': 'prompts/yazi/z.md' };
+  await x.runMove(cross, { confirmed: true });
+  assert.ok(log.includes('ls:pp.alfa.last=null'), 'taşınan plugin altındaki son açılan kaydı temizlenir');
+  calls.lsStore = null;
 
   log.length = 0; calls.exp = {};
   calls.apiError = new Error('hata');

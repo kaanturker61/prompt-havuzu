@@ -22,9 +22,10 @@ const EMPTY_DESCRIPTION_KEYS = Object.freeze({
 });
 
 class PackageCatalog {
-  // listPrompts: (cfg) => index.listMd(root, cfg.libraryDir, { includeBig: true })
-  constructor({ listPrompts, exporter, readIfExists, root, Rules, FM }) {
+  // listPrompts: (cfg) => index.listMd(root, cfg.libraryDir, { includeBig: true }); listFolders: (cfg) => libraryDir altındaki klasör adları
+  constructor({ listPrompts, listFolders, exporter, readIfExists, root, Rules, FM }) {
     this.listPrompts = listPrompts;
+    this.listFolders = listFolders || (async () => []);
     this.exporter = exporter;
     this.readIfExists = readIfExists;
     this.root = root;
@@ -149,6 +150,21 @@ class PackageCatalog {
       byTarget: new Map(plans.map((p) => [p.target, p])),
       bySkipped: new Map(skipped.map((x) => [x.source, x]))
     };
+  }
+
+  /** Summary: Promptu olmayan ama klasörü olan plugin için boş paket üretir; klasör yoksa ya da dışa aktarma dışındaysa null döner (built.packages'a dokunmaz). */
+  async emptyPackage(built, name) {
+    const { Rules, FM } = this;
+    const cfg = built.cfg;
+    if (cfg.libraryOk === false) return null;
+    const exp = cfg.export || { haricKlasorler: [Rules.INBOX_DIR] };
+    if ((exp.haricKlasorler || []).some((x) => FM.slug(x) === name)) return null;
+    const folder = (await this.listFolders(cfg)).find((f) => f.charAt(0) !== '.' && FM.slug(f) === name);
+    if (!folder) return null;
+    const pkg = { name, prompts: [], excluded: [], issues: [], paths: new Set([cfg.libraryDir + '/' + folder + '/']) };
+    const nameErr = Rules.checkPluginName(name);
+    if (nameErr) pkg.issues.push({ code: 'paketAdiGecersiz', level: 'error', msg: nameErr });
+    return pkg;
   }
 
   // Bir paketin plugins/ altında kalan ama kaynağı olmayan çıktıları da dahil, işlenecek tüm paket adları.

@@ -61,11 +61,11 @@ class PackageService {
     return ents.some((e) => e.name !== except && (e.name.toLowerCase() === slug.toLowerCase() || (e.isDirectory() && this.FM.slug(e.name) === slug)));
   }
 
-  // Geri alır. SettingsError (409) 500'e çevrilmez, aynen döner.
+  // Geri alır. SettingsError (409) 500'e çevrilmez, aynen döner. Hata koduyla döner: geriAlindi ya da rollbackFailed (prompt taşımayla aynı kodlar).
   _fail(e, undo, op = 'create') {
     return undo.rollback().then(
-      () => (e instanceof SettingsError ? e : new PackageError(500, tx(FAIL_LABEL[op], { reason: e.message }))),
-      (agg) => new PackageError(500, tx('pkg.err.rollbackFailed', { reason: (agg.errors || [agg]).map((x) => x.message).join('; ') }), { rollbackFailed: true })
+      () => (e instanceof SettingsError ? e : new PackageError(500, tx(FAIL_LABEL[op], { reason: e.message }), { code: 'geriAlindi' })),
+      (agg) => new PackageError(500, tx('pkg.err.rollbackFailed', { reason: (agg.errors || [agg]).map((x) => x.message).join('; ') }), { code: 'rollbackFailed', rollbackFailed: true })
     );
   }
 

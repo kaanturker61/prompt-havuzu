@@ -244,7 +244,7 @@ test('sunucu: /api/prompts/move ve /api/package/move; paket alanı kuralı, from
     assert.equal(fs.existsSync(path.join(BE, 'prompts/gelen-kutusu/z.md')), false);
     assert.ok(fs.existsSync(path.join(AL, 'prompts/yazi/a.md')), 'kaynak yerinde');
     r = await GM({ name: 'yazi', toMp: 'beta' });
-    assert.equal(r.status, 500); assert.match(r.data.error, /^Plugin taşınamadı: /);
+    assert.equal(r.status, 500); assert.match(r.data.error, /^Plugin taşınamadı: /); assert.equal(r.data.code, 'geriAlindi');
     assert.equal(fs.existsSync(path.join(BE, 'prompts', 'yazi')), false);
     assert.ok(fs.existsSync(path.join(AL, 'prompts/yazi/a.md')));
   } finally { await srv.stop(); rmrf(tmp); }

@@ -143,11 +143,16 @@
     return Object.prototype.hasOwnProperty.call(CC_BY_TUR, tur) ? CC_BY_TUR[tur] : [];
   }
 
+  /** Summary: Alanın tanımı: önce türün kendi alanları, yoksa spec'teki aynı anahtarlı ilk tanım (alan başka türe aitse ya da tür yayınlanabilir değilse); alan spec'te yoksa undefined. */
+  function ccField(key, tur) {
+    return ccFieldsFor(tur).find(function (x) { return x.key === key; }) || CC_FIELDS.find(function (x) { return x.key === key; });
+  }
+
   /** Summary: Alanın değeri; İngilizce anahtar boşsa eski Türkçe karşılığına düşer, ikisi de boşsa boş metin döner. */
   function ccValue(meta, key, tur) {
     const m = meta || {};
     if (!isBlank(m[key])) return m[key];
-    const f = ccFieldsFor(tur).find(function (x) { return x.key === key; }) || CC_FIELDS.find(function (x) { return x.key === key; });
+    const f = ccField(key, tur);
     if (f && f.legacy && !isBlank(m[f.legacy])) return m[f.legacy];
     return '';
   }
@@ -624,7 +629,7 @@
     pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath, PAKET_FIELD: PAKET_FIELD, paketAfterMove: paketAfterMove,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
     TUR_PROMPT: TUR_PROMPT, turOf: turOf, CC_FIELDS: CC_FIELDS, CC_PLUGIN_IGNORED: CC_PLUGIN_IGNORED, ccFieldsFor: ccFieldsFor,
-    ccValue: ccValue, ccBool: ccBool, ccList: ccList, ccUnusedKeys: ccUnusedKeys, migrateLegacyKeys: migrateLegacyKeys,
+    ccField: ccField, ccValue: ccValue, ccBool: ccBool, ccList: ccList, ccUnusedKeys: ccUnusedKeys, migrateLegacyKeys: migrateLegacyKeys,
     DEFAULT_VERSION: DEFAULT_VERSION, SEMVER_RE: SEMVER_RE, VERSION_PART_MAX: VERSION_PART_MAX, MAX_URL_LENGTH: MAX_URL_LENGTH, checkVersion: checkVersion,
     normalizeVersion: normalizeVersion, MSG: MSG,
     VERSION_LEVELS: VERSION_LEVELS, LEVEL_LABEL: LEVEL_LABEL, PROMPT_TAG_PREFIX: PROMPT_TAG_PREFIX,

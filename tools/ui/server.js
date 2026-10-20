@@ -101,6 +101,7 @@ const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toT
 const manifests = new ManifestWriter({ root: () => root(), fsp, atomicWrite, FM, Rules });
 const packageCatalog = new PackageCatalog({
   listPrompts: (cfg) => index.listMd(root(), cfg.libraryDir, { includeBig: true }),
+  listFolders: async (cfg) => (await fsp.readdir(path.join(root(), cfg.libraryDir), { withFileTypes: true }).catch(() => [])).filter((e) => e.isDirectory()).map((e) => e.name),
   exporter, readIfExists, root: () => root(), Rules, FM
 });
 const advisor = new VersionAdvisor({ git: gitService, versions, exporter, Rules, FM });
@@ -739,6 +740,10 @@ route('GET', '/api/package', async ({ q }) => {
   const name = String(q.get('name') || '');
   const cfg = await loadConfig();
   const built = await publishPlan(cfg);
+  if (!built.packages.has(name)) {
+    const empty = await packageCatalog.emptyPackage(built, name);
+    if (empty) built.packages.set(name, empty);
+  }
   const d = await publisher.details(root(), cfg, built, name);
   if (!d) throw httpErr(404, tx('err.package.notFound', { name }));
   const listed = new Set((await manifests.listed()).map((l) => l.name));

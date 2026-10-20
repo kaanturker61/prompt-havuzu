@@ -91,6 +91,19 @@ test('sunucu: paket listesi, sayfa, yayın, push, marketplace güncelle ve durum
     assert.equal((await srv.call('GET', '/api/package?name=yok')).data.error, 'Paket bulunamadı: yok');
     assert.equal((await srv.call('GET', '/api/package?name=yok')).status, 404);
 
+    // promptu olmayan plugin'in paket sayfası açılır; açıklama klasördeki plugin.json'a yazılır; gelen kutusu paket değildir
+    assert.equal((await srv.call('POST', '/api/package', { name: 'Kod İnceleme', description: 'Kodu inceler' })).status, 200);
+    r = await srv.call('GET', '/api/package?name=kod-inceleme');
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.description, 'Kodu inceler'); assert.equal(r.data.exportedCount, 0); assert.deepEqual(r.data.prompts, []);
+    assert.equal(r.data.blocking, 0);
+    assert.equal((await srv.call('PUT', '/api/package', { name: 'kod-inceleme', description: 'Yeni açıklama' })).status, 200);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(mk, 'prompts/kod-inceleme/.claude-plugin/plugin.json'), 'utf8')).description, 'Yeni açıklama');
+    assert.equal((await srv.call('GET', '/api/package?name=kod-inceleme')).data.description, 'Yeni açıklama');
+    assert.equal((await srv.call('GET', '/api/package?name=gelen-kutusu')).status, 404);
+    assert.equal((await srv.call('GET', '/api/packages')).data.packages.length, 1, 'boş plugin paket listesine girmez');
+    sh(mk, ['add', '-A'], env); sh(mk, ['commit', '-q', '-m', 'bos plugin'], env);
+
     // uzak depo ekle (bare), doğrulamalar
     const bare = makeBare(tmp);
     assert.equal((await srv.call('POST', '/api/git/remotes', { name: 'Origin', url: bare })).status, 400);

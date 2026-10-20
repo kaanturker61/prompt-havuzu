@@ -218,7 +218,7 @@ test('bağlam menüsü: etiketler dile göre, eylem kodları (data-act) dilden b
     [mk('dir', 'prompts/alfa/alt', { name: 'alt' }),
       ['Yeniden adlandır veya taşı', 'Sil (çöp kutusuna taşı)'], ['Rename or move', 'Delete (move to trash)'], ['rename', 'delete']],
     [mk('file', 'prompts/l.md', {}),
-      ["Plugin'e taşı…", 'Yeniden adlandır', 'Sil (çöp kutusuna taşı)'], ['Move to plugin…', 'Rename', 'Delete (move to trash)'], ['m-move', 'm-rename-file', 'delete']],
+      ['Taşı…', 'Yeniden adlandır', 'Sil (çöp kutusuna taşı)'], ['Move…', 'Rename', 'Delete (move to trash)'], ['m-move', 'm-rename-file', 'delete']],
     [mk('file', 'prompts/alfa/x.md', {}),
       ['Taşı…', 'Yeniden adlandır', 'Sil (çöp kutusuna taşı)'], ['Move…', 'Rename', 'Delete (move to trash)'], ['m-move', 'm-rename-file', 'delete']],
     [mk('file', 'notlar/a.txt', {}),
@@ -539,7 +539,6 @@ test('sözlük: bölgenin tr değerleri bugünkü metnin harfi harfine aynısı 
     'ui.search.truncated': 'İlk {limit} sonuç gösteriliyor. Daraltmak için etiket, durum, tür filtresi ya da daha uzun bir sözcük kullan.',
     'ui.toolbar.rootNotReadyPickRoot': "Library kökü hazır değil: önce Ayarlar'dan kökü seç",
     'ui.menu.deleteToTrash': 'Sil (çöp kutusuna taşı)',
-    'ui.menu.moveToPlugin': "Plugin'e taşı…",
     'ui.file.staleMarketplace': 'Bu dosya "{mp}" marketplace\'ine ait ama etkin marketplace "{active}". Dosyayı ağaçtan yeniden aç.',
     'ui.discard.text': '"{name}" dosyasında kaydetmediğin değişiklikler var.',
     'ui.lostEdit.textWithMessage': 'Kurulum bozulmadan önce "{name}" dosyasında kaydedilmemiş değişiklikler vardı (commit mesajın da korundu). Geri yüklensin mi?'

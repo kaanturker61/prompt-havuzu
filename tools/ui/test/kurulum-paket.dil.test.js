@@ -774,7 +774,7 @@ test('package-service: geri alınan işlem iletisi işleme göre ve dile göre; 
   try {
     const en = await inEn(() => rejected(b.svc.rename(b.d, 'prompts', { from: 'eski', to: 'yeni' })));
     assert.equal(en.message, 'Could not rename the plugin: yazılamadı. The changes were rolled back.');
-    assert.equal(en.data, undefined);
+    assert.deepEqual(en.data, { code: 'geriAlindi' });
     const tr = await inTr(() => rejected(b.svc.rename(b.d, 'prompts', { from: 'eski', to: 'yeni' })));
     assert.equal(tr.message, 'Plugin yeniden adlandırılamadı: yazılamadı. Yapılan değişiklikler geri alındı.');
   } finally { rmrf(b.d); }
@@ -782,7 +782,7 @@ test('package-service: geri alınan işlem iletisi işleme göre ve dile göre; 
   try {
     const en = await inEn(() => rejected(c.svc.create(c.d, 'prompts', { name: 'yeni', description: 'a' })));
     assert.equal(en.message, 'The plugin operation failed and the rollback could not be completed: geri alinamadi. Check the folder manually.');
-    assert.deepEqual(en.data, { rollbackFailed: true });
+    assert.deepEqual(en.data, { code: 'rollbackFailed', rollbackFailed: true });
     const tr = await inTr(() => rejected(c.svc.create(c.d, 'prompts', { name: 'yeni2', description: 'a' })));
     assert.equal(tr.message, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: geri alinamadi. Klasörü elle kontrol et.');
   } finally { rmrf(c.d); }

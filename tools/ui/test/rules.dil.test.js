@@ -98,7 +98,7 @@ const EXPORTS = [
   'CC_FIELDS', 'CC_PLUGIN_IGNORED', 'DEFAULT_VERSION', 'INBOX_DIR', 'LEVEL_LABEL', 'LIBRARY_DIR', 'LIBRARY_DIR_RESERVED',
   'MAX_NAME_BYTES', 'MAX_URL_LENGTH', 'MSG', 'PACKAGE_TAG_PREFIX', 'PAKET_FIELD',
   'PROMPT_TAG_PREFIX', 'PUBLISH_FIELDS', 'RESERVED_DIRS', 'SEMVER_RE', 'TUR_PROMPT',
-  'VERSION_LEVELS', 'VERSION_PART_MAX', 'bumpVersion', 'ccBool', 'ccFieldsFor', 'ccList', 'ccUnusedKeys', 'ccValue', 'checkEntryName',
+  'VERSION_LEVELS', 'VERSION_PART_MAX', 'bumpVersion', 'ccBool', 'ccField', 'ccFieldsFor', 'ccList', 'ccUnusedKeys', 'ccValue', 'checkEntryName',
   'checkMarketplaceName', 'checkPluginName', 'checkRemoteName', 'checkRemoteUrl',
   'checkVersion', 'classifyPromptPath', 'coerceVersion', 'compareVersions',
   'durumAllowed', 'isDeviceName', 'isFmBroken', 'isProtectedPath',

@@ -688,10 +688,10 @@ test('openImport: tara ve sonuç iletileri çoğul (tr/en); atlananlar, önizlem
   assert.ok(enOne.scanned.includes('<h3>1 file found</h3>') && enOne.scanned.includes('<span class="hint">1 line</span>'));
   const skippedList = 'x.txt (' + XSS_ESCAPED + '), y.txt (Boş dosya)';
   assert.ok(trOne.done.includes('<h3>1 prompt oluşturuldu</h3>'));
-  assert.ok(trOne.done.includes('<p>Taslak olarak <code>prompts/' + XSS_ESCAPED + '</code> içine kaydedildi.'));
+  assert.ok(trOne.done.includes('<p><code>prompts/' + XSS_ESCAPED + '</code> içine kaydedildi.'));
   assert.ok(trOne.done.includes('<p class="issue warn">2 dosya atlandı: ' + skippedList + '</p>'));
   assert.ok(enOne.done.includes('<h3>1 prompt created</h3>'));
-  assert.ok(enOne.done.includes('<p>Saved as drafts in <code>prompts/' + XSS_ESCAPED + '</code>.'));
+  assert.ok(enOne.done.includes('<p>Saved in <code>prompts/' + XSS_ESCAPED + '</code>.'));
   assert.ok(enOne.done.includes('<p class="issue warn">2 files skipped: ' + skippedList + '</p>'));
   for (const rendered of [trOne.scanned, trOne.done, enOne.scanned, enOne.done]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
   assert.ok(trOne.done.includes('data-path="prompts/' + XSS_ESCAPED + '"'));

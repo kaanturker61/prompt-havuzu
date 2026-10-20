@@ -121,7 +121,7 @@ test('hata iletisi işleme göre: create "oluşturulamadı", rename "yeniden adl
       assert.ok(e instanceof PackageError);
       assert.equal(e.status, 500);
       assert.equal(e.message, 'Plugin yeniden adlandırılamadı: yazılamadı. Yapılan değişiklikler geri alındı.');
-      assert.equal(e.data, undefined);
+      assert.deepEqual(e.data, { code: 'geriAlindi' });
       return true;
     });
     assert.ok(fs.existsSync(path.join(b.d, 'prompts', 'eski', 'a.md')), 'klasör yerinde');
@@ -136,7 +136,7 @@ test('create: geri alma da başarısız olursa ileti işlem adı taşımaz, roll
       assert.ok(e instanceof PackageError);
       assert.equal(e.status, 500);
       assert.equal(e.message, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: geri alinamadi. Klasörü elle kontrol et.');
-      assert.deepEqual(e.data, { rollbackFailed: true });
+      assert.deepEqual(e.data, { code: 'rollbackFailed', rollbackFailed: true });
       return true;
     });
   } finally { rmrf(d); }
@@ -284,6 +284,7 @@ test('move: çöpe taşıma hata verirse hedef kopya (ve oluşan prompts/) silin
       assert.ok(e instanceof PackageError);
       assert.equal(e.status, 500);
       assert.equal(e.message, 'Plugin taşınamadı: çöp yazılamadı. Yapılan değişiklikler geri alındı.');
+      assert.equal(e.data.code, 'geriAlindi', 'prompt taşımayla aynı hata kodu');
       return true;
     });
     assert.equal(fs.existsSync(path.join(dst, 'prompts')), false, 'hedefte hiçbir şey kalmadı');

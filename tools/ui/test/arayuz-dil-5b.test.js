@@ -95,7 +95,7 @@ function mainCtx(raw = SAMPLE, curExtra = {}, sExtra = {}) {
   };
   const ctx = load({
     fns: ['editPaneHtml', 'chipsHtml', 'hueOf', 'curCheck', 'exportCheck', 'pubPill', 'bodyInfoText', 'rawPaneHtml', 'histPaneHtml', 'histModeBar', 'histCommitHtml', 'histVerHtml',
-      'crumbsHtml', 'renderMainInner', 'startHtml', 'fieldLabel', 'pubFieldsHtml', 'ccFieldHtml', 'ccHint', 'verTimelineHtml', 'verCardHtml', 'verViewHtml', 'fieldCellsHtml', 'wordDiffHtml', 'verCompareHtml', 'verMainHtml'],
+      'crumbsHtml', 'renderMainInner', 'startHtml', 'fieldLabel', 'pubFieldsHtml', 'pubUsageHtml', 'ccFieldHtml', 'ccHint', 'verTimelineHtml', 'verCardHtml', 'verViewHtml', 'fieldCellsHtml', 'wordDiffHtml', 'verCompareHtml', 'verMainHtml'],
     consts: ['esc', 'str', 'toList', 'base', 'stem', 'fold', 'normTur', 'curNotice', 'HIST_STALE', 'verLabel', 'verByTag', 'FIELD_LABEL_KEYS', 'CC_HINT_KEYS', 'fmtDate', 'activeName', 'whereOf', 'durumClass'],
     expose: ['verLabel', 'fmtDate']
   }, {
@@ -166,9 +166,12 @@ test('editör paneli: işaretleme iskeleti (id, data-f, option value) iki dilde 
 test('editör paneli: ajan kullanım ipucu, klasörsüz prompt için varsayılan paket yer tutucusu ve tanınmayan değerler', () => {
   const { ctx, g, c } = mainCtx('---\nbaslik: B\ntur: yanlis\ndurum: ilginc\n---\nx', { path: 'prompts/loose.md', publish: { tur: 'ajan', paket: 'plug', ad: 'foo', state: 'guncel' } });
   const out = inLangs(g, () => ctx.editPaneHtml());
-  assert.ok(out.tr.includes('Ajan adı: <code>foo</code>') && out.en.includes('Agent name: <code>foo</code>'));
+  assert.ok(!out.tr.includes('Ajan adı') && !out.en.includes('Agent name'), 'tür yayınlanabilir değilse kullanım satırı gizlenir');
+  c.parsed = FM.parse('---\nbaslik: B\ntur: prompt\n---\nx');
+  assert.ok(inLangs(g, () => ctx.editPaneHtml()).tr.includes('<span class="hint" id="pubUsage"></span>'), 'prompt türünde de gizli');
   c.parsed = FM.parse('---\nbaslik: B\ntur: ajan\n---\nx');
   const agent = inLangs(g, () => ctx.editPaneHtml());
+  assert.ok(agent.tr.includes('Ajan adı: <code>foo</code>') && agent.en.includes('Agent name: <code>foo</code>'), 'yayınlanabilir türe dönünce satır geri gelir');
   assert.ok(agent.tr.includes('placeholder="Varsayılan: varsayilan"') && agent.en.includes('placeholder="Default: varsayilan"'));
   assert.ok(agent.tr.includes('plugin ajanlarında yok sayar; bu yüzden sunulmaz ve yayınlanmaz: permissionMode, mcpServers, hooks, initialPrompt</p>'));
   assert.ok(agent.en.includes('in plugin agents, so they are not offered or published: permissionMode, mcpServers, hooks, initialPrompt</p>'));
@@ -210,6 +213,23 @@ test('kanonik değer: İngilizce arayüzde Stable ve Command seçimi dosyaya dur
   setter.setField('arguments', 'a\n\n b \n');
   assert.equal(FM.stringify(c.parsed), '---\ntur: komut\ndescription: Yeni\narguments: [a, b]\nizinli_araclar: Read\ndisable-model-invocation: true\n---\ng',
     'alan değişince yalnızca o alanın eski anahtarı taşınır; boş değer yazılmaz; bool tırnaksız, liste köşeli');
+  c.parsed = FM.parse('---\ntur: ajan\n---\ng');
+  setter.setField('paths', 'src/**/*.{ts,tsx}\nlib/**');
+  assert.deepEqual(plain(FM.meta(c.parsed).paths), ['src/**/*.{ts,tsx}', 'lib/**'], 'liste alanı, açık dosyanın o anki türüne değil kendi tanımına göre dizi olarak yazılır');
+});
+
+test('flushFocusedField: tür değişmeden önce odaktaki yayın alanının değeri yazılır; tür seçicisi ve yayın alanı dışındaki öğeler atlanır', () => {
+  const g = browserEnv();
+  const c = makeCur('---\ntur: skill\n---\ng');
+  const S = { cur: c };
+  const written = [];
+  const focus = (f, inPub = true) => ({ dataset: { f }, value: 'a\nb', closest: (s) => (s === '#pubFields' && inPub ? {} : null) });
+  const doc = { activeElement: null };
+  const ctx = load({ fns: ['flushFocusedField'] }, { ...g, S, document: doc, setField: (k, v) => written.push([k, v]) });
+  for (const el of [null, focus('tur'), focus('paths', false), { dataset: {}, closest: () => ({}) }]) { doc.activeElement = el; ctx.flushFocusedField(); }
+  assert.deepEqual(written, []);
+  doc.activeElement = focus('paths'); ctx.flushFocusedField();
+  assert.deepEqual(written, [['paths', 'a\nb']]);
 });
 
 test('XSS: editör alanları, etiket çipleri, değişken listesi ve ham metin iki dilde kaçışlanır', () => {
