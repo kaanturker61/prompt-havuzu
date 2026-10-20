@@ -150,3 +150,102 @@ test('sunucu: "tools" adlı klasör bugünkü IGNORE yüzünden görünmez; plug
     assert.equal(r.status, 400); assert.match(r.data.error, /sistemde ayrılmış/);
   } finally { await srv.stop(); rmrf(tmp); }
 });
+
+test('sunucu: /api/prompts/move ve /api/package/move; paket alanı kuralı, fromMp ve X-PP-MP koruması, çakışma, çöp hatasında tam geri alma', { skip: !gitAvailable && 'git yok' }, async () => {
+  const tmp = tmpDir();
+  const srv = await start(tmp);
+  try {
+    const lib = path.join(tmp, 'PromptLibrary');
+    const AL = path.join(lib, 'alfa');
+    const BE = path.join(lib, 'beta');
+    await srv.call('PUT', '/api/settings', { libraryRoot: lib, create: true });
+    await srv.call('POST', '/api/marketplaces', { name: 'alfa' });
+    await srv.call('POST', '/api/marketplaces', { name: 'beta', activate: false });
+    fs.mkdirSync(path.join(BE, 'prompts', 'notlar'), { recursive: true });
+    assert.equal((await srv.call('POST', '/api/package', { name: 'kod', description: 'Kodu inceler' })).status, 200);
+    assert.equal((await srv.call('POST', '/api/package', { name: 'yazi' })).status, 200);
+    const put = async (p, raw) => assert.equal((await srv.call('POST', '/api/file', { path: p, raw })).status, 200);
+    const read = (root, p) => fs.readFileSync(path.join(root, p), 'utf8');
+    const PM = (body, headers) => srv.call('POST', '/api/prompts/move', body, headers ? { headers } : undefined);
+    const GM = (body, headers) => srv.call('POST', '/api/package/move', body, headers ? { headers } : undefined);
+    const body = (ad, extra = '') => `---\nbaslik: ${ad}\npaket: kod\n${extra}---\ngovde ${ad}\n`;
+
+    await put('prompts/kod/a.md', body('A', 'etiketler: [x, y]\n'));
+    const a = read(AL, 'prompts/kod/a.md');
+    let r = await PM({ path: 'prompts/kod/a.md', fromMp: 'alfa', to: { mp: 'alfa', kind: 'paket', plugin: 'yazi' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.deepEqual(r.data.to, { mp: 'alfa', path: 'prompts/yazi/a.md', kind: 'paket', plugin: 'yazi' });
+    assert.equal(r.data.same, true); assert.equal(r.data.trash, null); assert.equal(r.data.renamed, false);
+    assert.deepEqual(r.data.paket, { action: 'set', value: 'yazi' });
+    assert.equal(read(AL, 'prompts/yazi/a.md'), a.replace('paket: kod', 'paket: yazi'), 'yalnızca paket satırı değişti');
+    assert.equal(fs.existsSync(path.join(AL, 'prompts/kod/a.md')), false);
+    r = await PM({ path: 'prompts/yazi/a.md', to: { mp: 'alfa', kind: 'paket', plugin: 'yazi' } });
+    assert.equal(r.status, 400); assert.equal(r.data.code, 'ayniKonum');
+    const bomRaw = '﻿---\r\nbaslik: D\r\npaket: kod\r\n---\r\ngövde\r\n';
+    await put('prompts/kod/d.md', bomRaw);
+    r = await PM({ path: 'prompts/kod/d.md', to: { mp: 'alfa', kind: 'paket', plugin: 'yazi' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.deepEqual(fs.readFileSync(path.join(AL, 'prompts/yazi/d.md')), Buffer.from(bomRaw.replace('paket: kod', 'paket: yazi'), 'utf8'), 'BOM, CRLF ve gövde bayt aynı; yalnızca paket satırı değişti');
+    r = await PM({ path: 'prompts/yazi/a.md', fromMp: 'beta', to: { mp: 'beta', kind: 'klasorsuz' } });
+    assert.equal(r.status, 409); assert.equal(r.data.code, 'etkinDegil');
+    r = await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'klasorsuz' } }, { 'X-PP-MP': 'beta' });
+    assert.equal(r.status, 409);
+    assert.ok(fs.existsSync(path.join(AL, 'prompts/yazi/a.md')), 'korumalar devredeyken kaynak yerinde');
+    assert.equal((await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'olmayan' } })).data.code, 'hedefTuruGecersiz');
+    assert.equal((await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'paket', plugin: 'gelen-kutusu' } })).status, 400);
+    assert.equal((await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'paket', plugin: 'yok' } })).data.code, 'pluginYok');
+
+    await put('prompts/kod/b.md', body('B'));
+    const b = read(AL, 'prompts/kod/b.md');
+    r = await PM({ path: 'prompts/kod/b.md', fromMp: 'alfa', to: { mp: 'beta', kind: 'klasorsuz' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.same, false); assert.deepEqual(r.data.paket, { action: 'remove', value: null });
+    assert.equal(read(BE, 'prompts/b.md'), b.replace('paket: kod\n', ''), 'klasörsüze giderken eski klasör alanı kalkar');
+    assert.ok(fs.existsSync(path.join(AL, r.data.trash)));
+
+    await put('prompts/kod/c.md', body('C'));
+    const c = read(AL, 'prompts/kod/c.md');
+    r = await PM({ path: 'prompts/kod/c.md', to: { mp: 'beta', kind: 'gelenKutusu' } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.to.path, 'prompts/gelen-kutusu/c.md'); assert.equal(r.data.paket.action, 'keep');
+    assert.equal(read(BE, 'prompts/gelen-kutusu/c.md'), c, 'gelen kutusunda dosya bayt aynı');
+    await put('prompts/kod/c.md', c);
+    r = await PM({ path: 'prompts/kod/c.md', to: { mp: 'beta', kind: 'gelenKutusu', name: 'c.md' } });
+    assert.equal(r.status, 409); assert.equal(r.data.code, 'hedefVar');
+    r = await PM({ path: 'prompts/kod/c.md', to: { mp: 'beta', kind: 'gelenKutusu' } });
+    assert.equal(r.data.to.path, 'prompts/gelen-kutusu/c-2.md'); assert.equal(r.data.renamed, true);
+
+    r = await GM({ name: 'kod', fromMp: 'alfa', toMp: 'alfa' });
+    assert.equal(r.status, 400);
+    fs.mkdirSync(path.join(BE, 'prompts', 'yazi'));
+    r = await GM({ name: 'yazi', toMp: 'beta' });
+    assert.equal(r.status, 409); assert.equal(r.data.code, 'pluginVar');
+    assert.equal((await GM({ name: 'yazi', toMp: 'beta' }, { 'X-PP-MP': 'beta' })).data.code, 'etkinDegil');
+    assert.equal((await GM({ name: 'yazi', fromMp: 'beta', toMp: 'beta' })).data.code, 'etkinDegil');
+    fs.rmdirSync(path.join(BE, 'prompts', 'yazi'));
+    r = await GM({ name: 'kod', fromMp: 'alfa', toMp: 'beta' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.deepEqual(r.data.plugin, { name: 'kod', slug: 'kod', path: 'prompts/kod' });
+    assert.deepEqual(r.data.to, { mp: 'beta', path: 'prompts/kod' });
+    assert.equal(JSON.parse(read(BE, 'prompts/kod/.claude-plugin/plugin.json')).description, 'Kodu inceler');
+    const tree = await srv.call('GET', '/api/tree');
+    assert.equal(tree.data.marketplaces.find((m) => m.name === 'beta').plugins.find((p) => p.name === 'kod').description, 'Kodu inceler', 'açıklama klasörle birlikte taşındı');
+    assert.equal(fs.existsSync(path.join(AL, 'prompts', 'kod')), false);
+    assert.ok(fs.existsSync(path.join(AL, r.data.trash, '.gitkeep')));
+    assert.equal((await srv.call('GET', '/api/git/status')).data.hasCommits, false, 'commit atılmadı');
+
+    fs.rmSync(path.join(AL, '.pp', 'trash'), { recursive: true, force: true });
+    fs.writeFileSync(path.join(AL, '.pp', 'trash'), 'dosya');
+    r = await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'paket', plugin: 'notlar' } });
+    assert.equal(r.status, 500); assert.equal(r.data.code, 'geriAlindi');
+    assert.equal(fs.existsSync(path.join(BE, 'prompts/notlar/a.md')), false, 'hedef kopya geri alındı');
+    r = await PM({ path: 'prompts/yazi/a.md', to: { mp: 'beta', kind: 'gelenKutusu', name: 'z.md' } });
+    assert.equal(r.status, 500);
+    assert.equal(fs.existsSync(path.join(BE, 'prompts/gelen-kutusu/z.md')), false);
+    assert.ok(fs.existsSync(path.join(AL, 'prompts/yazi/a.md')), 'kaynak yerinde');
+    r = await GM({ name: 'yazi', toMp: 'beta' });
+    assert.equal(r.status, 500); assert.match(r.data.error, /^Plugin taşınamadı: /);
+    assert.equal(fs.existsSync(path.join(BE, 'prompts', 'yazi')), false);
+    assert.ok(fs.existsSync(path.join(AL, 'prompts/yazi/a.md')));
+  } finally { await srv.stop(); rmrf(tmp); }
+});

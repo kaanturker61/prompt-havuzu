@@ -10,8 +10,8 @@ const I18n = require('../public/i18n.js');
 /** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
 const tx = I18n.tx;
 
-/** Summary: Geri alınan işlemin hata iletisi sözlük anahtarı (create | rename). */
-const FAIL_LABEL = { create: 'pkg.err.createFailed', rename: 'pkg.err.renameFailed' };
+/** Summary: Geri alınan işlemin hata iletisi sözlük anahtarı (create | rename | move). */
+const FAIL_LABEL = { create: 'pkg.err.createFailed', rename: 'pkg.err.renameFailed', move: 'pkg.err.moveFailed' };
 
 class PackageError extends Error {
   constructor(status, message, data) {
@@ -23,12 +23,15 @@ class PackageError extends Error {
 }
 
 class PackageService {
-  constructor({ fsp, atomicWrite, settings, Rules, FM }) {
+  constructor({ fsp, atomicWrite, settings, Rules, FM, toTrash, isInside, checkNewPath }) {
     this.fsp = fsp;
     this.atomicWrite = atomicWrite;
     this.settings = settings;
     this.Rules = Rules;
     this.FM = FM;
+    this.toTrash = toTrash;
+    this.isInside = isInside;
+    this.checkNewPath = checkNewPath;
   }
 
   // Ham addan slug üretir ve kuralları denetler. Hata PackageError(400).
@@ -133,6 +136,62 @@ class PackageService {
       return { name: slug, slug, path: libraryDir + '/' + slug, moved };
     } catch (e) {
       throw await this._fail(e, undo, 'rename');
+    }
+  }
+
+  /** Summary: Plugin klasöründeki tüm girdileri sıralı (klasör, içindekilerden önce) listeler; bağlantı ya da .git adlı girdi varsa PackageError (400, baglantiVar). */
+  async _collect(abs, rel, out = []) {
+    for (const e of await this.fsp.readdir(abs, { withFileTypes: true })) {
+      const childRel = rel ? rel + '/' + e.name : e.name;
+      if (e.isSymbolicLink() || e.name.toLowerCase() === '.git') {
+        throw new PackageError(400, tx('pkg.err.linkInside', { path: childRel }), { code: 'baglantiVar' });
+      }
+      if (e.isDirectory()) {
+        out.push({ rel: childRel, dir: true });
+        await this._collect(path.join(abs, e.name), childRel, out);
+      } else {
+        out.push({ rel: childRel, dir: false });
+      }
+    }
+    return out;
+  }
+
+  /** Summary: Plugin klasörünü başka bir marketplace'e taşır (kopyalar, kaynağı çöpe taşır); açıklama klasördeki plugin.json ile birlikte gider. Dönüş { name, slug, path, moved, trash }. */
+  async move({ src, dst }) {
+    await this.settings.loadStrict(src.dir);
+    await this.settings.loadStrict(dst.dir);
+    const name = src.name;
+    const srcRel = src.libraryDir + '/' + name;
+    const srcAbs = path.join(src.dir, src.libraryDir, String(name == null ? '' : name));
+    if (!this._safeFolder(name) || !(await this._isDir(srcAbs))) throw new PackageError(404, tx('pkg.err.notFound', { name }));
+    const slug = this._slugOf(name);
+    const dstLibAbs = path.join(dst.dir, dst.libraryDir);
+    const dstAbs = path.join(dstLibAbs, name);
+    if (!this.isInside(dstAbs, dst.dir)) throw new PackageError(400, tx('pkg.err.outside'), { code: 'disarida' });
+    if (await this._clash(dstLibAbs, slug)) throw new PackageError(409, tx('pkg.err.exists', { name: slug }), { code: 'pluginVar' });
+    if ((await this.fsp.lstat(srcAbs)).isSymbolicLink()) throw new PackageError(400, tx('pkg.err.linkInside', { path: srcRel }), { code: 'baglantiVar' });
+    const list = await this._collect(srcAbs, '');
+    this.checkNewPath(dst.dir, dst.libraryDir + '/' + name);
+    const undo = new UndoStack();
+    try {
+      const firstLib = await this.fsp.mkdir(dstLibAbs, { recursive: true });
+      if (firstLib) undo.push(() => this.fsp.rm(firstLib, { recursive: true, force: true }));
+      try { await this.fsp.mkdir(dstAbs); } catch (e) {
+        if (e.code === 'EEXIST') throw new PackageError(409, tx('pkg.err.exists', { name: slug }), { code: 'pluginVar' });
+        throw e;
+      }
+      undo.push(() => this.fsp.rm(dstAbs, { recursive: true, force: true }));
+      for (const x of list) {
+        const parts = x.rel.split('/');
+        if (x.dir) await this.fsp.mkdir(path.join(dstAbs, ...parts));
+        else await this.fsp.copyFile(path.join(srcAbs, ...parts), path.join(dstAbs, ...parts));
+      }
+      const trash = await this.toTrash(srcRel, srcAbs);
+      undo.clear();
+      return { name, slug, path: dst.libraryDir + '/' + name, moved: list.filter((x) => !x.dir && /\.(md|markdown)$/i.test(x.rel)).length, trash };
+    } catch (e) {
+      if (e instanceof PackageError) { await undo.rollback().catch(() => {}); throw e; }
+      throw await this._fail(e, undo, 'move');
     }
   }
 

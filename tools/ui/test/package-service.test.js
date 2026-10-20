@@ -208,3 +208,86 @@ test('setDescription: plugin yoksa 404, boşsa 400, başarıda plugin.json yazı
     assert.deepEqual(readPlugin(d, 'eski'), { description: 'Yeni', keywords: ['k'] });
   } finally { rmrf(d); }
 });
+
+/** Summary: Kaynak marketplace'in .pp/trash klasörüne taşıyan çöp saplaması (sunucudaki toTrash ile aynı biçim). */
+const trashInto = (dir) => async (rel, abs) => {
+  const dest = path.join(dir, '.pp', 'trash', 'ts', rel);
+  await fsp.mkdir(path.dirname(dest), { recursive: true });
+  await fsp.rename(abs, dest);
+  return path.relative(dir, dest).split(path.sep).join('/');
+};
+
+/** Summary: Kaynak (eski plugin'li) ve boş hedef marketplace kurar; taşıma bağımlılıkları enjekte edilir. */
+function buildMove(over = {}) {
+  const holder = {};
+  const src = build({ toTrash: (rel, abs) => trashInto(holder.d)(rel, abs), isInside: require('../lib/paths').isInside, checkNewPath: require('../lib/safe-path').checkNewPath, ...over });
+  holder.d = src.d;
+  const dst = tmpDir();
+  fs.mkdirSync(path.join(dst, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(src.d, 'prompts', 'eski', '.gitkeep'), '');
+  fs.mkdirSync(path.join(src.d, 'prompts', 'eski', 'alt'));
+  fs.writeFileSync(path.join(src.d, 'prompts', 'eski', 'alt', 'b.md'), '---\nbaslik: B\n---\nİçerik\r\n');
+  return { ...src, dst, move: () => src.svc.move({ src: { dir: src.d, libraryDir: 'prompts', name: 'eski' }, dst: { dir: dst, libraryDir: 'prompts' } }) };
+}
+
+test('move: dosyalar, .gitkeep ve klasördeki plugin.json (açıklama) bayt aynı hedefe kopyalanır, kaynak çöpe gider', async () => {
+  const { d, dst, move } = buildMove();
+  try {
+    const before = fs.readFileSync(pluginFile(d, 'eski'));
+    const r = await move();
+    assert.deepEqual({ ...r, trash: undefined }, { name: 'eski', slug: 'eski', path: 'prompts/eski', moved: 2, trash: undefined });
+    assert.deepEqual(fs.readFileSync(pluginFile(dst, 'eski')), before, 'açıklama klasörle birlikte taşındı');
+    assert.deepEqual(fs.readFileSync(path.join(dst, 'prompts', 'eski', 'alt', 'b.md')), Buffer.from('---\nbaslik: B\n---\nİçerik\r\n'));
+    assert.equal(fs.readFileSync(path.join(dst, 'prompts', 'eski', 'a.md'), 'utf8'), 'a');
+    assert.ok(fs.existsSync(path.join(dst, 'prompts', 'eski', '.gitkeep')));
+    assert.equal(fs.existsSync(path.join(d, 'prompts', 'eski')), false);
+    assert.ok(fs.existsSync(path.join(d, r.trash, '.claude-plugin', 'plugin.json')), 'kaynak yedeği .pp/trash altında');
+    assert.equal(fs.existsSync(path.join(d, 'pp.config.json')) || fs.existsSync(path.join(dst, 'pp.config.json')), false);
+  } finally { rmrf(d); }
+});
+
+test('move: hedefte aynı slug 409 pluginVar, plugin içinde bağlantı ya da .git 400 baglantiVar, dışarı çıkan hedef 400; iki taraf diskte değişmez', async (t) => {
+  const { d, dst, move } = buildMove();
+  const out = tmpDir();
+  try {
+    const snapshot = () => JSON.stringify([fs.readdirSync(path.join(d, 'prompts', 'eski')).sort(), fs.existsSync(path.join(dst, 'prompts'))]);
+    const before = snapshot();
+    fs.mkdirSync(path.join(dst, 'prompts', 'ESKI'), { recursive: true });
+    await assert.rejects(move(), (e) => { assert.ok(e instanceof PackageError); assert.equal(e.status, 409); assert.equal(e.data.code, 'pluginVar'); return true; });
+    assert.deepEqual(fs.readdirSync(path.join(dst, 'prompts')), ['ESKI']);
+    fs.rmdirSync(path.join(dst, 'prompts', 'ESKI'));
+    fs.mkdirSync(path.join(d, 'prompts', 'eski', '.git'));
+    await assert.rejects(move(), (e) => { assert.equal(e.status, 400); assert.equal(e.data.code, 'baglantiVar'); assert.match(e.message, /\.git$/); return true; });
+    fs.rmdirSync(path.join(d, 'prompts', 'eski', '.git'));
+    const link = path.join(d, 'prompts', 'eski', 'alt', 'dis');
+    if (makeLink(out, link)) {
+      await assert.rejects(move(), (e) => { assert.equal(e.status, 400); assert.equal(e.data.code, 'baglantiVar'); return true; });
+      removeLink(link);
+    } else t.diagnostic('bağlantı kurulamadı (EPERM): baglantiVar bağlantı kolu atlandı');
+    fs.rmSync(path.join(dst, 'prompts'), { recursive: true, force: true });
+    assert.equal(snapshot(), before);
+    const hostile = path.join(dst, 'prompts');
+    if (makeLink(out, hostile)) {
+      await assert.rejects(move(), (e) => { assert.ok(e.status === 400 || e.status === 409); return true; });
+      assert.deepEqual(fs.readdirSync(out), [], 'bağlantının hedefine hiçbir şey yazılmadı');
+      removeLink(hostile);
+    }
+  } finally { rmrf(d); rmrf(dst); rmrf(out); }
+});
+
+test('move: çöpe taşıma hata verirse hedef kopya (ve oluşan prompts/) silinir, kaynak ve plugin.json bayt aynı kalır', async () => {
+  const failTrash = { toTrash: async () => { throw new Error('çöp yazılamadı'); } };
+  const { d, dst, move } = buildMove(failTrash);
+  try {
+    const before = fs.readFileSync(pluginFile(d, 'eski'));
+    await assert.rejects(move(), (e) => {
+      assert.ok(e instanceof PackageError);
+      assert.equal(e.status, 500);
+      assert.equal(e.message, 'Plugin taşınamadı: çöp yazılamadı. Yapılan değişiklikler geri alındı.');
+      return true;
+    });
+    assert.equal(fs.existsSync(path.join(dst, 'prompts')), false, 'hedefte hiçbir şey kalmadı');
+    assert.deepEqual(fs.readFileSync(pluginFile(d, 'eski')), before);
+    assert.ok(fs.existsSync(path.join(d, 'prompts', 'eski', 'alt', 'b.md')), 'kaynak yerinde');
+  } finally { rmrf(d); rmrf(dst); }
+});

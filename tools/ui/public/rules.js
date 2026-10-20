@@ -426,6 +426,21 @@
     return { kind: 'paket', klasor: parts[0], paket: FM.slug(parts[0]) };
   }
 
+  /** Summary: Promptun frontmatter'ında paketi belirten alanın anahtarı. */
+  const PAKET_FIELD = 'paket';
+
+  /** Summary: Taşıma sonrası paket alanı kararı { action: 'keep'|'set'|'remove', value }; o: { alan (ham değer), from: { kind, paket }, to: { kind, paket } }. */
+  function paketAfterMove(o) {
+    const keep = { action: 'keep', value: null };
+    const raw = o.alan;
+    const items = Array.isArray(raw) ? raw.map(String).filter(Boolean) : [str(raw).trim()].filter(Boolean);
+    if (items.length !== 1) return keep;
+    const current = FM.slug(items[0]);
+    if (o.to.kind === 'paket') return current === o.to.paket ? keep : { action: 'set', value: o.to.paket };
+    if (o.to.kind === 'klasorsuz' && o.from.kind === 'paket' && current === o.from.paket) return { action: 'remove', value: null };
+    return keep;
+  }
+
   /* ---- Aşama 4: paket, dışa aktarma ve uzak depo kuralları ---- */
 
   const PACKAGE_TAG_PREFIX = 'paket/';
@@ -606,7 +621,7 @@
     INBOX_DIR: INBOX_DIR, LIBRARY_DIR: LIBRARY_DIR, RESERVED_DIRS: RESERVED_DIRS, checkPluginName: checkPluginName,
     LIBRARY_DIR_RESERVED: LIBRARY_DIR_RESERVED, parseLibraryDir: parseLibraryDir,
     MAX_NAME_BYTES: MAX_NAME_BYTES, isDeviceName: isDeviceName, checkEntryName: checkEntryName, isProtectedPath: isProtectedPath,
-    pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath,
+    pluginNameWarn: pluginNameWarn, classifyPromptPath: classifyPromptPath, PAKET_FIELD: PAKET_FIELD, paketAfterMove: paketAfterMove,
     normTur: normTur, PUBLISH_FIELDS: PUBLISH_FIELDS, publishCheck: publishCheck, isFmBroken: isFmBroken,
     TUR_PROMPT: TUR_PROMPT, turOf: turOf, CC_FIELDS: CC_FIELDS, CC_PLUGIN_IGNORED: CC_PLUGIN_IGNORED, ccFieldsFor: ccFieldsFor,
     ccValue: ccValue, ccBool: ccBool, ccList: ccList, ccUnusedKeys: ccUnusedKeys, migrateLegacyKeys: migrateLegacyKeys,

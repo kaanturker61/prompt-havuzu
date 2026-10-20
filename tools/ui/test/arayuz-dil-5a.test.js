@@ -120,7 +120,7 @@ const ROW_CASES = [
     ['<span class="pill bad">geçersiz: Git deposu okunamadı</span>', '<span class="sr">, marketplace</span>'],
     ['<span class="pill bad">invalid: Git deposu okunamadı</span>', '<span class="sr">, marketplace</span>']],
   ['plugin', (items) => itemOf(items, 'plugin'),
-    ['<span class="sr">, plugin</span>', 'aria-label="Alfa içine yeni prompt"', 'aria-label="Alfa için işlemler"'],
+    ['<span class="sr">, plugin</span>', 'draggable="true"', 'aria-label="Alfa içine yeni prompt"', 'aria-label="Alfa için işlemler"'],
     ['<span class="sr">, plugin</span>', 'aria-label="New prompt in Alfa"', 'aria-label="Actions for Alfa"']],
   ['klasör', (items) => itemOf(items, 'dir'),
     ['<span class="sr">, klasör</span>', 'aria-label="alt için işlemler"'],
@@ -145,9 +145,9 @@ const ROW_CASES = [
     ['<span class="pill warn">Not a git repository</span>', 'tabindex="-1">Initialize git</button>']],
   ['uyarılı prompt', (items) => itemOf(items, 'file', (it) => it.path === 'prompts/alfa/x.md'),
     ['<span class="pill">ajan</span>', 'title="Yayınlanmayacak, ayrıntı için aç" aria-label="Yayın uyarısı">!</span>', 'title="Son sürümden beri değişti, versiyon aynı" aria-label="Sürüm uyarısı">v</span>',
-      'title="paket alanı klasörle uyuşmuyor" aria-label="Paket klasörle uyuşmuyor">p</span>', 'aria-label="Başlık için işlemler"'],
+      'title="paket alanı klasörle uyuşmuyor" aria-label="Paket klasörle uyuşmuyor">p</span>', 'draggable="true"', 'aria-label="Başlık için işlemler"'],
     ['<span class="pill">agent</span>', 'title="Will not be published, open for details" aria-label="Publish warning">!</span>', 'title="Changed since the last version, version is the same" aria-label="Version warning">v</span>',
-      'title="package field does not match the folder" aria-label="Package does not match the folder">p</span>', 'aria-label="Actions for Başlık"']]
+      'title="package field does not match the folder" aria-label="Package does not match the folder">p</span>', 'draggable="true"', 'aria-label="Actions for Başlık"']]
 ];
 
 test('ağaç satırları: tr bugünkü Türkçe, en İngilizce; aynı işlev iki dilde etiketleri bayatlamadan üretir', () => {
@@ -159,6 +159,9 @@ test('ağaç satırları: tr bugünkü Türkçe, en İngilizce; aynı işlev iki
     const out = inLangs(g, () => ctx.rowHtml(item, ''));
     for (const text of wantTr) assert.ok(out.tr.includes(text), 'tr ' + ad + ': ' + text + '\n' + out.tr);
     for (const text of wantEn) assert.ok(out.en.includes(text), 'en ' + ad + ': ' + text + '\n' + out.en);
+  }
+  for (const kind of ['mp', 'dir', 'inbox', 'loose', 'teknik', 'tfile', 'gitless', 'gitlessItem']) {
+    assert.ok(!ctx.rowHtml(itemOf(items, kind), '').includes('draggable'), kind + ' sürüklenemez');
   }
 });
 
@@ -209,9 +212,9 @@ test('bağlam menüsü: etiketler dile göre, eylem kodları (data-act) dilden b
       ['Activate', 'New plugin', 'Git panel', 'Marketplace (publishing)', 'Copy path'],
       ['m-activate', 'new-plugin', 'git', 'market', 'm-copy-path']],
     [mk('plugin', 'prompts/alfa', { name: 'Alfa' }),
-      ['Yeni prompt', 'Paket sayfasını aç', 'Açıklamayı düzenle', 'Yeniden adlandır', 'Sil (çöp kutusuna taşı)'],
-      ['New prompt', 'Open package page', 'Edit description', 'Rename', 'Delete (move to trash)'],
-      ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-delete-plugin']],
+      ['Yeni prompt', 'Paket sayfasını aç', 'Açıklamayı düzenle', 'Yeniden adlandır', "Başka marketplace'e taşı…", 'Sil (çöp kutusuna taşı)'],
+      ['New prompt', 'Open package page', 'Edit description', 'Rename', 'Move to another marketplace…', 'Delete (move to trash)'],
+      ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-move-plugin', 'm-delete-plugin']],
     [mk('dir', 'prompts/alfa/alt', { name: 'alt' }),
       ['Yeniden adlandır veya taşı', 'Sil (çöp kutusuna taşı)'], ['Rename or move', 'Delete (move to trash)'], ['rename', 'delete']],
     [mk('file', 'prompts/l.md', {}),

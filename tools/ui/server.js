@@ -31,6 +31,7 @@ const { resolveSafe, checkNewPath } = require('./lib/safe-path');
 const { PromptIndex } = require('./lib/prompt-index');
 const { LibraryCatalog } = require('./lib/library-catalog');
 const { PackageService, PackageError } = require('./lib/package-service');
+const { PromptMover, MoveError } = require('./lib/prompt-mover');
 const { PromptHistory, HistoryError } = require('./lib/prompt-history');
 const { UndoStack } = require('./lib/undo');
 const { PackageExporter } = require('./lib/exporter');
@@ -87,7 +88,14 @@ const versions = new VersionService({
 const catalog = new LibraryCatalog({
   registry, index, loadConfigAt: (dir) => settings.load(dir), versions, Rules, FM, ignore: IGNORE, editable: EDITABLE
 });
-const packages = new PackageService({ fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), settings, Rules, FM });
+const packages = new PackageService({
+  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), settings, Rules, FM,
+  toTrash: (rel, abs) => toTrash(rel, abs), isInside: paths.isInside, checkNewPath
+});
+const mover = new PromptMover({
+  fsp, atomicWrite: (abs, data) => atomicWrite(abs, data), decode, FM, Rules,
+  toTrash: (rel, abs) => toTrash(rel, abs), isInside: paths.isInside, samePath: paths.samePath, checkNewPath
+});
 const history = new PromptHistory({ git: gitService, FM, Rules });
 const exporter = new PackageExporter({ root: () => root(), fsp, atomicWrite, toTrash, FM, Rules });
 const manifests = new ManifestWriter({ root: () => root(), fsp, atomicWrite, FM, Rules });
@@ -755,61 +763,132 @@ route('POST', '/api/package/publish', async ({ body }) => publisher.publish(root
 
 /* ---- marketplace'ler arası taşıma ---- */
 
-// K2'nin tek, belgelenmiş istisnası: kaynak etkin marketplace'tir, hedef başka bir marketplace'tir. Commit atılmaz.
-route('POST', '/api/prompts/transfer', async ({ body }) => {
-  const st = setup.current;
-  const cfg = await loadConfigStrict();
-  const { abs, rel } = safePath(body.path);
+/** Summary: Taşıma hedefinin geçerli türleri (Rules.classifyPromptPath tür adları). */
+const MOVE_KINDS = ['paket', 'klasorsuz', 'gelenKutusu'];
+
+/** Summary: MoveError kodu -> sözlük anahtarı; ileti çağrı anındaki dilde üretilir. */
+const MOVE_MSG = {
+  ayniKonum: 'err.transfer.sameLocation', hedefVar: 'err.transfer.targetExists', pluginYok: 'err.transfer.pluginNotFound',
+  disarida: 'err.transfer.pluginOutside', geriAlindi: 'err.transfer.failed', rollbackFailed: 'err.transfer.rollbackFailed'
+};
+
+/** Summary: MoveError'u kodlu HTTP hatasına çevirir; diğer hatalara dokunmaz. */
+const moveErr = (e) => (e instanceof MoveError ? httpErr(e.status, tx(MOVE_MSG[e.code], e.params), { code: e.code }) : e);
+
+/** Summary: İstekteki fromMp etkin marketplace ile uyuşmuyorsa 409 etkinDegil fırlatır; fromMp yoksa denetlenmez. */
+function checkFromMp(body) {
+  if (body.fromMp === undefined || body.fromMp === null) return;
+  const active = setup.current.activeMarketplace;
+  if (String(body.fromMp) !== active) throw httpErr(409, tx('err.http.activeChanged', { active }), { code: 'etkinDegil', active });
+}
+
+/** Summary: Taşınacak prompt dosyasını doğrular (kitaplık içinde .md, korunan yol değil, var); dönüş { abs, rel }. */
+async function promptSource(p, cfg) {
+  const { abs, rel } = safePath(p);
   const cl = Rules.classifyPromptPath(rel, cfg.libraryDir);
   if (!/\.(md|markdown)$/i.test(rel) || cl.kind === 'disarida') throw httpErr(400, tx('err.transfer.onlyPrompts'));
+  if (Rules.isProtectedPath(rel, cfg.libraryDir)) throw httpErr(403, protectedMsg(), { code: 'korunanYol' });
   const sst = await fsp.stat(abs).catch(() => null);
   if (!sst || !sst.isFile()) throw httpErr(404, tx('err.file.notFound'));
-  const toMp = String(body.toMp || '');
+  return { abs, rel };
+}
+
+/** Summary: İstek gövdesindeki hedefi doğrular; dönüş { mp, kind, plugin, name } (plugin yalnızca paket türünde, name yoksa null). */
+function parseMoveTarget(to) {
+  if (!to || typeof to !== 'object' || Array.isArray(to)) throw httpErr(400, tx('err.transfer.targetRequired'));
+  const mp = String(to.mp || '');
+  if (!mp) throw httpErr(400, tx('err.transfer.targetRequired'));
+  if (!MOVE_KINDS.includes(to.kind)) throw httpErr(400, tx('err.transfer.invalidTargetKind'), { code: 'hedefTuruGecersiz' });
+  let plugin = null;
+  if (to.kind === 'paket') {
+    plugin = String(to.plugin || '');
+    if (!plugin) throw httpErr(400, tx('err.transfer.pluginRequired'));
+    if (/[\\/]/.test(plugin) || plugin.startsWith('.') || plugin.toLowerCase() === Rules.INBOX_DIR) throw httpErr(400, tx('err.transfer.invalidPlugin'));
+  }
+  let name = null;
+  if (to.name !== undefined && to.name !== null && to.name !== '') {
+    name = String(to.name);
+    if (!/\.(md|markdown)$/i.test(name)) throw httpErr(400, tx('err.transfer.onlyPrompts'));
+    if (/[\\/]/.test(name) || !name.replace(/\.(md|markdown)$/i, '')) throw httpErr(400, tx('err.transfer.invalidName'));
+  }
+  return { mp, kind: to.kind, plugin, name };
+}
+
+/** Summary: Hedef marketplace'i çözer ve doğrular; dönüş { name, path, libraryDir, same }. */
+async function resolveMoveTarget(toMp, { allowSame }) {
+  const st = setup.current;
   if (!toMp) throw httpErr(400, tx('err.transfer.targetRequired'));
-  if (toMp === st.activeMarketplace) throw httpErr(400, tx('err.transfer.sameMarketplace'));
+  const same = toMp === st.activeMarketplace;
+  if (same && !allowSame) throw httpErr(400, tx('err.transfer.sameMarketplace'));
   const { items } = await catalog.marketplaces(st.libraryRoot, st.activeMarketplace);
   const target = items.find((m) => m.name === toMp);
   if (!target) throw httpErr(404, tx('err.marketplace.notFound', { name: toMp }));
   if (!target.valid) throw httpErr(400, tx('err.transfer.targetInvalid', { name: toMp }));
-  const toPlugin = String(body.toPlugin || '');
-  if (!toPlugin) throw httpErr(400, tx('err.transfer.pluginRequired'));
-  if (/[\\/]/.test(toPlugin) || toPlugin.startsWith('.')) throw httpErr(400, tx('err.transfer.invalidPlugin'));
-  const tLib = target.cfg.libraryDir;
-  const tDir = path.join(target.path, tLib, toPlugin);
-  // Hedef plugin klasörü (bağlantı çözülerek) hedef marketplace'in dışına çıkıyorsa yazılmaz.
-  if (!paths.isInside(tDir, target.path)) throw httpErr(400, tx('err.transfer.pluginOutside'));
-  const dst = await fsp.stat(tDir).catch(() => null);
-  if (!dst || !dst.isDirectory()) throw httpErr(404, tx('err.transfer.pluginNotFound', { name: toPlugin }));
+  if (paths.samePath(target.path, TOOL_DIR) || paths.isInside(target.path, TOOL_DIR)) throw httpErr(400, tx('err.marketplace.toolRepoUnusable'));
+  if (!same && paths.samePath(target.path, root())) throw httpErr(400, tx('err.transfer.sameMarketplace'));
+  const cfg = await settings.loadStrict(target.path);
+  return { name: toMp, path: target.path, libraryDir: cfg.libraryDir, same };
+}
 
-  const buf = await fsp.readFile(abs);
-  let data = buf;
-  const p = FM.parse(decode(buf));
-  const alan = str(FM.meta(p).paket);
-  const newSlug = FM.slug(toPlugin);
-  if (cl.kind === 'paket' && alan && FM.slug(alan) === cl.paket && alan !== newSlug) {
-    FM.set(p, 'paket', newSlug);
-    data = FM.stringify(p);
-  }
-  // Hedefte benzersiz ad
-  const baseName = path.posix.basename(rel);
-  const ext = path.posix.extname(baseName);
-  const stem = baseName.slice(0, baseName.length - ext.length);
-  let name = baseName; let n = 2;
-  while (await exists(path.join(tDir, name))) name = stem + '-' + (n++) + ext;
-  const toAbs = path.join(tDir, name);
-  const toRel = tLib + '/' + toPlugin + '/' + name;
+/** Summary: Verilen marketplace klasörlerinde sırayla yaz kilidini alıp fn'i çalıştırır; kilit doluysa 409 busy. */
+function withWriteLocks(dirs, fn) {
+  const uniq = Array.from(new Set(dirs));
+  const run = (i) => (i < uniq.length ? opLock.run(uniq[i], 'yaz', () => run(i + 1)) : fn());
+  return run(0);
+}
 
-  const undo = new UndoStack();
+/** Summary: Kaynak promptu hedefe taşır (kilitli, tam geri almalı); dönüş { target, result }. */
+async function movePrompt(cfg, src, to, { allowSame }) {
+  const target = await resolveMoveTarget(to.mp, { allowSame });
+  const result = await withWriteLocks([root(), target.path], () => mover.move({
+    src: { dir: root(), libraryDir: cfg.libraryDir, rel: src.rel },
+    dst: { dir: target.path, libraryDir: target.libraryDir, kind: to.kind, plugin: to.plugin, name: to.name },
+    same: target.same
+  })).catch((e) => { throw moveErr(e); });
+  catalog.invalidate();
+  return { target, result };
+}
+
+route('POST', '/api/prompts/move', async ({ body }) => {
+  checkFromMp(body);
+  const cfg = await loadConfigStrict();
+  const src = await promptSource(body.path, cfg);
+  const to = parseMoveTarget(body.to);
+  const { target, result } = await movePrompt(cfg, src, to, { allowSame: true });
+  return {
+    ok: true, same: target.same,
+    from: { mp: setup.current.activeMarketplace, path: src.rel },
+    to: { mp: target.name, path: result.path, kind: to.kind, plugin: to.plugin },
+    renamed: result.renamed, paket: result.paket, trash: result.trash
+  };
+});
+
+route('POST', '/api/package/move', async ({ body }) => {
+  checkFromMp(body);
+  const cfg = await loadConfigStrict();
+  const target = await resolveMoveTarget(String(body.toMp || ''), { allowSame: false });
+  let r;
   try {
-    await atomicWrite(toAbs, data);
-    undo.push(() => fsp.rm(toAbs, { force: true }));
-    const trash = await toTrash(rel, abs);
-    undo.clear();
-    return { ok: true, from: { mp: st.activeMarketplace, path: rel }, to: { mp: toMp, path: toRel }, trash };
-  } catch (e) {
-    try { await undo.rollback(); } catch (agg) { throw httpErr(500, tx('err.transfer.rollbackFailed', { reason: e.message, path: toRel })); }
-    throw httpErr(500, tx('err.transfer.failed', { reason: e.message }));
-  }
+    r = await withWriteLocks([root(), target.path], () => packages.move({
+      src: { dir: root(), libraryDir: cfg.libraryDir, name: String(body.name || '') },
+      dst: { dir: target.path, libraryDir: target.libraryDir }
+    }));
+  } catch (e) { throw pkgErr(e); }
+  catalog.invalidate();
+  return {
+    ok: true, plugin: { name: r.name, slug: r.slug, path: r.path },
+    from: { mp: setup.current.activeMarketplace, path: cfg.libraryDir + '/' + r.name }, to: { mp: target.name, path: r.path },
+    moved: r.moved, trash: r.trash
+  };
+});
+
+// K2'nin tek, belgelenmiş istisnası: kaynak etkin marketplace'tir, hedef başka bir marketplace'tir. Commit atılmaz.
+route('POST', '/api/prompts/transfer', async ({ body }) => {
+  const cfg = await loadConfigStrict();
+  const src = await promptSource(body.path, cfg);
+  const to = parseMoveTarget({ mp: body.toMp, kind: 'paket', plugin: body.toPlugin });
+  const { target, result } = await movePrompt(cfg, src, to, { allowSame: false });
+  return { ok: true, from: { mp: setup.current.activeMarketplace, path: src.rel }, to: { mp: target.name, path: result.path }, trash: result.trash };
 });
 
 /* ---- git ---- */

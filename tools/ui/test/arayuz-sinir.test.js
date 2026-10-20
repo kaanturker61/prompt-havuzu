@@ -395,7 +395,8 @@ test('deleteItem: kaydedilmemiş açık dosya silinince başlık sıfırlanır',
 });
 
 test('marketplace\'ler arası taşıma da clearCur kullanır; S.cur elle sıfırlanan yer kalmadı', () => {
-  assert.match(html, /if \(S\.cur && S\.cur\.path === path\) clearCur\(\);/);
+  assert.match(html, /else if \(touched\) clearCur\(\);/);
+  assert.match(html, /if \(touched\) clearCur\(\);/);
   const kalan = html.split('\n').filter((l) => /S\.cur = null; ls\.set\(lsKey\('last'\), null\)/.test(l));
   assert.deepEqual(kalan, ['  S.cur = null; ls.set(lsKey(\'last\'), null);'], 'yalnızca clearCur içinde');
 });
@@ -613,7 +614,7 @@ test('menuItemsFor: korunmayan yollar eskisi gibi; plugin içeriği silinebilir;
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'plugins/mk/commands/a.md', node: {} })), ['rename', 'delete'], 'plugins/<paket> altındaki dosya silinebilir');
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'README.md', node: {} })), ['rename', 'delete']);
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'plugin', mp: 'mp', path: 'prompts/plug', node: { name: 'plug' } })),
-    ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-delete-plugin']);
+    ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-move-plugin', 'm-delete-plugin']);
   assert.ok(acts(ctx.menuItemsFor({ kind: 'mp', mp: 'mp', path: '', node: { active: false, state: 'hazir' } })).includes('m-activate'));
   const ic = menuCtx('a/b');
   assert.deepEqual(acts(ic.menuItemsFor({ kind: 'dir', mp: 'mp', path: 'a', node: {} })), []);
