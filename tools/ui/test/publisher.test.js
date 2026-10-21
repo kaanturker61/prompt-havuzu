@@ -39,7 +39,7 @@ test('yayın: commit, annotated tag, manifestler, katalog sürümü ve push', re
     const mj = readJson(mk, '.claude-plugin/marketplace.json');
     assert.equal(mj.version, '1.0.1');
     assert.deepEqual(mj.plugins.map((p) => [p.name, p.source, p.version]), [['ornek', './plugins/ornek', undefined]]);
-    assert.equal(readJson(mk, 'pp.config.json').marketplace.version, '1.0.1');
+    assert.equal(fs.existsSync(path.join(mk, 'pp.config.json')), false);
     assert.equal(sh(mk, ['status', '--porcelain'], gitEnv(tmp)).trim(), '', 'çalışma ağacı temiz');
     assert.deepEqual((await s.state.get(mk)).pendingTags, []);
     assert.ok(s.changed.length >= 1, 'önbellek temizliği tetiklendi');
@@ -72,7 +72,6 @@ test('katalog sürümü: verilen değer, küçük değer reddi, ardışık yayı
     commitAll(mk, tmp);
     const u = await s.publisher.updateAll(mk);
     assert.ok(u.commit); assert.equal(u.written.length, 1);
-    assert.equal(readJson(mk, 'pp.config.json').marketplace.version, '3.0.0');
     assert.equal(readJson(mk, '.claude-plugin/marketplace.json').version, '3.0.0');
     assert.equal(readJson(mk, 'plugins/ornek/.claude-plugin/plugin.json').version, '1.1.0', 'updateAll paket sürümünü artırmaz');
     assert.equal(sh(mk, ['tag', '-l', 'paket/*'], gitEnv(tmp)).trim().split('\n').length, 3, 'updateAll tag atmaz');
@@ -199,7 +198,7 @@ test('commit yokken yayın 409 commitYok; paket sayfası verisi', real, async ()
   try {
     const { makeRepo } = require('./helpers');
     const mk = makeRepo(tmp, 'bos');
-    write(mk, 'pp.config.json', JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'bos', owner: 'o', plugin: 'bos', description: 'd', version: '1.0.0' } }));
+    write(mk, '.claude-plugin/marketplace.json', JSON.stringify({ name: 'bos', description: 'd', owner: { name: 'o' }, plugins: [] }));
     write(mk, 'prompts/p/a.md', cmd('A'));
     const s = buildStack(mk, tmp);
     await assert.rejects(s.publisher.publish(mk, { name: 'p' }), (e) => e.status === 409 && e.data.code === 'commitYok');
@@ -229,7 +228,7 @@ test('komut_adi CON: publish 400 dogrulama, ağaç temiz, etiket yok; updateAll 
   } finally { rmrf(tmp); }
 });
 
-test('guard: yazmadan önce çağrılır, hata verirse hiçbir şey yazılmaz; bozuk ayar yayında 409', real, async () => {
+test('guard: yazmadan önce çağrılır, hata verirse hiçbir şey yazılmaz; bozuk marketplace.json yayında 409', real, async () => {
   const tmp = tmpDir();
   try {
     const mk = seed(tmp);
@@ -248,19 +247,39 @@ test('guard: yazmadan önce çağrılır, hata verirse hiçbir şey yazılmaz; b
     assert.deepEqual(snapshot(mk), before); assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head);
     // guard yoksa davranış değişmez (varsayılan)
     assert.equal((await s.publisher.publish(mk, { name: 'ornek' })).ok, true);
-    // bozuk pp.config.json: strict yükleyici ile publish/updateAll hiçbir şey yazmadan 409
-    const ppConfig = require('../lib/pp-config');
-    const strict = new PackagePublisher({
-      git: s.git, catalog: s.catalog, exporter: s.exporter, manifests: s.manifests, advisor: s.advisor, state: s.state, lock: s.lock,
-      remoteSync: s.remoteSync, Rules: require('../public/rules.js'), FM: require('../public/fm.js'),
-      config: { load: async () => (await ppConfig.assertHealthy(mk)).cfg, save: s.config.save }
-    });
-    fs.writeFileSync(path.join(mk, 'pp.config.json'), 'garip{');
-    const bytes = fs.readFileSync(path.join(mk, 'pp.config.json')); const head2 = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
-    await assert.rejects(strict.publish(mk, { name: 'ornek' }), (e) => e.status === 409 && e.data.code === 'ppConfigBozuk');
-    await assert.rejects(strict.updateAll(mk), (e) => e.status === 409 && e.data.code === 'ppConfigBozuk');
-    assert.deepEqual(fs.readFileSync(path.join(mk, 'pp.config.json')), bytes);
+    // bozuk marketplace.json: publish/updateAll hiçbir şey yazmadan 409 manifestBozuk
+    const manifest = path.join(mk, '.claude-plugin', 'marketplace.json');
+    fs.writeFileSync(manifest, 'garip{');
+    const bytes = fs.readFileSync(manifest); const head2 = sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim();
+    await assert.rejects(s.publisher.publish(mk, { name: 'ornek' }), (e) => e.status === 409 && e.data.code === 'manifestBozuk');
+    await assert.rejects(s.publisher.updateAll(mk), (e) => e.status === 409 && e.data.code === 'manifestBozuk');
+    assert.deepEqual(fs.readFileSync(manifest), bytes);
     assert.equal(sh(mk, ['rev-parse', 'HEAD'], gitEnv(tmp)).trim(), head2);
+  } finally { rmrf(tmp); }
+});
+
+test('yayın pp.config.json oluşturmaz ve commit\'e eklemez; eski ve kirli pp.config.json yayını engellemez', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    const s = buildStack(mk, tmp);
+    let r = await s.publisher.publish(mk, { name: 'ornek' });
+    assert.equal(fs.existsSync(path.join(mk, 'pp.config.json')), false, 'yayın dosya oluşturmadı');
+    const files = (c) => sh(mk, ['show', '--name-only', '--format=', c], gitEnv(tmp)).trim().split('\n').sort();
+    assert.deepEqual(files(r.commit), ['.claude-plugin/marketplace.json', 'plugins/ornek/.claude-plugin/plugin.json', 'plugins/ornek/commands/aa.md', 'plugins/ornek/commands/bb.md']);
+
+    write(mk, 'pp.config.json', JSON.stringify({ libraryDir: 'library', marketplace: { version: '9.9.9' } }));
+    commitAll(mk, tmp);
+    write(mk, 'prompts/ornek/c.md', cmd('C', 'komut_adi: cc\n'));
+    commitAll(mk, tmp);
+    write(mk, 'pp.config.json', JSON.stringify({ libraryDir: 'baska', marketplace: { version: '8.8.8' } }));
+    const dirty = fs.readFileSync(path.join(mk, 'pp.config.json'));
+    r = await s.publisher.publish(mk, { name: 'ornek' });
+    assert.equal(r.ok, true);
+    assert.equal(r.marketplaceVersion, '1.0.2', 'katalog sürümü marketplace.json üzerinden');
+    assert.ok(!files(r.commit).includes('pp.config.json'));
+    assert.deepEqual(fs.readFileSync(path.join(mk, 'pp.config.json')), dirty, 'eski dosyaya dokunulmadı');
+    assert.equal(sh(mk, ['status', '--porcelain'], gitEnv(tmp)).trim(), 'M pp.config.json');
   } finally { rmrf(tmp); }
 });
 

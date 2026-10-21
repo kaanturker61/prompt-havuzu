@@ -15,6 +15,7 @@ class PromptIndex {
     this.FM = FM;
     this.Rules = Rules;
     this.ignore = ignore instanceof Set ? ignore : new Set(ignore || []);
+    this.rawKeys = Array.from(new Set(Rules.CC_FIELDS.filter((f) => f.kind === 'raw').map((f) => f.key)));
     this._cache = new Map(); // dirAbs -> Map<rel, item>
   }
 
@@ -27,6 +28,19 @@ class PromptIndex {
   // dir verilmezse tümü, verilirse yalnızca o marketplace klasörü temizlenir.
   clear(dir) {
     if (dir) this._cache.delete(dir); else this._cache.clear();
+  }
+
+  /** Summary: Ham Claude Code alanlarının (hooks, metadata, experimental) kaynak satırları; yinelenende son girdi, boş değer atlanır. */
+  rawBlocks(p) {
+    const out = {};
+    for (const key of this.rawKeys) {
+      const entry = p.entries.filter((e) => e.key === key).pop();
+      if (!entry || entry.value === '' || (Array.isArray(entry.value) && !entry.value.length)) continue;
+      const lines = entry.lines.slice();
+      while (lines.length > 1 && lines[lines.length - 1].trim() === '') lines.pop();
+      out[key] = lines.join('\n');
+    }
+    return out;
   }
 
   async indexFile(dir, rel, abs) {
@@ -47,6 +61,7 @@ class PromptIndex {
       item.fmBroken = Rules.isFmBroken(raw, p.hasFm);
       item.check = Rules.publishCheck({ meta: m, hasFm: p.hasFm, fmBroken: item.fmBroken });
       item.body = p.body;
+      item.fmBlocks = this.rawBlocks(p);
       item.title = str(m.baslik) || path.basename(rel, ext);
       item.tags = toList(m.etiketler);
       item.fTitle = FM.fold(item.title);

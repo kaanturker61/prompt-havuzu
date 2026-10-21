@@ -56,6 +56,50 @@ test('publishCheck: tablo', () => {
   assert.equal(Rules.publishCheck({ meta: {} }).level, 'info');
 });
 
+test('prompt türü ve Claude Code alanları: turOf, publishCheck, ccValue, ccUnusedKeys, migrateLegacyKeys', () => {
+  const FM = require('../public/fm.js');
+  for (const [v, e] of [['prompt', 'prompt'], ['Prompt', 'prompt'], [' PROMPT ', 'prompt'], ['', 'prompt'], [undefined, 'prompt'],
+    ['komut', 'komut'], ['Agent', 'ajan'], ['beceri', 'skill'], ['komutt', ''], [['komut', 'ajan'], '']]) {
+    assert.equal(Rules.turOf(v), e, String(v));
+  }
+  const pc = Rules.publishCheck({ meta: { tur: 'Prompt', aciklama: 'x', model: 'sonnet' }, hasFm: true });
+  assert.deepEqual([pc.code, pc.level], ['yayinDisi', 'info']);
+  assert.equal(pc.reason, "Prompt türü: Claude Code'a yayınlanmaz.");
+  assert.equal(Rules.publishCheck({ meta: { description: 'x' }, hasFm: true }).code, 'turYok');
+  assert.deepEqual(Rules.PUBLISH_FIELDS.slice(0, 6), ['paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model']);
+  assert.deepEqual(Rules.ccFieldsFor('ajan').map((f) => f.key).slice(0, 5), ['name', 'description', 'tools', 'model', 'disallowedTools']);
+  assert.equal(Rules.ccFieldsFor('komut').find((f) => f.key === 'name').emit, false);
+  assert.deepEqual(Rules.ccFieldsFor('prompt'), []);
+  assert.equal(Rules.ccValue({ aciklama: 'eski' }, 'description', 'komut'), 'eski');
+  assert.equal(Rules.ccValue({ aciklama: 'eski', description: 'yeni' }, 'description', 'komut'), 'yeni');
+  assert.equal(Rules.ccValue({ izinli_araclar: 'Read' }, 'tools', 'ajan'), 'Read');
+  assert.equal(Rules.ccValue({ komut_adi: 'x' }, 'name', ''), 'x');
+  assert.deepEqual(['True', 'YES', 'on', '1', true, 'false', 'No', 'OFF', '0', 'belki', ''].map(Rules.ccBool),
+    [true, true, true, true, true, false, false, false, false, null, null]);
+  assert.deepEqual(Rules.ccList({ listSep: ',' }, 'src/**/*.{ts,tsx}, lib/**'), ['src/**/*.{ts,tsx}', 'lib/**']);
+  assert.deepEqual(Rules.ccList({ listSep: ' ' }, 'a  b'), ['a', 'b']);
+  assert.deepEqual(Rules.ccUnusedKeys({ tools: 'Read', 'allowed-tools': 'Bash', izinli_araclar: 'x', aciklama: 'a', permissionMode: 'plan', hooks: 'h', baslik: 'B', ozel: '1' }, 'komut'),
+    ['tools', 'izinli_araclar']);
+  assert.deepEqual(Rules.ccUnusedKeys({ 'allowed-tools': 'Bash', 'argument-hint': 'x', permissionMode: 'plan', hooks: 'h', aciklama: 'a', description: '' }, 'ajan'),
+    ['allowed-tools', 'argument-hint', 'permissionMode', 'hooks']);
+
+  const run = (raw, tur, only) => { const p = FM.parse(raw); const moved = Rules.migrateLegacyKeys(p, tur, only); return [FM.stringify(p), moved.map((x) => x.from + '>' + x.to)]; };
+  const legacy = '---\nbaslik: A\naciklama: "Kod: x"   # not\narguman_ipucu: [dosya]\nizinli_araclar: Read\nmodel: opus\n---\ng\n';
+  assert.deepEqual(run(legacy, 'komut'), [
+    '---\nbaslik: A\ndescription: "Kod: x"   # not\nargument-hint: [dosya]\nallowed-tools: Read\nmodel: opus\n---\ng\n',
+    ['aciklama>description', 'arguman_ipucu>argument-hint', 'izinli_araclar>allowed-tools']]);
+  assert.deepEqual(run(legacy, 'ajan'), [
+    '---\nbaslik: A\ndescription: "Kod: x"   # not\narguman_ipucu: [dosya]\ntools: Read\nmodel: opus\n---\ng\n',
+    ['aciklama>description', 'izinli_araclar>tools']]);
+  assert.deepEqual(run(legacy, '').slice(1), [[]]);
+  assert.equal(run(legacy, '')[0], legacy, 'prompt/boş türde eski anahtarlar yerinde kalır');
+  assert.deepEqual(run(legacy, 'skill', 'description')[1], ['aciklama>description']);
+  assert.equal(run(legacy, 'skill', 'description')[0].includes('arguman_ipucu'), true);
+  const both = '---\naciklama: eski\ndescription: yeni\n---\ng\n';
+  assert.deepEqual(run(both, 'komut'), [both, []]);
+  assert.deepEqual(run('---\ndescription:\naciklama: eski\n---\ng\n', 'komut'), ['---\ndescription: eski\n---\ng\n', ['aciklama>description']]);
+});
+
 test('coerceVersion: K3 tablosu', () => {
   const eq = (v, e) => assert.deepEqual(Rules.coerceVersion(v), e, String(v));
   eq(undefined, { version: '', legacy: false });
@@ -155,12 +199,12 @@ test('parseLibraryDir tablosu', () => {
 
 test('isProtectedPath tablosu (iç içe libraryDir dahil)', () => {
   const p = (rel, lib = 'prompts') => Rules.isProtectedPath(rel, lib);
-  for (const rel of ['prompts', 'Prompts', 'PROMPTS', 'prompts/', '/prompts', 'prompts.', 'prompts ', 'pp.config.json', 'PP.Config.JSON', 'plugins', 'Plugins',
+  for (const rel of ['prompts', 'Prompts', 'PROMPTS', 'prompts/', '/prompts', 'prompts.', 'prompts ', 'plugins', 'Plugins',
     '.claude-plugin', '.CLAUDE-PLUGIN', '.gitignore', '.gitattributes', '.pp', '.pp/trash', '.pp/trash/2026/x.md', '.PP/x', '.pp.', 'prompts\\']) {
     assert.equal(p(rel), true, rel);
   }
   for (const rel of ['prompts/x', 'prompts/x/a.md', 'prompts/gelen-kutusu', 'plugins/mk', 'plugins/mk/commands/a.md', '.claude-plugin/marketplace.json',
-    'README.md', 'x/pp.config.json', 'x/plugins', 'x/.pp', 'prompts2', 'tools', '', '.ppx', '.gitignore/x']) {
+    'README.md', 'pp.config.json', 'PP.Config.JSON', 'x/pp.config.json', 'x/plugins', 'x/.pp', 'prompts2', 'tools', '', '.ppx', '.gitignore/x']) {
     assert.equal(p(rel), false, rel);
   }
   // iç içe libraryDir: üst klasörler de korunur
@@ -170,7 +214,8 @@ test('isProtectedPath tablosu (iç içe libraryDir dahil)', () => {
   assert.equal(p('prompts', './prompts/'), true);
   assert.equal(Rules.isProtectedPath('prompts', undefined), false);
   assert.equal(p('prompts', '../x'), false);
-  assert.equal(Rules.isProtectedPath('pp.config.json', undefined), true);
+  assert.equal(Rules.isProtectedPath('pp.config.json', undefined), false);
+  assert.equal(Rules.isProtectedPath('plugins', undefined), true);
   assert.equal(p('library', 'library'), true);
 });
 

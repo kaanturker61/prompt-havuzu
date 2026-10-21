@@ -8,6 +8,7 @@ const { GitService } = require('../lib/git-service');
 const { MarketplaceRegistry } = require('../lib/marketplace-registry');
 const { SetupService } = require('../lib/setup-service');
 const { gitAvailable, tmpDir, rmrf, gitEnv } = require('./helpers');
+const { makeLink, removeLink } = require('./links');
 
 async function build(d, { cfg, rawCfg, gitBin } = {}) {
   const tool = path.join(d, 'arac'); fs.mkdirSync(tool, { recursive: true });
@@ -116,8 +117,8 @@ test('ok: root doğru; kök değişince onRootChange çağrılır', real, async 
   try {
     const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
     const { svc, store, git } = await build(d, { cfg: { libraryRoot: lib } });
-    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a); fs.writeFileSync(path.join(a, 'pp.config.json'), '{}');
-    const b = path.join(lib, 'b'); fs.mkdirSync(b); await git.init(b); fs.writeFileSync(path.join(b, 'pp.config.json'), '{}');
+    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
+    const b = path.join(lib, 'b'); fs.mkdirSync(b); await git.init(b);
     const seen = [];
     svc.onRootChange((now, prev) => seen.push([now, prev]));
     await store.save({ libraryRoot: lib, activeMarketplace: 'a' });
@@ -145,92 +146,79 @@ test('uyarılar: kokAracReposunuIceriyor ve kokBaskaDepoda; ok kalır', real, as
     await store.save({ libraryRoot: path.join(outer, 'lib2'), activeMarketplace: 'm' });
     let st = await svc.evaluate();
     assert.equal(st.ok, true);
-    assert.deepEqual(codes(st), ['kokBaskaDepoda', 'ppConfigYok']);
+    assert.deepEqual(codes(st), ['kokBaskaDepoda']);
     assert.equal(st.issues[0].level, 'warn');
-    const pc = st.issues.find((i) => i.code === 'ppConfigYok');
-    assert.equal(pc.level, 'warn'); assert.equal(pc.action, 'ppConfigOlustur');
-    assert.equal(st.rootOk, true, 'ppConfigYok uyarıdır, rootOk değişmez');
-    fs.writeFileSync(path.join(outer, 'lib2', 'm', 'pp.config.json'), '{}');
-    assert.deepEqual(codes(await svc.evaluate()), ['kokBaskaDepoda']);
+    assert.equal(st.rootOk, true);
     await store.save({ libraryRoot: d, activeMarketplace: 'dis' });
     st = await svc.evaluate();
     assert.ok(codes(st).includes('kokAracReposunuIceriyor'));
   } finally { rmrf(d); }
 });
 
-test('ppConfigBozuk ve libraryDirGecersiz uyarı olarak eklenir, ok kalır', real, async () => {
+test('manifestBozuk ve libraryDirGecersiz uyarı olarak eklenir, ok kalır', real, async () => {
   const d = tmpDir();
+  const out = tmpDir();
+  const a = path.join(d, 'lib', 'a');
+  const link = path.join(a, 'prompts');
   try {
     const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
-    const { svc, git, store } = await build(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' } });
-    const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
-    const file = path.join(a, 'pp.config.json');
+    const { svc, git } = await build(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' } });
+    fs.mkdirSync(a); await git.init(a);
+    const file = path.join(a, '.claude-plugin', 'marketplace.json');
+    fs.mkdirSync(path.dirname(file));
     for (const bad of ['garip{', 'null', '[]', '"x"', '5']) {
       fs.writeFileSync(file, bad);
       svc.invalidate();
       const st = await svc.evaluate();
       assert.equal(st.ok, true, bad); assert.equal(st.rootOk, true, bad);
-      assert.deepEqual(codes(st), ['ppConfigBozuk'], bad);
+      assert.deepEqual(codes(st), ['manifestBozuk'], bad);
       assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].action, null);
       assert.equal(st.issues[0].path, file);
-      assert.match(st.issues[0].message, /^pp\.config\.json okunamadı/);
+      assert.match(st.issues[0].message, /^\.claude-plugin\/marketplace\.json okunamadı/);
       assert.equal(st.root.toLowerCase(), a.toLowerCase());
     }
-    for (const v of ['../../disari', 'C:\\Windows', '', 'plugins']) {
-      fs.writeFileSync(file, JSON.stringify({ libraryDir: v }));
+    fs.writeFileSync(file, JSON.stringify({ name: 'a', version: '1.2.3' }));
+    svc.invalidate();
+    assert.deepEqual((await svc.evaluate()).issues, [], 'sağlam dosya: uyarı yok');
+    if (makeLink(out, link)) {
       svc.invalidate();
       const st = await svc.evaluate();
-      assert.equal(st.ok, true, v);
-      assert.deepEqual(codes(st), ['libraryDirGecersiz'], v);
-      assert.equal(st.issues[0].level, 'warn');
+      assert.equal(st.ok, true);
+      assert.deepEqual(codes(st), ['libraryDirGecersiz']);
+      assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].path, link);
+      assert.match(st.issues[0].message, /^"prompts" klasörü marketplace klasörünün dışına çıkıyor/);
     }
-    // sağlam dosya: uyarı yok
-    fs.writeFileSync(file, JSON.stringify({ libraryDir: './prompts/' }));
-    svc.invalidate();
-    assert.deepEqual((await svc.evaluate()).issues, []);
-    assert.ok(store);
-  } finally { rmrf(d); }
+  } finally { removeLink(link); rmrf(d); rmrf(out); }
 });
 
-test('exportAlanGecersiz uyarı olarak eklenir, ok ve rootOk değişmez; geçerli export uyarısız', real, async () => {
+test('ppConfigEski: varsayılan dışı değerli eski dosya yok sayılır ve yalnızca bu uyarı çıkar; dosya yoksa ya da klasörse uyarı yok', real, async () => {
   const d = tmpDir();
   try {
     const lib = path.join(d, 'lib'); fs.mkdirSync(lib);
     const { svc, git } = await build(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' } });
     const a = path.join(lib, 'a'); fs.mkdirSync(a); await git.init(a);
     const file = path.join(a, 'pp.config.json');
-    const cases = [
-      '{"export":{"durumlar":"kararlı"}}',
-      JSON.stringify({ export: { haricKlasorler: 5 } }),
-      JSON.stringify({ export: null }),
-      JSON.stringify({ export: 'kararlı' }),
-      JSON.stringify({ export: [] })
+    assert.deepEqual((await svc.evaluate()).issues, [], 'dosya yok: uyarı yok');
+    const olds = [
+      JSON.stringify({ libraryDir: '../disari', marketplace: { version: '9.9.9', plugin: 'baska' }, export: { durumlar: 'a', haricKlasorler: 'b' } }),
+      JSON.stringify({ libraryDir: 'library', export: { durumlar: ['taslak'] } }),
+      '{}', 'garip{', '[]'
     ];
-    for (const raw of cases) {
+    for (const raw of olds) {
       fs.writeFileSync(file, raw);
       svc.invalidate();
       const st = await svc.evaluate();
       assert.equal(st.ok, true, raw); assert.equal(st.rootOk, true, raw);
-      assert.deepEqual(codes(st), ['exportAlanGecersiz'], raw);
-      assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].action, null);
+      assert.deepEqual(codes(st), ['ppConfigEski'], raw);
+      assert.equal(st.issues[0].level, 'warn'); assert.equal(st.issues[0].action, 'ppConfigSil');
       assert.equal(st.issues[0].path, file);
-      assert.match(st.issues[0].message, /^pp\.config\.json içindeki "export/);
-      assert.equal(st.root.toLowerCase(), a.toLowerCase(), 'etkin kök değişmez');
+      assert.match(st.issues[0].message, /^pp\.config\.json artık kullanılmıyor ve içindeki değerler yok sayılıyor\./);
+      assert.equal(st.root.toLowerCase(), a.toLowerCase());
     }
-    // iki alan birden bozuksa ve libraryDir da geçersizse sırayla hepsi uyarı, ok yine true
-    fs.writeFileSync(file, JSON.stringify({ libraryDir: '../disari', export: { durumlar: 'a', haricKlasorler: 'b' } }));
+    fs.rmSync(file);
+    fs.mkdirSync(file);
     svc.invalidate();
-    let st = await svc.evaluate();
-    assert.equal(st.ok, true);
-    assert.deepEqual(codes(st), ['libraryDirGecersiz', 'exportAlanGecersiz', 'exportAlanGecersiz']);
-    // geçerli export (dizi), boş nesne ve anahtarın yokluğu: uyarı yok
-    for (const ok of [{ export: { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu'] } }, { export: {} }, { libraryDir: 'prompts' }]) {
-      fs.writeFileSync(file, JSON.stringify(ok));
-      svc.invalidate();
-      st = await svc.evaluate();
-      assert.deepEqual(st.issues, [], JSON.stringify(ok));
-      assert.equal(st.ok, true);
-    }
+    assert.deepEqual((await svc.evaluate()).issues, [], 'klasör eski dosya sayılmaz');
   } finally { rmrf(d); }
 });
 

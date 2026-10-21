@@ -257,16 +257,33 @@ mark { background: color-mix(in srgb, var(--lime) 80%, transparent); color: #121
 .chip button:hover { background: var(--ink); color: var(--card); }
 .meta .chips input.chip-in, .chips input.chip-in { border: 0; outline: 0; box-shadow: none; background: transparent; flex: 1; min-width: 100px; width: auto; padding: 3px 4px; }
 /* yayın ayarları paneli */
-details.pub { margin: 6px 0 22px; border: 2px dashed var(--field); border-radius: 20px; background: color-mix(in srgb, var(--cobalt) 5%, var(--card)); transition: border-color .2s, background-color .2s; }
+details.pub { --cc-col: 210px; margin: 6px 0 22px; border: 2px dashed var(--field); border-radius: 20px; background: color-mix(in srgb, var(--cobalt) 5%, var(--card)); transition: border-color .2s, background-color .2s; }
 details.pub[open] { border-style: solid; border-color: var(--rule); }
 details.pub > summary { list-style: none; padding: 13px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 18px; }
 details.pub > summary::-webkit-details-marker { display: none; }
 details.pub > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--rule); border-radius: 50%; background: var(--lime); color: #121116; font: 800 16px/1 var(--sans); transition: transform .45s var(--spring); }
 details.pub[open] > summary::before { transform: rotate(135deg); }
 details.pub summary b { font: 750 17px/1.2 var(--display); font-variation-settings: "opsz" 24; letter-spacing: -.02em; }
-details.pub .meta { padding: 4px 16px 14px 54px; margin: 0; }
+details.pub .meta { grid-template-columns: var(--cc-col) minmax(0, 1fr); padding: 4px 16px 14px 54px; margin: 0; }
 details.pub > .issue { margin: 0 16px 8px 54px; }
 .pubfoot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0 16px 16px 54px; }
+details.pub .meta.cc { align-items: start; }
+details.pub .meta.cc > label { padding-top: 9px; }
+details.pub .meta > label.cckey { font: 400 12.5px var(--mono); overflow-wrap: anywhere; color: var(--ink); }
+.meta.cc .hint { margin-top: 4px; }
+.meta.cc .hint:empty { display: none; }
+.meta textarea.cclist { width: 100%; min-height: 44px; resize: vertical; padding: 8px 12px; border: 2px solid transparent; border-radius: 12px; background-color: var(--soft); color: var(--ink); font: 400 13px/1.5 var(--mono); transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+.meta textarea.cclist:hover { border-color: var(--field); }
+.meta textarea.cclist:focus { outline: 0; border-color: var(--rule); background-color: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
+details.ccmore { margin: 4px 16px 12px 54px; border: 2px dashed var(--field); border-radius: 14px; transition: border-color .2s; }
+details.ccmore[open] { border-style: solid; border-color: var(--rule); }
+details.ccmore > summary { list-style: none; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; border-radius: 12px; }
+details.ccmore > summary::-webkit-details-marker { display: none; }
+details.ccmore > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--rule); border-radius: 50%; background: var(--sun); color: #121116; font: 800 13px/1 var(--sans); transition: transform .45s var(--spring); }
+details.ccmore[open] > summary::before { transform: rotate(135deg); }
+details.pub details.ccmore .meta { grid-template-columns: calc(var(--cc-col) - 14px) minmax(0, 1fr); padding: 4px 12px 12px; }
+.ccnotes { display: grid; gap: 6px; padding: 0 16px 14px 54px; }
+.ccnotes > * { margin: 0; }
 /* gövde editörü */
 .bodywrap { margin-top: 4px; }
 .bodywrap textarea, #fRaw { width: 100%; min-height: 320px; resize: vertical; padding: 22px 26px 26px; border: 2px solid var(--rule); border-radius: 20px; background: var(--code); color: var(--ink);
@@ -495,6 +512,19 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
 .lostbtns { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; }
 .mkrow.dim { opacity: .6; }
 .fieldset-plain { border: 0; margin: 0; padding: 0; min-width: 0; border-radius: 0; }
+.consq { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.row.dragging { opacity: .45; outline: 2px dashed var(--rule); outline-offset: -2px; }
+.row.drop-ok { background: var(--hue, var(--lime)); color: #121116; box-shadow: inset 0 0 0 2px var(--rule), 3px 3px 0 var(--hard);
+  transform: translate(-2px, -2px); transition: transform .25s var(--spring), box-shadow .25s var(--spring); }
+.row.drop-ok .cnt, .row.drop-ok .pill { color: #121116; border-color: #121116; background: transparent; }
+.row.drop-ok[data-c="2"], .row.drop-ok[data-c="2"] .cnt, .row.drop-ok[data-c="2"] .pill { color: var(--on-cobalt); border-color: var(--on-cobalt); }
+.row.drop-no { cursor: no-drop; box-shadow: inset 0 0 0 2px var(--tomato-ink);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tomato) 16%, transparent) 0 6px, transparent 6px 12px); }
+.dnd-hint { flex: none; display: flex; gap: 8px; align-items: center; margin: 6px 12px 10px; padding: 7px 12px; border: 2px solid var(--rule);
+  border-radius: 12px; background: var(--card); box-shadow: 3px 3px 0 var(--hard); font-weight: 700; font-size: 13px; animation: pop .25s var(--spring) backwards; }
+.dnd-hint .ic { color: inherit; }
+.dnd-hint.ok { background: color-mix(in srgb, var(--lime) 30%, var(--card)); }
+.dnd-hint.no { background: color-mix(in srgb, var(--tomato) 18%, var(--card)); }
 
 /* ---------------------------------------------------------------- hareket */
 @keyframes shape-pop { from { opacity: 0; transform: scale(0) rotate(-90deg); } to { opacity: 1; transform: none; } }
@@ -529,7 +559,11 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
   .hist, .gitgrid, .grid2 { grid-template-columns: 1fr; }
   .meta { grid-template-columns: 1fr; gap: 4px; }
   .meta > label { margin-top: 10px; }
-  details.pub .meta, details.pub > .issue, .pubfoot { padding-left: 16px; margin-left: 0; }
+  details.pub .meta, details.pub > .issue, .pubfoot, .ccnotes { padding-left: 16px; margin-left: 0; }
+  details.pub .meta, details.pub details.ccmore .meta { grid-template-columns: 1fr; }
+  details.pub .meta.cc { gap: 4px; }
+  details.pub .meta.cc > label { padding-top: 0; }
+  details.ccmore { margin-left: 16px; }
   .mkrow { grid-template-columns: 1fr; }
   .tile.stat, .tile.types { grid-column: 1 / -1; }
   .tile.hero { padding: 28px 22px 24px; min-height: 0; }
@@ -576,7 +610,7 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
           <option value="" data-i18n="ui.static.allStatuses"></option><option value="taslak" data-i18n="ui.static.statusDraft"></option><option value="kararlı" data-i18n="ui.static.statusStable"></option><option value="arşiv" data-i18n="ui.static.statusArchived"></option>
         </select>
         <select id="fTur" data-i18n-aria-label="ui.static.filterTypeLabel">
-          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.notPublished"></option>
+          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.typePrompt"></option>
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="fScope"><span data-i18n="ui.static.searchInFiles"></span></label>
@@ -593,6 +627,7 @@ legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 70
       <span id="why-mp" class="sr"></span><span id="why-plugin" class="sr"></span><span id="why-prompt" class="sr"></span>
     </div>
     <div id="list" class="list" role="tree" data-i18n-aria-label="ui.static.library"></div>
+    <div id="dndHint" class="dnd-hint" role="status" aria-live="polite" hidden></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -761,7 +796,7 @@ function hl(text, tokens) {
   return out + esc(text.slice(pos));
 }
 
-function autosize(el) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(300, el.scrollHeight + 4) + 'px'; }
+function autosize(el, min = 300) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(min, el.scrollHeight + 4) + 'px'; }
 
 /* --------------------------------------------------------------------- durum */
 const S = {
@@ -776,6 +811,7 @@ const S = {
   results: null, resultsInfo: null, // resultsInfo: { total, limit, truncated } (sunucu 300'de keser)
   cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null,
   warnHidden: false,
+  drag: null,
   openSeq: 0,             // openFile çağrı sayacı: yavaş eski yanıt yenisini ezmesin
   lostEdit: null          // kurulum bozulunca kurtarılan kaydedilmemiş metin: { mp, path, raw, commitMsg }
 };
@@ -792,7 +828,7 @@ const activeMp = () => { const m = mpByName(activeName()); return m && m.state =
 const pluginsOf = (mp) => { const m = typeof mp === 'string' ? mpByName(mp) : mp; return m ? m.plugins : []; };
 const libDirOf = (mp) => {
   const m = mpByName(mp || activeName());
-  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || 'library';
+  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || Rules.LIBRARY_DIR;
 };
 const pathSep = () => ((S.lib && S.lib.libraryRoot) || (S.info && S.info.libraryRoot) || '').includes('\\') ? '\\' : '/';
 
@@ -956,7 +992,7 @@ function rowHtml(it, focusKey) {
     return `<div class="empty note" style="--d:${d}" data-note>${esc(it.text)}${it.action ? ` <button class="btn sm" data-act="${it.action}" data-mp="${esc(it.mp)}">${esc(it.actionLabel)}</button>` : ''}</div>`;
   }
   const cur = S.cur && isFileKind(it.kind) && S.cur.mp === it.mp && S.cur.path === it.path;
-  const selected = cur || (S.sel && S.sel.key === it.key);
+  const selected = S.sel && S.modelMap && S.modelMap.has(S.sel.key) ? S.sel.key === it.key : cur;
   const isEtkin = it.kind === 'mp' && it.node.active;
   let icon = ICON[it.kind] || ''; let label = ''; let pills = ''; let sr = ''; let acts = ''; let cls = ''; let hue = null;
   const btn = (act, txt, aria) => `<button class="${act === 'plus' ? 'plus' : 'more'}" data-act="${act}" data-key="${esc(it.key)}" tabindex="-1" aria-label="${esc(aria)}">${txt}</button>`;
@@ -992,7 +1028,7 @@ function rowHtml(it, focusKey) {
       acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">${th('ui.tree.initGit')}</button>`; break;
     case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', tx('ui.tree.actionsFor', { name: it.node.name })) : ''; break;
     default: { // file
-      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
+      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name.replace(/\.(md|markdown)$/i, '');
       label = esc(txt);
       icon = `<span class="dot ${m ? durumClass(m.durum) : ''}"></span>`;
       pills = (m && m.tur ? `<span class="pill">${esc(turLabel(m.tur))}</span>` : '')
@@ -1006,7 +1042,7 @@ function rowHtml(it, focusKey) {
   const caret = it.expandable ? `<span class="caret ${it.expanded ? 'open' : ''}"></span>` : '<span class="caret" style="visibility:hidden"></span>';
   const title = it.kind === 'loose' ? tx('ui.tree.looseTitle', { plugin: (it.mpNode && it.mpNode.defaultPlugin) || (mpByName(it.mp) || {}).defaultPlugin || '' })
     : isFileKind(it.kind) ? it.path : it.kind === 'plugin' ? (it.node.description || it.node.name) : '';
-  return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node"${hue === null ? '' : ` data-c="${hue}"`} tabindex="${it.key === focusKey ? 0 : -1}"
+  return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}${S.drag && S.drag.key === it.key ? ' dragging' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node"${it.kind === 'plugin' || (it.kind === 'file' && /\.(md|markdown)$/i.test(it.path)) ? ' draggable="true"' : ''}${hue === null ? '' : ` data-c="${hue}"`} tabindex="${it.key === focusKey ? 0 : -1}"
     aria-level="${it.level}" aria-posinset="${it.posinset}" aria-setsize="${it.setsize}" ${it.expandable ? `aria-expanded="${it.expanded}"` : ''} ${selected ? 'aria-selected="true"' : ''}
     style="--d:${d}" ${title ? `title="${esc(title)}"` : ''}>${it.expandable || it.level > 1 ? caret : caret}${icon}<span class="name">${label}${sr ? `<span class="sr">${esc(sr)}</span>` : ''}</span>${pills}${acts ? `<span class="acts">${acts}</span>` : ''}</div>`;
 }
@@ -1081,7 +1117,9 @@ function renderList() {
     if (fri != null) { const el = list.querySelector('[data-ri="' + fri + '"]'); if (el) el.focus(); }
   } else {
     list.setAttribute('role', 'tree'); list.setAttribute('aria-label', tx('ui.static.library'));
+    const keep = S.drag ? rowEl(S.drag.key) : null;
     list.innerHTML = treeHtml();
+    if (S.drag) keepDragSource(keep);
     $('#listTitle').textContent = tx('ui.tree.listTitle', { count: S.facets.total || 0 });
     if (fk) { const el = rowEl(fk); if (el) el.focus(); }
   }
@@ -1241,9 +1279,9 @@ function showMenu(x, y, items, returnKey) {
   const first = $('.mi', m); if (first) first.focus();
 }
 
-// Marketplace yapısının parçası olan yollar (pp.config.json, plugins/, .claude-plugin/, libraryDir ...) silinemez ya da taşınamaz:
+// Marketplace yapısının parçası olan yollar (plugins/, .claude-plugin/, prompts/ ...) silinemez ya da taşınamaz:
 // sunucu 403 korunanYol döner, menüde de bu işlemler gösterilmez. Kural Rules.isProtectedPath'te (sunucuyla ortak).
-const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-delete-plugin'];
+const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-move-plugin', 'm-delete-plugin'];
 const isProtectedItem = (it) => !!it.path && Rules.isProtectedPath(it.path, libDirOf(it.mp));
 
 // Düğüm türüne göre bağlam menüsü öğeleri.
@@ -1258,15 +1296,15 @@ function menuItemsFor(it) {
       break;
     case 'plugin':
       items.push(mk(tx('ui.menu.newPrompt'), 'm-new-prompt', { name: it.node.name }), mk(tx('ui.menu.openPackage'), 'open-package', { name: it.node.name }), mk(tx('ui.menu.editDescription'), 'm-desc', { name: it.node.name }),
-        mk(tx('ui.menu.rename'), 'm-rename-plugin', { name: it.node.name }), mk(tx('ui.menu.deleteToTrash'), 'm-delete-plugin', { name: it.node.name, danger: true }));
+        mk(tx('ui.menu.rename'), 'm-rename-plugin', { name: it.node.name }), mk(tx('ui.menu.movePlugin'), 'm-move-plugin', { name: it.node.name }),
+        mk(tx('ui.menu.deleteToTrash'), 'm-delete-plugin', { name: it.node.name, danger: true }));
       break;
     case 'dir':
       items.push(mk(tx('ui.menu.renameOrMove'), 'rename'), mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
     case 'file': {
       if (/\.(md|markdown)$/i.test(it.path)) {
-        const loose = Rules.classifyPromptPath(it.path, libDirOf(it.mp)).kind === 'klasorsuz';
-        items.push(mk(loose ? tx('ui.menu.moveToPlugin') : tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
+        items.push(mk(tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
       } else items.push(mk(tx('ui.menu.renameOrMove'), 'rename'));
       items.push(mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
@@ -1428,9 +1466,17 @@ function pubPill() {
   return `<span class="pill warn">${esc(tx('ui.edit.pillNotYetPublished'))}</span>`;
 }
 
+/** Summary: "Claude Code'da çağır" kullanım satırı (HTML); sunucu yayın bilgisi yoksa ya da seçili tür yayınlanmayan bir değerdeyse (prompt, boş) boş döner. */
+function pubUsageHtml() {
+  const c = S.cur; const p = c && c.publish;
+  if (!p || !normTur(FM.meta(c.parsed).tur)) return '';
+  return p.tur === 'ajan' ? th('ui.edit.usageAgent', { name: p.ad }) : th('ui.edit.usageCommand', { paket: p.paket, name: p.ad });
+}
+
 function editPaneHtml() {
   const c = S.cur; const m = FM.meta(c.parsed);
   const tur = normTur(m.tur);
+  const turShown = Rules.turOf(m.tur);
   const shownBody = c.parsed.body.slice(c.lead.length);
   const chk = curCheck();
   const nt = curNotice();
@@ -1441,9 +1487,6 @@ function editPaneHtml() {
   const dOpt = [['taslak', tx('ui.static.statusDraft')], ['kararlı', tx('ui.static.statusStable')], ['arşiv', tx('ui.static.statusArchived')]];
   const known = dOpt.some((d) => fold(d[0]) === durumVal);
   const mk = S.info.config.marketplace;
-  const usage = c.publish ? (c.publish.tur === 'ajan'
-    ? th('ui.edit.usageAgent', { name: c.publish.ad })
-    : th('ui.edit.usageCommand', { paket: c.publish.paket, name: c.publish.ad })) : '';
   // Aynı anahtar birden fazla yazılmışsa sonuncusu geçerlidir; yayını engellemez, yalnızca uyarır.
   const dup = FM.duplicateKeys(c.parsed);
   const dupWarn = dup.length ? `<div id="fmWarn" class="issue warn" role="status">${esc(Rules.MSG.anahtarTekrar(dup))}</div>` : '';
@@ -1467,23 +1510,110 @@ function editPaneHtml() {
     <div class="meta">
       <label for="pTur">${esc(tx('ui.fields.type'))}</label>
       <select id="pTur" data-f="tur">
-        <option value="">${esc(tx('ui.static.notPublished'))}</option>
-        ${rawTur && !tur ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        ${rawTur ? '' : `<option value="" selected hidden>${esc(tx('ui.edit.turImplicitPrompt'))}</option>`}
+        ${rawTur && !turShown ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        <option value="prompt" ${rawTur && turShown === 'prompt' ? 'selected' : ''}>${esc(tx('ui.edit.turPromptOption'))}</option>
         <option value="komut" ${tur === 'komut' ? 'selected' : ''}>${esc(tx('ui.edit.turCommandOption'))}</option>
         <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>${esc(tx('ui.edit.turAgentOption'))}</option>
         <option value="skill" ${tur === 'skill' ? 'selected' : ''}>${esc(tx('ui.static.typeSkill'))}</option>
       </select>
-      <label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
-      <label for="pAd">${esc(tx('ui.fields.name'))}</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
-      <label for="pAcik">${esc(tx('ui.fields.description'))}</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="${esc(tx('ui.edit.descriptionPlaceholder'))}">
-      <label for="pArg">${esc(tx('ui.fields.argumentHint'))}</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="${esc(tx('ui.edit.argumentHintPlaceholder'))}">
-      <label for="pArac">${esc(tx('ui.fields.allowedTools'))}</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
-      <label for="pModel">${esc(tx('ui.fields.model'))}</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
     </div>
-    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${usage}</span></div>
+    <div id="pubFields">${pubFieldsHtml()}</div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${pubUsageHtml()}</span></div>
   </details>
   <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="${esc(tx('ui.edit.bodyLabel'))}" placeholder="${esc(tx('ui.edit.bodyPlaceholder', { example: '{{' + tx('ui.edit.exampleVar') + '}}' }))}">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
+}
+
+/** Summary: Claude Code alanı -> ipucu sözlük anahtarı (türe göre değişenler tür başına). */
+const CC_HINT_KEYS = { name: { komut: 'ui.cc.nameCommand', skill: 'ui.cc.nameSkill', ajan: 'ui.cc.nameAgent' }, description: { komut: 'ui.cc.descriptionCommand', skill: 'ui.cc.descriptionCommand', ajan: 'ui.cc.descriptionAgent' }, when_to_use: 'ui.cc.whenToUse', 'argument-hint': 'ui.cc.argumentHint', arguments: 'ui.cc.arguments', 'disable-model-invocation': 'ui.cc.disableModelInvocation', 'user-invocable': 'ui.cc.userInvocable', 'allowed-tools': 'ui.cc.allowedTools', 'disallowed-tools': 'ui.cc.disallowedTools', model: 'ui.cc.model', effort: 'ui.cc.effort', context: 'ui.cc.context', agent: 'ui.cc.agent', background: { komut: 'ui.cc.backgroundSkill', skill: 'ui.cc.backgroundSkill', ajan: 'ui.cc.backgroundAgent' }, paths: 'ui.cc.paths', shell: 'ui.cc.shell', license: 'ui.cc.license', compatibility: 'ui.cc.compatibility', tools: 'ui.cc.tools', disallowedTools: 'ui.cc.agentDisallowedTools', maxTurns: 'ui.cc.maxTurns', autoCompactWindow: 'ui.cc.autoCompactWindow', skills: 'ui.cc.skills', memory: 'ui.cc.memory', omitClaudeMd: 'ui.cc.omitClaudeMd', isolation: 'ui.cc.isolation', color: 'ui.cc.color' };
+
+/** Summary: Claude Code alanının geçerli dildeki ipucu metni; ipucu tanımlı değilse boş döner. */
+function ccHint(key, tur) {
+  const e = Object.prototype.hasOwnProperty.call(CC_HINT_KEYS, key) ? CC_HINT_KEYS[key] : null;
+  const k = e && (typeof e === 'string' ? e : e[tur]);
+  return k ? tx(k) : '';
+}
+
+/** Summary: Claude Code alanı için etiket (gerçek anahtar adı), girdi ve ipucu işaretlemesi. */
+function ccFieldHtml(f, tur) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const id = 'cc-' + f.key;
+  const val = Rules.ccValue(m, f.key, tur);
+  const text = str(val).trim();
+  const attrs = `id="${id}" data-f="${f.key}" aria-describedby="${id}-h"`;
+  const unknown = (v) => `<option value="${esc(v)}" selected>${th('ui.edit.ccUnrecognized', { value: v })}</option>`;
+  const empty = `<option value="">${esc(tx('ui.edit.ccEmptyOption'))}</option>`;
+  let ctl;
+  if (f.kind === 'bool') {
+    const b = Rules.ccBool(val);
+    ctl = `<select ${attrs}>${empty}<option value="true" ${b === true ? 'selected' : ''}>true</option><option value="false" ${b === false ? 'selected' : ''}>false</option>${text && b === null ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'enum') {
+    ctl = `<select ${attrs}>${empty}${f.values.map((v) => `<option value="${esc(v)}" ${text === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}${text && !f.values.includes(text) ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'list') {
+    ctl = `<textarea ${attrs} class="cclist" rows="2" spellcheck="false" placeholder="${esc(tx('ui.edit.ccListPlaceholder'))}">${esc(Rules.ccList(f, val).join('\n'))}</textarea>`;
+  } else {
+    const ph = f.key === 'name' ? FM.slug(stem(c.path)) : f.key === 'description' ? tx('ui.edit.descriptionPlaceholder') : f.key === 'argument-hint' ? tx('ui.edit.argumentHintPlaceholder')
+      : ({ 'allowed-tools': 'Bash(git diff:*), Read', tools: 'Read, Grep, Glob', model: 'sonnet' })[f.key] || '';
+    ctl = `<input ${attrs} value="${esc(str(val))}" placeholder="${esc(ph)}" autocomplete="off"${f.kind === 'int' ? ' inputmode="numeric"' : ''}${f.maxLength ? ` maxlength="${f.maxLength}"` : ''}${f.key === 'model' ? ' list="dl-cc-model"' : ''}>`;
+  }
+  return `<label for="${id}" class="cckey">${esc(f.key)}</label><div>${ctl}<div id="${id}-h" class="hint">${esc(ccHint(f.key, tur))}</div></div>`;
+}
+
+/** Summary: Türe göre Claude Code alanları bölmesi (paket satırı, temel alanlar, diğer alanlar, notlar); tür yayınlanabilir değilse boş. */
+function pubFieldsHtml(forceOpen) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const tur = normTur(m.tur);
+  if (!tur) return '';
+  const mk = S.info.config.marketplace;
+  const pkgCl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  const fields = Rules.ccFieldsFor(tur);
+  const more = fields.filter((f) => f.group === 'diger');
+  const rawKeys = fields.filter((f) => f.group === 'ham').map((f) => f.key);
+  const ignored = Rules.CC_PLUGIN_IGNORED[tur] || [];
+  const unused = Rules.ccUnusedKeys(m, tur);
+  const open = !!forceOpen || more.some((f) => str(Rules.ccValue(m, f.key, tur)).trim() !== '');
+  const pkgRow = `<label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>`;
+  const notes = (rawKeys.length ? `<p class="hint">${esc(tx('ui.edit.ccRawOnly', { keys: rawKeys.join(', ') }))}</p>` : '')
+    + (ignored.length ? `<p class="hint">${esc(tx('ui.edit.ccPluginIgnored', { keys: ignored.join(', ') }))}</p>` : '')
+    + (unused.length ? `<p class="issue info">${esc(tx('ui.edit.ccUnused', { keys: unused.join(', ') }))}</p>` : '');
+  return `<div class="meta cc">${pkgRow}${fields.filter((f) => f.group === 'temel').map((f) => ccFieldHtml(f, tur)).join('')}</div>
+    <details class="ccmore" ${open ? 'open' : ''}><summary>${esc(tx('ui.edit.ccMore'))}</summary><div class="meta cc">${more.map((f) => ccFieldHtml(f, tur)).join('')}</div></details>
+    <datalist id="dl-cc-model">${['inherit', 'sonnet', 'opus', 'haiku', 'fable'].map((v) => `<option value="${v}"></option>`).join('')}</datalist>
+    ${notes ? `<div class="ccnotes">${notes}</div>` : ''}`;
+}
+
+/** Summary: Claude Code alanının tanımı (önce açık dosyanın türünün alanı, yoksa spec'teki kendi tanımı, böylece değer o anki türe bağlı yorumlanmaz); alan değilse null döner. */
+function ccFieldOf(key) {
+  return Rules.ccField(key, Rules.normTur(FM.meta(S.cur.parsed).tur)) || null;
+}
+
+/** Summary: Odaktaki yayın alanı girdisinin değerini, tür değişip bölme yeniden çizilmeden önce açık dosyaya yazar. */
+function flushFocusedField() {
+  const ae = document.activeElement;
+  if (!S.cur || !ae || !ae.dataset || !ae.dataset.f || ae.dataset.f === 'tur' || !ae.closest('#pubFields')) return;
+  setField(ae.dataset.f, ae.value);
+}
+
+/** Summary: Girdi metnini alanın yazılacak değerine çevirir (bool -> boolean, liste -> satır dizisi, diğerleri kırpılmış metin). */
+function ccInputValue(f, raw) {
+  const v = typeof raw === 'string' ? raw : str(raw);
+  if (f.kind === 'bool') return v.trim() === 'true' ? true : v.trim() === 'false' ? false : v.trim();
+  if (f.kind === 'list') return v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  return v.trim();
+}
+
+/** Summary: Liste alanlarının yüksekliğini içeriğe uydurur. */
+function sizeCcLists(root) { $$('textarea.cclist', root).forEach((t) => autosize(t, 44)); }
+
+/** Summary: Claude Code alanları bölmesini yeniden çizer (tür değişince); "diğer alanlar" açıksa açık kalır. */
+function paintPubFields() {
+  const c = S.cur; const box = $('#pubFields'); if (!c || !box) return;
+  const more = $('details.ccmore', box);
+  box.innerHTML = pubFieldsHtml(!!(more && more.open));
+  sizeCcLists(box);
+  paintPaketHint();
+  const u = $('#pubUsage'); if (u) u.innerHTML = pubUsageHtml();
 }
 
 function bodyInfoText() {
@@ -1597,7 +1727,7 @@ function renderMainInner() {
     ${staleBanner}${banner}${ext}${restore}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${esc(t[1])}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
-  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
+  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); sizeCcLists(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
   if (c.tab === 'hist') paintHist();
   paintVerHint(); paintVerWarn();
@@ -1623,7 +1753,7 @@ function startHtml() {
     const shown = st.filter((x) => x[2] > 0);
     const types = [['komut', tx('ui.static.typeCommand')], ['ajan', tx('ui.static.typeAgent')], ['skill', tx('ui.static.typeSkill')]]
       .map(([k, label]) => [label, sum(F.tur, (x) => x.name === k)]);
-    types.push([tx('ui.static.notPublished'), Math.max(0, n - types.reduce((a, x) => a + x[1], 0))]);
+    types.push([tx('ui.static.typePrompt'), Math.max(0, n - types.reduce((a, x) => a + x[1], 0))]);
     stats = `<div class="tile stat"><div class="big">${n}</div><div class="bar" aria-hidden="true">${shown.map((x) => `<span class="b-${x[0]}" style="flex:${x[2]}"></span>`).join('')}</div>
       <ul class="legend">${shown.map((x) => `<li><span class="dot ${x[0] === 'bos' ? '' : x[0]}"></span>${esc(x[1])}<b>${x[2]}</b></li>`).join('')}</ul></div>
       <div class="tile types"><ul>${types.map((x) => `<li><b>${x[1]}</b><span>${esc(x[0])}</span></li>`).join('')}</ul></div>`;
@@ -1636,11 +1766,14 @@ function startHtml() {
 /* ---------------------------------------------------------------- düzenleme */
 function setField(key, value) {
   const c = S.cur;
-  FM.set(c.parsed, key, typeof value === 'string' ? value.trim() : value);
+  const cc = c.isPrompt ? ccFieldOf(key) : null;
+  if (cc) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur), key);
+  FM.set(c.parsed, key, cc ? ccInputValue(cc, value) : (typeof value === 'string' ? value.trim() : value));
   c.lead = c.lead || leadOf(c.parsed);
   updateDirty();
   if (key === 'tur') {
-    c.turClearedExplicitly = !str(value).trim();
+    c.turClearedExplicitly = !Rules.normTur(value);
+    paintPubFields();
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
   if (key === 'paket') paintPaketHint();
@@ -1842,6 +1975,7 @@ async function openBump() {
         if (extra) { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn sm'; bt.dataset.act = extra.act; bt.textContent = extra.label; er.appendChild(document.createTextNode(' ')); er.appendChild(bt); }
       };
       const send = async (force, pick) => {
+        if (c.dirty && c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
         const body = { path: c.path, level: pick.level, note: pick.note,
           raw: c.dirty ? FM.stringify(c.parsed) : undefined, baseMtime: force ? undefined : c.mtime };
         try {
@@ -1889,6 +2023,7 @@ async function save(force) {
   if (!c.dirty && c.commitMsg.trim() && uncommitted(c.path)) return commitOnly();
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
   if (!(await confirmTurRemoval(c, force))) return false;
+  if (c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
   const raw = FM.stringify(c.parsed);
   const msg = c.commitMsg.trim();
   try {
@@ -1909,6 +2044,7 @@ async function save(force) {
       if (chk && (chk.code === 'turYok' || chk.code === 'turGecersiz')) toast(chk.reason, 'warn', 7000);
     }
     updateDirty();
+    if (!c.isPrompt) refreshSetupState().catch(() => { /* sessiz */ });
     const aw = afterWrite();
     if (needId) { await aw; if (await askIdentity()) await commitOnly(); }
     return true;
@@ -2037,7 +2173,7 @@ function diffHtml(d) {
 }
 
 /** Summary: Frontmatter anahtarı -> görünen etiket sözlük anahtarı. */
-const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package', komut_adi: 'ui.fields.name', aciklama: 'ui.fields.description', arguman_ipucu: 'ui.fields.argumentHint', izinli_araclar: 'ui.fields.allowedTools', model: 'ui.fields.model' };
+const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package' };
 
 /** Summary: Frontmatter anahtarının görünen etiketi; bilinmeyen anahtar için boş döner. */
 function fieldLabel(key) {
@@ -2248,8 +2384,8 @@ function templates() {
   return {
     bos: { label: tx('ui.templates.blankLabel'), meta: {}, body: '' },
     rgc: { label: tx('ui.templates.rgcLabel'), meta: {}, body: tx('ui.templates.rgcBody') },
-    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: tx('ui.templates.commandBody') },
-    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
+    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', 'argument-hint': '[argüman]' }, body: tx('ui.templates.commandBody') },
+    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
   };
 }
 
@@ -2416,24 +2552,24 @@ function openNewPrompt(o) {
     title: tx('ui.menu.newPrompt'),
     html: `<form class="stack" id="newForm">
       <p class="hint" style="margin:0">${th('ui.newPrompt.marketplace', { name: m.name })}</p>
-      <label>${esc(tx('ui.fields.title'))}<input name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.fields.name'))}<input id="npTitle" name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off" aria-describedby="npFile"></label>
+      <p class="hint" id="npFile" style="margin:0"></p>
       <label>${esc(tx('ui.newPrompt.plugin'))}<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
       <label>${esc(tx('ui.newPrompt.tagsLabel'))}<input name="tags" list="dl-etiketler" placeholder="${esc(tx('ui.newPrompt.tagsPlaceholder'))}" autocomplete="off"></label>
       <label>${esc(tx('ui.newPrompt.template'))}<select name="tpl">${Object.keys(tpls).map((k) => `<option value="${k}">${esc(tpls[k].label)}</option>`).join('')}</select></label>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
+      $('#npTitle', b).addEventListener('input', (e) => { $('#npFile', b).textContent = hasWord(e.target.value) ? tx('ui.newPrompt.filePreview', { file: FM.slug(e.target.value) + '.md' }) : ''; });
       $('#newForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
         const title = String(f.get('title')).trim(); if (!title) return;
         const plugin = String(f.get('plugin'));
         const p = FM.parse('');
-        FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
-        FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = tpls[f.get('tpl')] || tpls.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
-        p.body = '\n' + t.body;
+        FM.setBody(p, t.body);
         closeModal();
         if (activeName() !== m.name) { toast(tx('ui.newPrompt.activeChanged'), 'error'); return; }
         if (!(await confirmDiscard())) return;
@@ -2450,72 +2586,304 @@ function openNewPrompt(o) {
   });
 }
 
-// Prompt taşı: aynı marketplace'te /api/rename, başka marketplace'e /api/prompts/transfer.
+/** Summary: Taşıma hedefinin ağaç anahtarı: plugin satırı, Klasörsüz ya da Gelen kutusu düğümü. */
+function moveTargetKey(mp, to) {
+  if (to.kind === 'paket') return nodeKey(mp, libDirOf(mp) + '/' + to.plugin);
+  return nodeKey(mp, to.kind === 'gelenKutusu' ? '#gelen' : '#klasorsuz');
+}
+
+/** Summary: Hedef kapsayıcının marketplace'e göreli klasör yolu. */
+function moveTargetDir(to) {
+  const lib = libDirOf(to.mp);
+  return to.kind === 'paket' ? lib + '/' + to.plugin : to.kind === 'gelenKutusu' ? lib + '/' + Rules.INBOX_DIR : lib;
+}
+
+/** Summary: Kaynak (src) ve hedeften (to) taşıma planı üretir; geçerliyse { ok: true, op, fromMp, toMp, same, path, name, to, targetKey }, değilse { ok: false, code, params }. */
+function movePlan(src, to) {
+  const same = src.mp === to.mp;
+  if (src.op === 'plugin') {
+    if (same) return { ok: false, code: 'pluginSameMp', params: {} };
+    const slug = FM.slug(src.name);
+    if (pluginsOf(to.mp).some((p) => p.slug === slug || p.name.toLowerCase() === src.name.toLowerCase())) return { ok: false, code: 'pluginExists', params: { name: src.name } };
+    return { ok: true, op: 'plugin', fromMp: src.mp, toMp: to.mp, same: false, path: src.path, name: src.name, slug, count: src.count, hasDesc: src.hasDesc, to: { kind: 'mp', plugin: null, name: null }, targetKey: nodeKey(to.mp, '') };
+  }
+  const dir = src.path.split('/').slice(0, -1).join('/');
+  if (same && dir === moveTargetDir(to) && (!to.name || to.name === src.name)) return { ok: false, code: 'same', params: {} };
+  return { ok: true, op: 'prompt', fromMp: src.mp, toMp: to.mp, same, path: src.path, name: src.name, to: { kind: to.kind, plugin: to.plugin || null, name: to.name || null }, targetKey: moveTargetKey(to.mp, to) };
+}
+
+/** Summary: Sürüklenen kaynağın bırakıldığı ağaç öğesine (it) göre taşıma planı; kural dışıysa { ok: false, code, params }. */
+function dropPlan(src, it) {
+  const bad = (code) => ({ ok: false, code, params: {} });
+  if (it.kind === 'teknik' || it.kind === 'tdir' || it.kind === 'tfile') return bad('technical');
+  const mp = mpByName(it.mp);
+  if (!mp || mp.state !== 'hazir') return bad('unavailable');
+  if (src.op === 'plugin') return movePlan(src, { mp: it.mp });
+  switch (it.kind) {
+    case 'mp': case 'loose': return movePlan(src, { mp: it.mp, kind: 'klasorsuz' });
+    case 'inbox': return movePlan(src, { mp: it.mp, kind: 'gelenKutusu' });
+    case 'plugin': return movePlan(src, { mp: it.mp, kind: 'paket', plugin: it.node.name });
+    case 'dir': return bad('subfolder');
+    case 'file': {
+      const cl = Rules.classifyPromptPath(it.path, libDirOf(it.mp));
+      if (cl.kind === 'paket') return movePlan(src, { mp: it.mp, kind: 'paket', plugin: cl.klasor });
+      if (cl.kind === 'klasorsuz' || cl.kind === 'gelenKutusu') return movePlan(src, { mp: it.mp, kind: cl.kind });
+      return bad('technical');
+    }
+    default: return bad('unavailable');
+  }
+}
+
+/** Summary: Reddedilen plan kodu -> sözlük anahtarı. */
+const DND_REASON = { same: 'ui.dnd.no.same', technical: 'ui.dnd.no.technical', subfolder: 'ui.dnd.no.subfolder', pluginSameMp: 'ui.dnd.no.pluginSameMp', unavailable: 'ui.dnd.no.unavailable', pluginExists: 'ui.dnd.no.pluginExists' };
+
+/** Summary: Reddedilen planın nedeni, geçerli dilde. */
+function dropReason(plan) {
+  const k = DND_REASON[plan.code];
+  return tx(k, plan.params);
+}
+
+/** Summary: Taşıma konumunun kısa adı: plugin adı, Klasörsüz ya da Gelen kutusu. */
+function placeLabel(kind, plugin) {
+  return kind === 'paket' ? plugin : kind === 'gelenKutusu' ? tx('ui.tree.inbox') : tx('ui.tree.loose');
+}
+
+/** Summary: Hedef etiketi "marketplace › konum"; plugin taşımada yalnızca marketplace adı. */
+function dropLabel(plan) {
+  return plan.op === 'plugin' ? plan.toMp : tx('ui.move.place', { mp: plan.toMp, place: placeLabel(plan.to.kind, plan.to.plugin) });
+}
+
+/** Summary: Kaynak etiketi "marketplace › konum" (plugin taşımada "marketplace › plugin"). */
+function moveFromLabel(plan) {
+  if (plan.op === 'plugin') return tx('ui.move.place', { mp: plan.fromMp, place: plan.name });
+  const cl = Rules.classifyPromptPath(plan.path, libDirOf(plan.fromMp));
+  return tx('ui.move.place', { mp: plan.fromMp, place: placeLabel(cl.kind, cl.klasor) });
+}
+
+/** Summary: Planın sonuç maddeleri (her biri tam cümle), geçerli dilde. */
+function moveConsequences(plan) {
+  const out = [];
+  const from = plan.fromMp;
+  if (plan.op === 'plugin') {
+    out.push(tx('ui.move.c.pluginCount', { count: plan.count }), tx('ui.move.c.pluginTags', { slug: plan.slug, from }), tx('ui.move.c.pluginOutput', { slug: plan.slug }));
+    if (plan.hasDesc) out.push(tx('ui.move.c.pluginDesc'));
+    out.push(tx('ui.move.c.sourceTrash', { from }), tx('ui.move.c.noCommitCross'));
+  } else {
+    const kind = plan.to.kind;
+    if (kind !== 'gelenKutusu') out.push(tx('ui.move.c.paketField'));
+    out.push(plan.same ? tx('ui.move.c.tagsStay') : tx('ui.move.c.historyStays', { from }));
+    if (!plan.same) out.push(tx('ui.move.c.sourceTrash', { from }));
+    out.push(tx('ui.move.c.outputOrphan'));
+    if (kind === 'klasorsuz') out.push(tx('ui.move.c.looseDefault', { plugin: (mpByName(plan.toMp) || {}).defaultPlugin || '' }));
+    if (kind === 'gelenKutusu') out.push(tx('ui.move.c.inbox'));
+    out.push(plan.same ? tx('ui.move.c.noCommit') : tx('ui.move.c.noCommitCross'));
+  }
+  if (from !== activeName()) out.push(tx('ui.move.c.activate', { mp: from }));
+  return out;
+}
+
+/** Summary: Sonuç maddelerinin <li> işaretlemesi. */
+function consequencesHtml(plan) {
+  return moveConsequences(plan).map((x) => `<li>${esc(x)}</li>`).join('');
+}
+
+/** Summary: Onay penceresi gövdesi: öğe adı, kaynak → hedef ve sonuç maddeleri. */
+function moveSummaryHtml(plan) {
+  return `<p><strong>${esc(plan.name)}</strong></p><p>${th('ui.move.route', { from: moveFromLabel(plan), to: dropLabel(plan) })}</p><ul class="consq">${consequencesHtml(plan)}</ul>`;
+}
+
+/** Summary: Taşıma onay penceresini açar; "Taşı" seçilirse true, vazgeçilirse false çözer. */
+function confirmMove(plan) {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    openModal({
+      title: plan.op === 'plugin' ? tx('ui.move.confirmPluginTitle') : tx('ui.move.confirmPromptTitle'),
+      html: `${moveSummaryHtml(plan)}<div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button type="button" class="btn primary" data-go autofocus>${esc(tx('ui.move.submit'))}</button></div>`,
+      onMount: (b) => { $('[data-go]', b).addEventListener('click', () => { fin(true); closeModal(); }); },
+      onClose: () => fin(false)
+    });
+  });
+}
+
+/** Summary: Taşıma, açık dosyayı etkiliyor mu (taşınan prompt ya da taşınan plugin'in içindeki dosya). */
+function moveTouchesOpenFile(plan) {
+  const c = S.cur;
+  if (!c || c.mp !== plan.fromMp) return false;
+  return plan.op === 'plugin' ? c.path.startsWith(plan.path + '/') : c.path === plan.path;
+}
+
+/** Summary: Kaynak marketplace'in "son açılan" kaydı taşınan yolu gösteriyorsa yeni yola (aynı marketplace) günceller, başka marketplace'e gidiyorsa siler. */
+function moveLastOpened(plan, r) {
+  const key = lsKey('last', plan.fromMp);
+  const last = ls.get(key, null);
+  if (typeof last !== 'string') return;
+  const hit = plan.op === 'plugin' ? last.startsWith(plan.path + '/') : last === plan.path;
+  if (hit) ls.set(key, plan.same ? r.to.path : null);
+}
+
+/** Summary: Taşıma yanıtını arayüze işler: açık dosya, açık düğümler, son açılan ve son plugin kaydı, seçim ve bildirimler. */
+async function applyMoveResult(plan, r) {
+  const { fromMp, toMp } = plan;
+  const touched = moveTouchesOpenFile(plan);
+  if (!touched) moveLastOpened(plan, r);
+  const tab = touched ? S.cur.tab : undefined;
+  let reopen = false; let key;
+  if (plan.op === 'plugin') {
+    const old = plan.path; const src = expOf(fromMp); const dst = expOf(toMp);
+    Array.from(src).filter((k) => k === old || k.startsWith(old + '/')).forEach((k) => { src.delete(k); dst.add(r.plugin.path + k.slice(old.length)); });
+    dst.add(r.plugin.path);
+    saveExp(fromMp); saveExp(toMp);
+    if (ls.get(lsKey('sonPlugin', fromMp), '') === plan.name) ls.set(lsKey('sonPlugin', fromMp), '');
+    if (touched) clearCur();
+    S.mpOpen.add(toMp); saveMpOpen();
+    key = nodeKey(toMp, r.plugin.path);
+  } else {
+    if (touched && plan.same) { S.cur.path = r.to.path; ls.set(lsKey('last'), r.to.path); reopen = true; }
+    else if (touched) clearCur();
+    if (S.lostEdit && plan.same && S.lostEdit.mp === fromMp && S.lostEdit.path === plan.path) S.lostEdit.path = r.to.path;
+    expandParents(r.to.path, toMp);
+    key = nodeKey(toMp, r.to.path);
+  }
+  S.sel = { mp: toMp, key }; S.focusKey = key;
+  await afterWrite();
+  if (reopen) await openFile(r.to.path, { reload: true, quiet: true, tab });
+  if (!S.cur) renderMain();
+  focusKey(key);
+  if (plan.op === 'plugin') { toast(tx('ui.move.donePlugin', { name: plan.name, mp: toMp, count: r.moved }), 'ok', 6000); return; }
+  const to = dropLabel(plan);
+  const name = base(r.to.path);
+  const msg = plan.same
+    ? (r.renamed ? tx('ui.move.doneRenamed', { to, name }) : tx('ui.move.done', { to }))
+    : (r.renamed ? tx('ui.move.doneRenamedCross', { to, name }) : tx('ui.move.doneCross', { to }));
+  toast(msg, 'ok', plan.same ? 4500 : 6000);
+  if (r.paket && r.paket.action === 'set') toast(tx('ui.move.paketSet', { value: r.paket.value }), 'ok', 5000);
+  else if (r.paket && r.paket.action === 'remove') toast(tx('ui.move.paketRemoved'), 'ok', 5000);
+}
+
+/** Summary: Taşımanın tek yürütücüsü (pencereler ve sürükle-bırak): onay, kaynağı etkinleştirme, açık dosya kararı, API çağrısı, sonuç. Başarılıysa true. */
+async function runMove(plan, o) {
+  if (!(o && o.confirmed) && !(await confirmMove(plan))) return false;
+  if (plan.fromMp !== activeName() && !(await activateMarketplace(plan.fromMp, { quiet: true }))) return false;
+  if (moveTouchesOpenFile(plan) && !(await confirmDiscard())) return false;
+  let r;
+  try {
+    r = plan.op === 'plugin'
+      ? await api('POST', '/api/package/move', { name: plan.name, fromMp: plan.fromMp, toMp: plan.toMp })
+      : await api('POST', '/api/prompts/move', { path: plan.path, fromMp: plan.fromMp, to: { mp: plan.toMp, kind: plan.to.kind, plugin: plan.to.plugin || undefined, name: plan.to.name || undefined } });
+  } catch (e) { fail(e); return false; }
+  await applyMoveResult(plan, r);
+  return true;
+}
+
+/** Summary: Formdaki seçim listelerinde Enter'a basınca (liste kapalıyken) formun varsayılan düğmesine basar; tarayıcı bunu kendiliğinden yapmaz. Düğme pasifse hiçbir şey olmaz. */
+function submitOnEnter(form) {
+  $$('select', form).forEach((sel) => sel.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' || ev.isComposing || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    ev.preventDefault();
+    const go = $('button:not([type="button"])', form);
+    if (go && !go.disabled) go.click();
+  }));
+}
+
 async function openMove(path) {
   const m = activeMp(); if (!m) return;
   const from = m.name;
+  const src = { op: 'prompt', mp: from, path, name: base(path) };
   const mps = S.lib.marketplaces.filter((x) => x.state === 'hazir');
   const cl = Rules.classifyPromptPath(path, m.libraryDir);
-  const targetOpts = (name) => {
-    const mm = mpByName(name); const opts = mm.plugins.map((p) => ({ v: 'p:' + p.name, label: p.name }));
-    if (name === from) { opts.push({ v: 'i:', label: tx('ui.tree.inbox') }, { v: 'l:', label: tx('ui.tree.loose') }); }
-    return opts;
-  };
+  const targetOpts = (name) => mpByName(name).plugins.map((p) => ({ v: 'p:' + p.name, label: p.name })).concat([{ v: 'i:', label: tx('ui.tree.inbox') }, { v: 'l:', label: tx('ui.tree.loose') }]);
   const defTarget = cl.kind === 'paket' ? 'p:' + cl.klasor : cl.kind === 'gelenKutusu' ? 'i:' : 'l:';
+  const toOf = (name, tv) => ({ mp: name, kind: tv.charAt(0) === 'p' ? 'paket' : tv.charAt(0) === 'i' ? 'gelenKutusu' : 'klasorsuz', plugin: tv.charAt(0) === 'p' ? tv.slice(2) : null });
   openModal({
     title: tx('ui.move.title', { name: base(path) }),
     html: `<form class="stack" id="moveForm">
       <label>${esc(tx('ui.static.marketplace'))}<select id="mvMp">${mps.map((x) => `<option value="${esc(x.name)}" ${x.name === from ? 'selected' : ''}>${esc(x.name === from ? tx('ui.move.mpActive', { name: x.name }) : x.name)}</option>`).join('')}</select></label>
       <label>${esc(tx('ui.common.target'))}<select id="mvTarget"></select></label>
       <label>${esc(tx('ui.move.fileName'))}<input id="mvName" value="${esc(base(path))}" autocomplete="off"></label>
-      <p class="hint" id="mvNote" style="margin:0"></p>
+      <ul class="consq" id="mvConsq" aria-live="polite" style="margin:0"></ul>
       <div id="mvErr" class="issue error" role="alert" hidden></div>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.move.submit'))}</button></div></form>`,
     onMount: (b) => {
+      const planNow = () => {
+        const tv = $('#mvTarget', b).value; if (!tv) return null;
+        const name = $('#mvMp', b).value; const to = toOf(name, tv);
+        if (name === from) {
+          let file = $('#mvName', b).value.trim() || base(path);
+          if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
+          if (file !== base(path)) to.name = file;
+        }
+        return movePlan(src, to);
+      };
+      const paint = () => {
+        const plan = planNow();
+        $('#mvConsq', b).innerHTML = plan && plan.ok ? consequencesHtml(plan) : '';
+        $('#mvErr', b).hidden = true;
+      };
       const fill = () => {
         const name = $('#mvMp', b).value; const cross = name !== from;
         const opts = targetOpts(name);
         const keep = $('#mvTarget', b).value;
-        $('#mvTarget', b).innerHTML = opts.length ? opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('') : `<option value="">${esc(tx('ui.move.noPlugins'))}</option>`;
+        $('#mvTarget', b).innerHTML = opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('');
         const want = cross ? keep : (keep || defTarget);
         if (opts.some((o) => o.v === want)) $('#mvTarget', b).value = want;
         else if (!cross && opts.some((o) => o.v === defTarget)) $('#mvTarget', b).value = defTarget;
         $('#mvName', b).disabled = cross;
         if (cross) $('#mvName', b).value = base(path);
-        $('#mvNote', b).textContent = cross ? tx('ui.move.noteCross', { name, from }) : tx('ui.move.noteSame');
+        paint();
       };
       fill();
       $('#mvMp', b).addEventListener('change', fill);
+      $('#mvTarget', b).addEventListener('change', paint);
+      $('#mvName', b).addEventListener('input', paint);
+      submitOnEnter($('#moveForm', b));
       $('#moveForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const toMp = $('#mvMp', b).value; const tv = $('#mvTarget', b).value; const er = $('#mvErr', b);
+        const er = $('#mvErr', b);
         const showErr = (msg) => { er.textContent = msg; er.hidden = false; };
-        if (!tv) { showErr(tx('ui.move.pickTarget')); return; }
+        const plan = planNow();
+        if (!plan) { showErr(tx('ui.move.pickTarget')); return; }
+        if (!plan.ok) { showErr(dropReason(plan)); return; }
         if (activeName() !== from) { showErr(tx('ui.common.activeChangedRetry')); return; }
-        if (S.cur && S.cur.path === path && !(await confirmDiscard())) return;
-        try {
-          if (toMp !== from) {
-            await api('POST', '/api/prompts/transfer', { path, toMp, toPlugin: tv.slice(2) });
-            closeModal();
-            if (S.cur && S.cur.path === path) clearCur();
-            S.mpOpen.add(toMp); saveMpOpen();
-            await afterWrite(); renderMain();
-            toast(tx('ui.move.movedCross', { toMp, from }), 'ok', 7000);
-            return;
-          }
-          const kind = tv.charAt(0); const nm = tv.slice(2);
-          const dir = kind === 'p' ? m.libraryDir + '/' + nm : kind === 'i' ? m.libraryDir + '/' + Rules.INBOX_DIR : m.libraryDir;
-          let file = $('#mvName', b).value.trim() || base(path);
-          if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
-          const to = dir + '/' + file;
-          if (to === path) { closeModal(); return; }
-          const r = await api('POST', '/api/rename', { from: path, to });
-          closeModal();
-          if (S.cur && S.cur.path === path) { S.cur.path = r.path; ls.set(lsKey('last'), r.path); }
-          expandParents(r.path);
-          await afterWrite(); renderMain();
-          toast(tx('ui.move.movedSame'), 'ok', 6000);
-        } catch (err) { showErr(err.message); }
+        closeModal();
+        await runMove(plan, { confirmed: true });
+      });
+    }
+  });
+}
+
+function openMovePlugin(name) {
+  const m = activeMp(); if (!m) return;
+  const pl = m.plugins.find((p) => p.name === name); if (!pl) return;
+  const title = tx('ui.movePlugin.title', { name: pl.name });
+  const targets = S.lib.marketplaces.filter((x) => x.state === 'hazir' && x.name !== m.name);
+  if (!targets.length) {
+    openModal({ title, html: `<p>${esc(tx('ui.movePlugin.noTarget'))}</p><div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.static.close'))}</button></div>` });
+    return;
+  }
+  const src = { op: 'plugin', mp: m.name, name: pl.name, path: pl.path, count: pl.count, hasDesc: !!pl.description };
+  const planFor = (mpName) => movePlan(src, { mp: mpName });
+  const firstOk = targets.find((x) => planFor(x.name).ok);
+  openModal({
+    title,
+    html: `<form class="stack" id="movePlForm">
+      <label>${esc(tx('ui.static.marketplace'))}<select id="mpvTarget" autofocus>${targets.map((x) => { const plan = planFor(x.name); return `<option value="${esc(x.name)}"${plan.ok ? '' : ' disabled'}${firstOk && firstOk.name === x.name ? ' selected' : ''}>${esc(plan.ok ? x.name : `${x.name} (${dropReason(plan)})`)}</option>`; }).join('')}</select></label>
+      <ul class="consq" id="mpvConsq" aria-live="polite" style="margin:0"></ul>
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary" id="mpvGo"${firstOk ? '' : ' disabled'}>${esc(tx('ui.move.submit'))}</button></div></form>`,
+    onMount: (b) => {
+      const paint = () => {
+        const plan = planFor($('#mpvTarget', b).value);
+        $('#mpvConsq', b).innerHTML = plan.ok ? consequencesHtml(plan) : '';
+        $('#mpvGo', b).disabled = !plan.ok;
+      };
+      paint();
+      $('#mpvTarget', b).addEventListener('change', paint);
+      submitOnEnter($('#movePlForm', b));
+      $('#movePlForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const plan = planFor($('#mpvTarget', b).value);
+        if (!plan.ok) return;
+        closeModal();
+        await runMove(plan, { confirmed: true });
       });
     }
   });
@@ -2803,9 +3171,6 @@ async function gitCommit() {
 /* -------------------------------------------------------------- marketplace */
 const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">${esc(tx('ui.main.copy'))}</button></div>`;
 
-/** Summary: Dışa aktarma durumu seçenekleri: [kanonik durum değeri, görünen etiket anahtarı]. */
-const DURUM_OPTS = [['kararlı', 'ui.static.statusStable'], ['taslak', 'ui.static.statusDraft'], ['arşiv', 'ui.static.statusArchived'], ['', 'ui.mp.statusEmpty']];
-
 function mkListHtml(st) {
   const skipped = st.skipped || [];
   const stPill = (s) => s === 'guncel' ? `<span class="pill ok">${esc(tx('ui.mp.stateCurrent'))}</span>` : s === 'eski' ? `<span class="pill warn">${esc(tx('ui.mp.stateStale'))}</span>` : `<span class="pill warn">${esc(tx('ui.mp.stateMissing'))}</span>`;
@@ -2860,23 +3225,15 @@ function mkStateText(st) {
 
 function marketHtml(st) {
   const c = st.config;
-  const mpn = mpByName(activeName());
-  const noCfg = mpn && mpn.hasPpConfig === false;
   const cfgIssues = (st.configIssues || []).map((x) => `<div class="issue ${esc(x.level)}" role="status">${esc(x.message)}</div>`).join('');
-  const ex = st.export || { durumlar: ['kararlı', ''] };
-  return `${noCfg ? `<div class="issue warn" role="status">${th('ui.mp.noPpConfig')} <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(tx('ui.common.createPpConfig'))}</button></div>` : ''}
-    <h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
+  return `<h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
     <form class="grid2" id="mkForm">
       <label>${esc(tx('ui.mp.fieldName'))}<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.fieldOwner'))}<input name="owner" value="${esc(c.owner)}" placeholder="${esc(tx('ui.mp.ownerPlaceholder'))}" autocomplete="off"></label>
-      <label>${esc(tx('ui.mp.fieldLoosePackage'))}<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.catalogVersion'))}<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
         <div id="mkVerHint" class="hint">${esc(tx('ui.mp.catalogVersionHint'))}</div>
         <div id="mkVerErr" class="issue error" role="alert" hidden></div></label>
       <label class="span2">${esc(tx('ui.fields.description'))}<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
-      <fieldset class="span2" aria-describedby="mkExpErr"><legend>${esc(tx('ui.mp.exportStatuses'))}</legend>
-        <div class="inline">${DURUM_OPTS.map(([v, k]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${esc(tx(k))}</label>`).join(' ')}</div>
-        <div id="mkExpErr" class="issue error" role="alert" hidden></div></fieldset>
       <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">${esc(tx('ui.mp.writeFiles'))}</button>
         <span class="hint" id="mkState">${esc(mkStateText(st))}</span></div>
     </form>
@@ -3268,30 +3625,33 @@ function paintRemoteBand() {
   $('#main').prepend(band);
 }
 
-/* klonlama sonucu ve pp.config.json oluşturma */
-async function mkCreatePpConfig(name) {
-  try {
-    await api('POST', '/api/marketplaces/pp-config', { name });
-    S.info = await get('/api/info');
-    toast(tx('ui.clone.ppConfigCreated'), 'ok', 5000);
-    await refreshAll(); applySetupUi();
-    if (!$('#overlay').hidden && $('#mkForm')) await openMarket();
-    paintWarnBand();
-  } catch (e) { fail(e); }
+/** Summary: Kurulum durumunu (/api/info) sunucudan yeniden okuyup düğmeleri ve uyarı bandını günceller; teknik/ayar dosyası değişince kullanılır. Etkin marketplace bu arada değiştiyse dokunmaz (geçişi yeniden eşleme akışları yapar). */
+async function refreshSetupState() {
+  const info = await get('/api/info');
+  if (info.activeMarketplace !== activeName()) return;
+  S.info = info;
+  applySetupUi();
+  paintWarnBand();
+}
+
+/** Summary: Eski ayar dosyasını onay sonrası çöp kutusuna taşır ve kurulum uyarılarını yeniler. */
+async function removeLegacyConfig() {
+  await deleteItem('pp.config.json');
+  try { await refreshSetupState(); } catch (e) { fail(e); }
 }
 
 function cloneResultModal(r) {
   openModal({
     title: tx('ui.clone.doneTitle'),
     html: `<p>${th('ui.clone.added', { name: r.marketplace ? r.marketplace.name : '' })}</p>
-      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">${esc(tx('ui.common.createPpConfig'))}</button>` : ''}</div>`).join('')}
+      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)}</div>`).join('')}
       <div class="foot"><button class="btn primary" data-act="close" autofocus>${esc(tx('ui.common.ok'))}</button></div>`
   });
 }
 
 /* ------------------------------------------------- kurulum durumu, marketplace geçişi */
 /** Summary: Kurulum sorunu eylem kodu -> düğme etiketi sözlük anahtarı. */
-const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigOlustur: 'ui.common.createPpConfig' };
+const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigSil: 'ui.menu.deleteToTrash' };
 
 /** Summary: Kurulum sorunu eylem kodunun düğme etiketi; bilinmeyen kod için boş döner. */
 function actionLabel(code) {
@@ -3306,7 +3666,7 @@ function issueButton(i) {
   if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + label + '</button>';
   if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + label + '</button>';
   if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${label}</button>`;
-  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + label + '</button>';
+  if (i.action === 'ppConfigSil') return '<button class="btn sm" data-act="mk-ppconfig-sil">' + label + '</button>';
   return '';
 }
 
@@ -3337,7 +3697,7 @@ function paintWarnBand() {
   if (!warns.length) return;
   const band = document.createElement('div');
   band.id = 'warnBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
-  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigOlustur' ? `<button class="link" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(actionLabel('ppConfigOlustur'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
+  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigSil' ? `<button class="link" data-act="mk-ppconfig-sil">${esc(actionLabel('ppConfigSil'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
   $('#main').prepend(band);
 }
 
@@ -3512,12 +3872,10 @@ function mkRowHtml(i, kind) {
     if (i.active) pills.push(`<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>`);
     if (!i.valid) pills.push(`<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: i.reason || '' }))}</span>`);
     if (!i.hasManifest) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoManifest'))}</span>`);
-    if (i.valid && i.hasPpConfig === false) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoPpConfig'))}</span>`);
   } else pills.push(`<span class="pill ${tool ? '' : 'warn'}">${esc(i.reason)}</span>`);
   const btns = [];
   if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">${esc(tx('ui.menu.activate'))}</button>`);
   // Geçerli olmayan ama .git içeren klasörde sunucu git başlatmayı reddeder; yalnızca git deposu olmayanlarda göster.
-  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">${esc(tx('ui.common.createPpConfig'))}</button>`);
   if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">${esc(tx('ui.common.initGit'))}</button>`);
   return `<div class="mkrow ${tool ? 'dim' : ''}"><div><b>${esc(i.name)}</b> ${pills.join(' ')}<div class="hint mono">${esc(i.path)}</div></div><div></div><div class="mkbtns">${btns.join('')}</div></div>`;
 }
@@ -3699,6 +4057,132 @@ function listKey(ev, t) {
   }
 }
 
+/** Summary: Sürükleme olayı dışarıdan dosya taşıyor mu (tarayıcının dosyayı açıp sayfadan ayrılmasını önlemek için). */
+function dragHasFiles(ev) {
+  return !!ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files');
+}
+
+/** Summary: Kapalı marketplace satırında bu kadar ms beklenince sürükleme sırasında açılır. */
+const DND_OPEN_MS = 700;
+
+/** Summary: Bırakma vurgularını, ipucunu ve bekleyen otomatik açma zamanlayıcısını temizler. */
+function clearDropMarks() {
+  if (S.drag) { clearTimeout(S.drag.timer); S.drag.timer = null; }
+  $$('#list .drop-ok, #list .drop-no').forEach((e) => e.classList.remove('drop-ok', 'drop-no'));
+  const h = $('#dndHint');
+  if (h) { h.hidden = true; h.textContent = ''; h.className = 'dnd-hint'; }
+}
+
+/** Summary: Sürüklemeyi bitirir: vurgular, soluk görünüm ve durum temizlenir. */
+function endTreeDrag() {
+  clearDropMarks();
+  $$('#list .dragging').forEach((e) => e.classList.remove('dragging'));
+  S.drag = null;
+}
+
+/** Summary: Üzerine gelinen satırı plana göre boyar (geçerliyse kapsayıcı satır, geçersizse satırın kendisi) ve ipucunu yazar. */
+function paintDrop(row, plan) {
+  $$('#list .drop-ok, #list .drop-no').forEach((e) => e.classList.remove('drop-ok', 'drop-no'));
+  const hint = $('#dndHint');
+  if (plan.ok) {
+    (rowEl(plan.targetKey) || row).classList.add('drop-ok');
+    hint.className = 'dnd-hint ok';
+    hint.innerHTML = `${ICON.plugin}<span>${esc(tx('ui.dnd.hintTarget', { target: dropLabel(plan) }))}</span>`;
+  } else {
+    row.classList.add('drop-no');
+    hint.className = 'dnd-hint no';
+    hint.innerHTML = `${ICON.warn}<span>${esc(dropReason(plan))}</span>`;
+  }
+  hint.hidden = false;
+}
+
+/** Summary: Sürükleme sürerken kapalı marketplace düğümünü açar. */
+function autoOpenMp(name) {
+  const d = S.drag;
+  if (!d || d.overKey !== nodeKey(name, '')) return;
+  S.mpOpen.add(name); saveMpOpen();
+  renderList();
+}
+
+/** Summary: Sürükleme sürerken liste yeniden çizilirse sürüklenen satır DOM'da korunur (dragend kaybolmasın) ve hedef vurgusu yeniden çizilir. */
+function keepDragSource(keep) {
+  const d = S.drag;
+  const fresh = keep ? rowEl(d.key) : null;
+  if (fresh) fresh.replaceWith(keep);
+  const over = d.overKey && d.plan ? rowEl(d.overKey) : null;
+  if (over) paintDrop(over, d.plan);
+}
+
+/** Summary: Ağaçta sürüklemeyi başlatır; yalnızca sürüklenebilir satırlarda, arama sonuçları ve açık pencere yokken. */
+function onTreeDragStart(ev) {
+  const row = ev.target.closest ? ev.target.closest('#list [draggable="true"]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  if (!it || S.results || !$('#overlay').hidden) { ev.preventDefault(); return; }
+  closeMenu();
+  const src = it.kind === 'plugin'
+    ? { op: 'plugin', mp: it.mp, name: it.node.name, path: it.path, count: it.node.count, hasDesc: !!it.node.description }
+    : { op: 'prompt', mp: it.mp, path: it.path, name: base(it.path) };
+  S.drag = { ...src, key: it.key, overKey: null, plan: null, timer: null };
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('application/x-pp-node', it.key);
+  ev.dataTransfer.setData('text/plain', src.name);
+  row.classList.add('dragging');
+}
+
+/** Summary: Sürükleme sürerken hedef satırı çözer, vurgular; yalnızca geçerli hedefte bırakmaya izin verir ve liste kenarlarında kaydırır. */
+function onTreeDragOver(ev) {
+  const d = S.drag;
+  if (!d) {
+    if (dragHasFiles(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'none'; }
+    return;
+  }
+  const row = ev.target.closest ? ev.target.closest('#list [data-key]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  const list = $('#list');
+  const box = list.getBoundingClientRect();
+  if (ev.clientY < box.top + 24) list.scrollTop -= 12;
+  else if (ev.clientY > box.bottom - 24) list.scrollTop += 12;
+  if (!it) {
+    if (d.overKey !== null) { d.overKey = null; d.plan = null; clearDropMarks(); }
+    ev.dataTransfer.dropEffect = 'none';
+    return;
+  }
+  if (d.overKey !== it.key) {
+    clearTimeout(d.timer);
+    d.overKey = it.key; d.plan = dropPlan(d, it); paintDrop(row, d.plan);
+    d.timer = it.kind === 'mp' && it.expandable && !it.expanded ? setTimeout(() => autoOpenMp(it.mp), DND_OPEN_MS) : null;
+  }
+  if (d.plan.ok) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; } else ev.dataTransfer.dropEffect = 'none';
+}
+
+/** Summary: İmleç ağaçtan çıkınca vurguyu temizler. */
+function onTreeDragLeave(ev) {
+  const d = S.drag; if (!d) return;
+  if (ev.relatedTarget && $('#list').contains(ev.relatedTarget)) return;
+  d.overKey = null; d.plan = null; clearDropMarks();
+}
+
+/** Summary: Bırakmayı işler: hedefi yeniden çözer, sürüklemeyi bitirir, plan geçerliyse onaylı taşımayı başlatır. */
+async function onTreeDrop(ev) {
+  const d = S.drag;
+  if (!d) { if (dragHasFiles(ev)) ev.preventDefault(); return; }
+  ev.preventDefault();
+  const row = ev.target.closest ? ev.target.closest('#list [data-key]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  const plan = it ? dropPlan(d, it) : null;
+  endTreeDrag();
+  if (plan && plan.ok) await runMove(plan);
+}
+
+const treeList = $('#list');
+treeList.addEventListener('dragstart', onTreeDragStart);
+treeList.addEventListener('dragenter', onTreeDragOver);
+treeList.addEventListener('dragover', onTreeDragOver);
+treeList.addEventListener('dragleave', onTreeDragLeave);
+treeList.addEventListener('drop', onTreeDrop);
+treeList.addEventListener('dragend', endTreeDrag);
+document.addEventListener('pointerdown', () => { if (S.drag) endTreeDrag(); });
+
 const resetFilters = () => { S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; };
 
 document.addEventListener('click', async (ev) => {
@@ -3746,6 +4230,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'm-move': await openMove(p); break;
+    case 'm-move-plugin': openMovePlugin(el.dataset.name); break;
     case 'm-rename-file': await renameFile(p); break;
     case 'rename': await renameItem(p); break;
     case 'delete': await deleteItem(p); break;
@@ -3799,7 +4284,7 @@ document.addEventListener('click', async (ev) => {
     case 'pk-esitle': await pkAlignField(p); break;
     case 'pk-git': closeModal(); openGit(); break;
     case 'mk-update': await mkUpdate(); break;
-    case 'mk-ppconfig': await mkCreatePpConfig(el.dataset.name || activeName()); break;
+    case 'mk-ppconfig-sil': await removeLegacyConfig(); break;
     case 'remote-add': ev.preventDefault(); await remoteAdd(); break;
     case 'remote-edit': await remoteEdit(el.dataset.name, el.dataset.url); break;
     case 'remote-push': await remotePush(); break;
@@ -3835,13 +4320,7 @@ document.addEventListener('click', async (ev) => {
       verBox.hidden = true; verBox.textContent = ''; verIn.removeAttribute('aria-invalid');
       const verErr = Rules.checkVersion(f.get('version'));
       if (verErr) { showVerErr(verErr); break; }
-      const durumlar = f.getAll('exdurum');
-      showFieldErr('mkExpErr', '');
-      if (!durumlar.length) { showFieldErr('mkExpErr', tx('ui.mp.statusRequired')); break; }
-      const cfgBody = Object.fromEntries(f.entries()); delete cfgBody.exdurum;
-      const oldEx = (S.mk && S.mk.export) || { durumlar: [] };
-      const extra = oldEx.durumlar.filter((d) => !DURUM_OPTS.some(([v]) => fold(v).trim() === fold(d).trim()));
-      cfgBody.export = { durumlar: durumlar.concat(extra), haricKlasorler: oldEx.haricKlasorler };
+      const cfgBody = { name: f.get('name'), owner: f.get('owner'), version: f.get('version'), description: f.get('description') };
       try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast(tx('ui.mp.filesWritten', { packages: r.packages.join(', ') })); await mkReload(); }
       catch (e) { if (e.status === 400 && e.data && e.data.field === 'version') showVerErr(e.message); else fail(e); }
       break;
@@ -3866,7 +4345,7 @@ document.addEventListener('input', (ev) => {
   if (S.pk && t.closest && t.closest('.pkrel')) { pkValidate(); return; }
   if (!S.cur) return;
   if (t.id === 'commitMsg') { S.cur.commitMsg = t.value; updateDirty(); return; }
-  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
+  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); if (t.tagName === 'TEXTAREA') autosize(t, 44); return; }
   if (t.id === 'fBody') {
     S.cur.parsed.body = S.cur.lead + t.value;
     autosize(t); updateDirty();
@@ -3884,10 +4363,16 @@ document.addEventListener('change', (ev) => {
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
   else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
-  else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
+  else if (t.dataset && t.dataset.f && S.cur) {
+    if (t.dataset.f === 'tur') flushFocusedField();
+    setField(t.dataset.f, t.value);
+  }
 });
 
-document.addEventListener('toggle', (ev) => { if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open); }, true);
+document.addEventListener('toggle', (ev) => {
+  if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open);
+  if (ev.target.open && ev.target.matches && ev.target.matches('#pubBox, details.ccmore')) sizeCcLists(ev.target);
+}, true);
 
 document.addEventListener('keydown', (ev) => {
   const t = ev.target;

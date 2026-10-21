@@ -5,7 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const { samePath, isInside } = require('./paths');
 const { GitNotFoundError } = require('./git-service');
-const { inspectConfigAt } = require('./pp-config');
+const { MarketplaceSettings } = require('./marketplace-settings');
+const FM = require('../public/fm.js');
+const Rules = require('../public/rules.js');
 const { readFailure, failureDetail } = require('./marketplace-registry');
 const I18n = require('../public/i18n.js');
 
@@ -40,7 +42,7 @@ const ISSUE_KEYS = Object.freeze({
   marketplaceSecilmedi: 'setup.marketplaceSecilmedi',
   marketplaceBulunamadi: 'setup.marketplaceBulunamadi',
   marketplaceGitYok: 'setup.marketplaceGitYok',
-  ppConfigYok: 'setup.ppConfigYok'
+  ppConfigEski: 'setup.ppConfigEski'
 });
 
 /** Summary: Sorun kodu ve parametrelerinden geçerli dilde ileti üretir. */
@@ -52,11 +54,12 @@ function describeIssue(code, params) {
 }
 
 class SetupService {
-  constructor({ configStore, registry, git, toolRoot }) {
+  constructor({ configStore, registry, git, toolRoot, settings }) {
     this.configStore = configStore;
     this.registry = registry;
     this.git = git;
     this.toolRoot = toolRoot;
+    this.settings = settings || new MarketplaceSettings({ fsp: fs.promises, Rules, FM });
     this._state = { ok: false, rootOk: false, libraryRoot: '', activeMarketplace: '', root: null, issues: [] };
     this._dirty = true;
     this._listeners = [];
@@ -156,13 +159,8 @@ class SetupService {
       add('marketplaceGitYok', 'error', { name: active, failure }, folder, 'gitBaslat');
       return done();
     }
-    const cfgFile = path.join(folder, 'pp.config.json');
-    if (!fs.existsSync(cfgFile)) {
-      add('ppConfigYok', 'warn', {}, folder, 'ppConfigOlustur');
-    } else {
-      // Bozuk dosya ya da geçersiz libraryDir kurulumu durdurmaz; okuma varsayılanla sürer, yazma rotaları reddeder.
-      for (const i of (await inspectConfigAt(folder)).issues) issues.push(issueOf(i.code, 'warn', () => i.message, cfgFile, null));
-    }
+    for (const i of (await this.settings.inspect(folder)).issues) issues.push(issueOf(i.code, i.level, () => i.message, i.file, null));
+    if (await this.settings.hasLegacy(folder)) add('ppConfigEski', 'warn', {}, this.settings.legacyFile(folder), 'ppConfigSil');
     return done(folder);
   }
 }

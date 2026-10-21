@@ -1,6 +1,5 @@
 'use strict';
 /* Yeni marketplace iskelet dosyalarının içerikleri. */
-const { DEFAULT_VERSION } = require('../public/rules.js');
 const I18n = require('../public/i18n.js');
 
 /** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
@@ -13,14 +12,6 @@ function marketplaceJson({ name, description, owner }) {
   return JSON.stringify({ name, description, owner: { name: owner }, plugins: [] }, null, 2) + '\n';
 }
 
-function ppConfig({ name, description, owner }) {
-  return JSON.stringify({
-    libraryDir: 'prompts',
-    marketplace: { name, owner, plugin: name, description, version: DEFAULT_VERSION },
-    packages: {}
-  }, null, 2) + '\n';
-}
-
 function readme(name) {
   return tx('scaffold.readme', { name });
 }
@@ -30,4 +21,4 @@ function defaultDescription(slug) {
   return tx('scaffold.defaultDescription', { slug });
 }
 
-module.exports = { GITIGNORE, GITATTRIBUTES, marketplaceJson, ppConfig, readme, defaultDescription };
+module.exports = { GITIGNORE, GITATTRIBUTES, marketplaceJson, readme, defaultDescription };

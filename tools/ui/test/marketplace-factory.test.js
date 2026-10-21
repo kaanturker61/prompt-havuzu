@@ -27,10 +27,8 @@ test('create: dosya içerikleri ve repo kökü', real, async () => {
     assert.equal(fs.readFileSync(path.join(dir, '.git', 'HEAD'), 'utf8').trim(), 'ref: refs/heads/main');
     const mk = JSON.parse(fs.readFileSync(path.join(dir, '.claude-plugin', 'marketplace.json'), 'utf8'));
     assert.deepEqual(mk, { name: 'ornek-promptlar', description: 'Açıklama', owner: { name: 'Demo' }, plugins: [] });
-    const pp = JSON.parse(fs.readFileSync(path.join(dir, 'pp.config.json'), 'utf8'));
-    assert.equal(pp.libraryDir, 'prompts');
-    assert.deepEqual(pp.marketplace, { name: 'ornek-promptlar', owner: 'Demo', plugin: 'ornek-promptlar', description: 'Açıklama', version: '1.0.0' });
-    assert.deepEqual(pp.packages, {});
+    assert.equal(fs.existsSync(path.join(dir, 'pp.config.json')), false);
+    assert.equal(fs.existsSync(path.join(dir, 'library')), false);
     assert.ok(fs.existsSync(path.join(dir, 'prompts', '.gitkeep')));
     assert.match(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), /^desktop\.ini$/m);
     assert.match(fs.readFileSync(path.join(dir, '.gitattributes'), 'utf8'), /\*\.md text eol=lf/);
@@ -107,7 +105,8 @@ test('initExisting: var olan dosya korunur, yalnızca eksikler yazılır', real,
     fs.writeFileSync(path.join(dir, '.gitignore'), 'benim\n');
     fs.writeFileSync(path.join(dir, 'prompts', 'a.md'), 'icerik');
     const created = await factory.initExisting(dir);
-    assert.ok(created.includes('.git') && created.includes('pp.config.json') && created.includes('prompts/.gitkeep'));
+    assert.ok(created.includes('.git') && created.includes('.claude-plugin/marketplace.json') && created.includes('prompts/.gitkeep'));
+    assert.ok(!created.includes('pp.config.json'));
     assert.ok(!created.includes('.gitignore'));
     assert.equal(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), 'benim\n');
     assert.equal(fs.readFileSync(path.join(dir, 'prompts', 'a.md'), 'utf8'), 'icerik');

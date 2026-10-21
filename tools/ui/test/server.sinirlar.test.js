@@ -13,6 +13,7 @@ const real = { skip: !gitAvailable && 'git yok' };
 const issueCodes = (r) => r.data.setup.issues.map((i) => i.code);
 const put = (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data); };
 const ppFile = (mk) => path.join(mk, 'pp.config.json');
+const manifestFile = (mk) => path.join(mk, '.claude-plugin', 'marketplace.json');
 
 // Sunucu + marketplace kurar, fn'e verir, sonunda kapatır ve temizler.
 async function withServer(fn, opts) {
@@ -30,172 +31,119 @@ async function withServer(fn, opts) {
   }
 }
 
-test('B-01: bozuk/null/[] pp.config.json okumada uyarı, yazan rotalarda 409; dosya bayt bayt aynı', real, async () => {
+test('B-01: bozuk/null/[] marketplace.json okumada uyarı, manifest yazan rotalarda 409 manifestBozuk; dosya bayt bayt aynı; plugin, içe aktarma ve +1 engellenmez', real, async () => {
   await withServer(async ({ call, mk, tmp }) => {
-    const good = JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'mk', owner: 'ben', plugin: 'mk', description: 'ÖZEL AÇIKLAMA', version: '2.5.0' }, packages: { eski: { description: 'ESKİ PAKET' } }, export: { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu', 'ozel-haric'] } }, null, 2) + '\n';
+    const good = JSON.stringify({ name: 'mk', description: 'ÖZEL AÇIKLAMA', owner: { name: 'ben' }, version: '2.5.0', plugins: [] }, null, 2) + '\n';
+    put(path.join(mk, 'prompts', 'eski', 'a.md'), '---\nbaslik: A\n---\ngovde\n');
+    put(path.join(mk, 'prompts', 'v.md'), '---\nbaslik: V\n---\ngovde\n');
+    commitAllIn(mk, tmp, 'ilk icerik');
     for (const bad of [good.replace(/\n$/, '') + ', "elle_eklenen": }', 'garip{', 'null', '[]', '"x"', '5']) {
-      fs.writeFileSync(ppFile(mk), bad);
-      put(path.join(mk, 'plugins', 'x', 'commands', 'a.md'), 'x'); // unpublish için var olan dosya
-      const before = fs.readFileSync(ppFile(mk));
+      fs.writeFileSync(manifestFile(mk), bad);
+      put(path.join(mk, 'plugins', 'x', 'commands', 'a.md'), 'x');
+      const before = fs.readFileSync(manifestFile(mk));
       const names = fs.readdirSync(mk).sort();
 
-      // okuma: 200 + uyarı, ok kalır
       let r = await call('GET', '/api/info');
       assert.equal(r.status, 200, bad);
-      assert.ok(issueCodes(r).includes('ppConfigBozuk'), bad);
+      assert.ok(issueCodes(r).includes('manifestBozuk'), bad);
       assert.equal(r.data.setup.ok, true);
-      assert.equal(r.data.config.libraryDir, 'library');
+      assert.equal(r.data.config.libraryDir, 'prompts');
+      assert.equal(r.data.config.marketplace.name, 'mk', 'ad klasör adına düşer');
+      assert.equal(r.data.config.marketplace.version, '1.0.0');
       for (const u of ['/api/tree', '/api/facets', '/api/search?q=x', '/api/settings', '/api/marketplaces']) assert.equal((await call('GET', u)).status, 200, u + ' ' + bad);
       r = await call('GET', '/api/tree');
-      assert.ok(r.data.marketplaces[0].count === 0);
+      assert.equal(r.data.marketplaces[0].count, 2, 'promptlar bozuk manifestte de görünür');
       r = await call('GET', '/api/marketplace/status');
       assert.equal(r.status, 200);
-      assert.ok(r.data.configIssues.some((i) => i.code === 'ppConfigBozuk'), 'configIssues');
+      assert.ok(r.data.configIssues.some((i) => i.code === 'manifestBozuk'), 'configIssues');
       assert.equal(fs.existsSync(path.join(mk, 'library')), false, 'library/ açılmadı');
 
-      // yazma/üretim: 409 ppConfigBozuk
       const writes = [
-        ['POST', '/api/package', { name: 'yeni-plugin', description: 'yeni' }],
-        ['PUT', '/api/package', { name: 'eski', description: 'x' }],
-        ['POST', '/api/package/rename', { from: 'eski', to: 'yeni' }],
         ['POST', '/api/marketplace/init', {}],
         ['POST', '/api/marketplace/update', {}],
         ['POST', '/api/package/publish', { name: 'eski' }],
-        ['POST', '/api/import/run', { dir: tmp, files: [path.join(tmp, 'a.txt')] }],
-        ['POST', '/api/version/bump', { path: 'prompts/a.md', level: 'yama', note: 'x' }],
         ['POST', '/api/marketplace/publish', { all: true }],
         ['POST', '/api/marketplace/unpublish', { target: 'plugins/x/commands/a.md' }]
       ];
       for (const [m, u, b] of writes) {
         r = await call(m, u, b);
         assert.equal(r.status, 409, `${m} ${u} ${bad}: ${r.text}`);
-        assert.equal(r.data.code, 'ppConfigBozuk', `${u}: ${r.text}`);
-        assert.match(r.data.error, /^pp\.config\.json okunamadı .*düzelt/, u);
+        assert.equal(r.data.code, 'manifestBozuk', `${u}: ${r.text}`);
+        assert.match(r.data.error, /^\.claude-plugin\/marketplace\.json okunamadı .*düzelt/, u);
       }
-      assert.deepEqual(fs.readFileSync(ppFile(mk)), before, 'pp.config.json bayt bayt aynı');
-      assert.equal(fs.existsSync(path.join(mk, 'prompts', 'yeni-plugin')), false);
+      assert.deepEqual(fs.readFileSync(manifestFile(mk)), before, 'marketplace.json bayt bayt aynı');
       assert.ok(fs.existsSync(path.join(mk, 'plugins', 'x', 'commands', 'a.md')), 'unpublish hiçbir şeyi çöpe taşımadı');
       assert.deepEqual(fs.readdirSync(mk).sort(), names, 'kökte yeni dosya/klasör yok (.bak, library/ ...)');
       assert.ok(!fs.readdirSync(mk).some((n) => /\.bak/.test(n)));
       fs.rmSync(path.join(mk, 'plugins'), { recursive: true, force: true });
     }
 
-    // uygulamanın içinden düzeltme: PUT /api/file ile pp.config.json
-    fs.writeFileSync(ppFile(mk), 'garip{');
-    let r = await call('GET', '/api/file?path=pp.config.json');
-    assert.equal(r.status, 200); assert.equal(r.data.raw, 'garip{');
-    r = await call('PUT', '/api/file', { path: 'pp.config.json', raw: good });
+    const bytes = fs.readFileSync(manifestFile(mk));
+    let r = await call('POST', '/api/package', { name: 'yeni-plugin', description: 'yeni' });
+    assert.equal(r.status, 200, r.text);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(mk, 'prompts', 'yeni-plugin', '.claude-plugin', 'plugin.json'), 'utf8')), { description: 'yeni' });
+    r = await call('PUT', '/api/package', { name: 'eski', description: 'x' });
+    assert.equal(r.status, 200, r.text);
+    r = await call('POST', '/api/package/rename', { from: 'eski', to: 'yeni' });
+    assert.equal(r.status, 200, r.text);
+    fs.writeFileSync(path.join(tmp, 'a.txt'), 'icerik');
+    r = await call('POST', '/api/import/run', { dir: tmp, files: [path.join(tmp, 'a.txt')] });
+    assert.equal(r.status, 200, r.text);
+    r = await call('POST', '/api/version/bump', { path: 'prompts/v.md', level: 'yama', note: 'x' });
+    assert.equal(r.status, 200, r.text);
+    assert.deepEqual(fs.readFileSync(manifestFile(mk)), bytes, 'marketplace.json bu işlemlerden etkilenmedi');
+
+    r = await call('GET', '/api/file?path=.claude-plugin/marketplace.json');
+    assert.equal(r.status, 200);
+    r = await call('PUT', '/api/file', { path: '.claude-plugin/marketplace.json', raw: good });
     assert.equal(r.status, 200);
     r = await call('GET', '/api/info');
-    assert.ok(!issueCodes(r).includes('ppConfigBozuk'), 'uyarı kalktı');
-    r = await call('POST', '/api/package', { name: 'yeni-plugin', description: 'yeni' });
-    assert.equal(r.status, 200, r.text);
-    const cfg = JSON.parse(fs.readFileSync(ppFile(mk), 'utf8'));
-    assert.equal(cfg.marketplace.version, '2.5.0'); assert.equal(cfg.packages.eski.description, 'ESKİ PAKET');
-    assert.equal(cfg.packages['yeni-plugin'].description, 'yeni');
-    assert.ok(fs.existsSync(path.join(mk, 'prompts', 'yeni-plugin')));
+    assert.ok(!issueCodes(r).includes('manifestBozuk'), 'uyarı kalktı');
+    assert.equal(r.data.config.marketplace.version, '2.5.0'); assert.equal(r.data.config.marketplace.description, 'ÖZEL AÇIKLAMA');
   });
 });
 
-test('B-01: tipi yanlış export alanı yalnızca uyarıdır (info/status 200, yazan rotalar engellenmez)', real, async () => {
+test('B-01: marketplace.json BOM ile başlıyorsa okunur, yazma çalışır', real, async () => {
   await withServer(async ({ call, mk }) => {
-    // "durumlar" dizi yerine metin: etkin ayar varsayılana ('kararlı' + boş durum) döner, ama kullanıcı uyarılır
-    fs.writeFileSync(ppFile(mk), '{"export":{"durumlar":"kararlı"}}');
+    fs.writeFileSync(manifestFile(mk), '\uFEFF' + JSON.stringify({ name: 'mk', version: '3.1.0', plugins: [] }));
     let r = await call('GET', '/api/info');
-    assert.equal(r.status, 200, r.text);
-    assert.equal(r.data.setup.ok, true);
-    const i = r.data.setup.issues.filter((x) => x.code === 'exportAlanGecersiz');
-    assert.equal(i.length, 1, JSON.stringify(r.data.setup.issues));
-    assert.equal(i[0].level, 'warn');
-    assert.match(i[0].message, /^pp\.config\.json içindeki "export\.durumlar" dizi olmalı \(şu an: metin\)/);
-    assert.ok(!issueCodes(r).includes('ppConfigBozuk'), 'dosya bozuk sayılmaz');
-    assert.deepEqual(r.data.config.export, { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu'] });
-    for (const u of ['/api/tree', '/api/facets', '/api/search?q=x']) assert.equal((await call('GET', u)).status, 200, u);
-    r = await call('GET', '/api/marketplace/status');
-    assert.equal(r.status, 200, r.text);
-    assert.ok(r.data.configIssues.some((x) => x.code === 'exportAlanGecersiz'), 'configIssues');
-    assert.deepEqual(r.data.export.durumlar, ['kararlı', '']);
-
-    // yazan rotalar ENGELLENMEZ (409 yok); yalnızca ppConfigBozuk/libraryDirGecersiz engeller
-    r = await call('POST', '/api/package', { name: 'yeni-plugin', description: 'yeni' });
-    assert.equal(r.status, 200, r.text);
-    assert.ok(fs.existsSync(path.join(mk, 'library', 'yeni-plugin')), 'varsayılan libraryDir (library) kullanıldı');
-    assert.equal(JSON.parse(fs.readFileSync(ppFile(mk), 'utf8')).packages['yeni-plugin'].description, 'yeni');
-    r = await call('POST', '/api/package', { name: 'ikinci' });
-    assert.equal(r.status, 200, r.text);
-    r = await call('POST', '/api/marketplace/update', {});
-    // (bu rota başka nedenle 409 verebilir, örn. ilk commit yok; önemli olan ayar nedeniyle engellenmemesi)
-    assert.ok(!['ppConfigBozuk', 'libraryDirGecersiz', 'exportAlanGecersiz'].includes(r.data && r.data.code), r.text);
-
-    // nesne olmayan export da aynı: uyarı var, engel yok
-    for (const ex of ['kararlı', 5, null, ['kararlı']]) {
-      fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: 'prompts', export: ex }));
-      r = await call('GET', '/api/info');
-      assert.equal(r.status, 200, JSON.stringify(ex));
-      assert.deepEqual(issueCodes(r), ['exportAlanGecersiz'], JSON.stringify(ex));
-      assert.deepEqual(r.data.config.export.durumlar, ['kararlı', '']);
-      r = await call('POST', '/api/package', { name: 'p-' + (typeof ex) + (Array.isArray(ex) ? '-dizi' : ''), description: 'x' });
-      assert.equal(r.status, 200, `${JSON.stringify(ex)}: ${r.text}`);
-    }
-
-    // düzeltilince uyarı kalkar
-    fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: 'prompts', export: { durumlar: ['kararlı'], haricKlasorler: ['gelen-kutusu'] } }));
-    r = await call('GET', '/api/info');
-    assert.deepEqual(issueCodes(r), []);
-    assert.deepEqual(r.data.config.export.durumlar, ['kararlı']);
-  });
-});
-
-test('B-01: pp.config.json BOM ile başlıyorsa okunur, yazma çalışır', real, async () => {
-  await withServer(async ({ call, mk }) => {
-    fs.writeFileSync(ppFile(mk), '\uFEFF' + JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'mk', version: '3.1.0' } }));
-    let r = await call('GET', '/api/info');
-    assert.ok(!issueCodes(r).includes('ppConfigBozuk'));
+    assert.ok(!issueCodes(r).includes('manifestBozuk'));
     assert.equal(r.data.config.marketplace.version, '3.1.0');
     r = await call('POST', '/api/package', { name: 'p1', description: 'a' });
     assert.equal(r.status, 200, r.text);
+    r = await call('POST', '/api/marketplace/init', { config: { version: '3.2.0' } });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(JSON.parse(fs.readFileSync(manifestFile(mk), 'utf8')).version, '3.2.0');
   });
 });
 
-test('B-02: libraryDir doğrulanır: kök dışı, mutlak, boş -> uyarı + library; diske dokunulmaz', real, async () => {
+test('B-02: eski pp.config.json içindeki libraryDir yok sayılır (kök dışı, mutlak, boş değerler dahil); yalnızca prompts/ kullanılır, hiçbir klasör oluşmaz', real, async () => {
   await withServer(async ({ call, mk, tmp }) => {
     const outside = path.join(tmp, 'disari');
     put(path.join(outside, 'gizli.md'), '---\nbaslik: Gizli\n---\nDISARI-GIZLI');
+    put(path.join(mk, 'prompts', 'p', 'a.md'), '---\nbaslik: Normal\n---\nNORMAL-ICERIK');
     const before = fs.readdirSync(tmp).sort();
-    for (const v of ['../../yeni_dis', '../../disari', 'C:\\Windows', '/etc', '', '.git']) {
+    for (const [i, v] of ['../../yeni_dis', '../../disari', 'C:\\Windows', '/etc', '', '.git', 'library'].entries()) {
       fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: v, marketplace: { name: 'mk' } }));
       let r = await call('GET', '/api/tree');
       assert.equal(r.status, 200, JSON.stringify(v) + r.text);
       assert.ok(!JSON.stringify(r.data).includes('gizli.md'), 'kök dışı dosya ağaçta yok');
+      assert.equal(r.data.libraryDir, 'prompts');
       r = await call('GET', '/api/info');
       assert.equal(r.status, 200);
-      assert.ok(issueCodes(r).includes('libraryDirGecersiz'), JSON.stringify(v));
-      assert.equal(r.data.config.libraryDir, 'library');
+      assert.deepEqual(issueCodes(r), ['ppConfigEski'], JSON.stringify(v));
+      assert.equal(r.data.config.libraryDir, 'prompts');
       r = await call('GET', '/api/search?q=DISARI-GIZLI');
       assert.equal(r.status, 200); assert.deepEqual(r.data.results, []);
+      assert.equal((await call('GET', '/api/search?q=NORMAL-ICERIK')).data.results.length, 1, JSON.stringify(v));
       assert.equal((await call('GET', '/api/facets')).status, 200);
       assert.deepEqual(fs.readdirSync(tmp).sort(), before, 'kök dışında hiçbir klasör oluşmadı');
       assert.equal(fs.existsSync(path.join(mk, 'library')), false);
-      // yazan rota 409 libraryDirGecersiz
-      r = await call('POST', '/api/package', { name: 'x', description: 'y' });
-      assert.equal(r.status, 409, r.text); assert.equal(r.data.code, 'libraryDirGecersiz');
+      r = await call('POST', '/api/package', { name: 'x-' + i, description: 'y' });
+      assert.equal(r.status, 200, r.text);
+      assert.ok(fs.existsSync(path.join(mk, 'prompts', 'x-' + i)), 'plugin prompts/ altında açıldı');
     }
     assert.equal(fs.readFileSync(path.join(outside, 'gizli.md'), 'utf8').includes('DISARI-GIZLI'), true);
-
-    // normalize edilen geçerli biçimler sorunsuz çalışır
-    for (const v of ['./prompts', 'prompts/', 'prompts', '.\\prompts\\']) {
-      fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: v, marketplace: { name: 'mk' } }));
-      put(path.join(mk, 'prompts', 'p', 'a.md'), '---\nbaslik: Normal\n---\nNORMAL-ICERIK');
-      let r = await call('GET', '/api/info');
-      assert.ok(!issueCodes(r).includes('libraryDirGecersiz'), v);
-      assert.equal(r.data.config.libraryDir, 'prompts');
-      r = await call('GET', '/api/search?q=NORMAL-ICERIK');
-      assert.equal(r.data.results.length, 1, v);
-    }
-    // anahtar yoksa library ve uyarı yok
-    fs.writeFileSync(ppFile(mk), JSON.stringify({ marketplace: { name: 'mk' } }));
-    const r = await call('GET', '/api/info');
-    assert.ok(!issueCodes(r).includes('libraryDirGecersiz')); assert.equal(r.data.config.libraryDir, 'library');
   });
 });
 
@@ -208,12 +156,20 @@ test('B-02: prompts kök dışına junction ise geçersiz sayılır', real, asyn
     links.push(path.join(mk, 'prompts'));
     let r = await call('GET', '/api/info');
     assert.ok(issueCodes(r).includes('libraryDirGecersiz'));
-    assert.equal(r.data.config.libraryDir, 'library');
+    assert.equal(r.data.config.libraryDir, 'prompts');
+    assert.equal(r.data.config.libraryOk, false);
     r = await call('GET', '/api/search?q=DISARI-GIZLI');
     assert.deepEqual(r.data.results, []);
+    r = await call('GET', '/api/facets');
+    assert.equal(r.status, 200); assert.equal(r.data.total, 0);
     r = await call('GET', '/api/tree');
     assert.equal(r.status, 200);
+    assert.ok(!JSON.stringify(r.data).includes('gizli.md'), 'dış içerik ağaçta yok');
+    assert.equal(r.data.marketplaces[0].libraryDirExists, false);
     assert.equal(fs.existsSync(path.join(mk, 'library')), false);
+    r = await call('POST', '/api/package', { name: 'yeni-plugin', description: 'x' });
+    assert.equal(r.status, 409, r.text); assert.equal(r.data.code, 'libraryDirGecersiz');
+    assert.deepEqual(fs.readdirSync(outside), ['x'], 'dış klasöre hiçbir şey yazılmadı');
   });
 });
 
@@ -298,24 +254,22 @@ test('B-04: .git varyantları GET/PUT/POST/DELETE 403; depo yerinde kalır', rea
   });
 });
 
-test('B-05: yapı dosyaları silinemez/taşınamaz (403 korunanYol); içerikleri silinebilir', real, async () => {
+test('B-05: yapı dosyaları silinemez/taşınamaz (403 korunanYol); içerikleri ve eski pp.config.json silinebilir', real, async () => {
   await withServer(async ({ call, mk }) => {
     put(path.join(mk, 'plugins', 'mk', 'commands', 'a.md'), 'x');
     put(path.join(mk, '.pp', 'ozel.txt'), 'x');
     put(path.join(mk, 'prompts', 'x', 'a.md'), 'x');
-    for (const p of ['prompts', 'Prompts', 'PROMPTS', 'pp.config.json', 'PP.CONFIG.JSON', 'plugins', '.claude-plugin', '.gitignore', '.gitattributes', '.pp', '.pp/ozel.txt']) {
+    for (const p of ['prompts', 'Prompts', 'PROMPTS', 'plugins', '.claude-plugin', '.gitignore', '.gitattributes', '.pp', '.pp/ozel.txt']) {
       const r = await call('DELETE', '/api/file?path=' + encodeURIComponent(p));
       assert.equal(r.status, 403, `${p}: ${r.text}`);
       assert.equal(r.data.code, 'korunanYol');
       assert.equal(r.data.error, 'Bu yol marketplace yapısının parçası; silinemez veya taşınamaz');
     }
-    for (const p of ['prompts', 'pp.config.json', 'plugins', '.claude-plugin']) assert.ok(fs.existsSync(path.join(mk, p)), p + ' yerinde');
+    for (const p of ['prompts', 'plugins', '.claude-plugin']) assert.ok(fs.existsSync(path.join(mk, p)), p + ' yerinde');
     assert.ok(fs.existsSync(path.join(mk, '.pp', 'ozel.txt')));
     assert.equal(fs.existsSync(path.join(mk, '.pp', 'trash')), false, 'çöp kutusuna bir şey taşınmadı');
     let r = await call('POST', '/api/rename', { from: 'prompts', to: 'x' });
     assert.equal(r.status, 403); assert.equal(r.data.code, 'korunanYol');
-    r = await call('POST', '/api/rename', { from: 'pp.config.json', to: 'baska.json' });
-    assert.equal(r.status, 403);
     assert.ok(fs.existsSync(path.join(mk, 'prompts')) && !fs.existsSync(path.join(mk, 'x')));
     // içerikleri silinebilir
     r = await call('DELETE', '/api/file?path=prompts/x/a.md');
@@ -324,11 +278,17 @@ test('B-05: yapı dosyaları silinemez/taşınamaz (403 korunanYol); içerikleri
     assert.equal(r.status, 200, r.text);
     r = await call('DELETE', '/api/file?path=plugins/mk');
     assert.equal(r.status, 200, r.text);
-    // iç içe libraryDir: üst klasör de korunur
-    fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: 'a/b', marketplace: { name: 'mk' } }));
-    put(path.join(mk, 'a', 'b', 'p.md'), 'x');
-    for (const p of ['a', 'a/b']) assert.equal((await call('DELETE', '/api/file?path=' + encodeURIComponent(p))).status, 403, p);
-    assert.equal((await call('DELETE', '/api/file?path=a/b/p.md')).status, 200);
+    put(ppFile(mk), '{}');
+    r = await call('POST', '/api/rename', { from: 'pp.config.json', to: 'eski-ayar.json' });
+    assert.equal(r.status, 200, r.text);
+    assert.ok(fs.existsSync(path.join(mk, 'eski-ayar.json')) && !fs.existsSync(ppFile(mk)));
+    put(ppFile(mk), '{}');
+    r = await call('DELETE', '/api/file?path=pp.config.json');
+    assert.equal(r.status, 200, r.text);
+    assert.match(r.data.trash, /^\.pp\/trash\/.+\/pp\.config\.json$/);
+    assert.equal(fs.existsSync(ppFile(mk)), false);
+    r = await call('GET', '/api/info');
+    assert.ok(!issueCodes(r).includes('ppConfigEski'), 'dosya gidince uyarı kalktı');
   });
 });
 
@@ -424,7 +384,7 @@ test('B-06 (dosya adı): aygıt adları ve yasak adlar 400; içe aktarmada atlan
   });
 });
 
-test('B-03 (transfer): hedef plugin kök dışına bağlıysa 400; hedef ayarı bozuksa 409; normal taşıma çalışır', real, async (t) => {
+test('B-03 (transfer): hedef plugin kök dışına bağlıysa 400; hedefte ayar dosyası ve sağlam manifest aranmaz; normal taşıma çalışır', real, async (t) => {
   await withServer(async ({ call, mk, lib, tmp, links }) => {
     let r = await call('POST', '/api/marketplaces', { name: 'hedef', activate: false });
     assert.equal(r.status, 200, r.text);
@@ -432,26 +392,28 @@ test('B-03 (transfer): hedef plugin kök dışına bağlıysa 400; hedef ayarı 
     fs.mkdirSync(path.join(hedef, 'prompts', 'plug'), { recursive: true });
     put(path.join(mk, 'prompts', 'p', 'a.md'), '---\nbaslik: A\n---\ngovde');
     put(path.join(mk, 'prompts', 'p', 'b.md'), '---\nbaslik: B\n---\ngovde');
+    put(path.join(mk, 'prompts', 'p', 'c.md'), '---\nbaslik: C\n---\ngovde');
     // 1) normal
     r = await call('POST', '/api/prompts/transfer', { path: 'prompts/p/a.md', toMp: 'hedef', toPlugin: 'plug' });
     assert.equal(r.status, 200, r.text);
     assert.ok(fs.existsSync(path.join(hedef, 'prompts', 'plug', 'a.md')));
-    // 2) hedef ayarı bozuk
-    fs.writeFileSync(ppFile(hedef), 'garip{');
+    // 2) hedefte ayar dosyası yok ve manifest bozuk: taşıma yine çalışır
+    assert.equal(fs.existsSync(ppFile(hedef)), false);
+    fs.writeFileSync(manifestFile(hedef), 'garip{');
     r = await call('POST', '/api/prompts/transfer', { path: 'prompts/p/b.md', toMp: 'hedef', toPlugin: 'plug' });
-    assert.equal(r.status, 409, r.text); assert.equal(r.data.code, 'ppConfigBozuk');
-    assert.ok(fs.existsSync(path.join(mk, 'prompts', 'p', 'b.md')), 'kaynak yerinde');
-    assert.equal(fs.readFileSync(ppFile(hedef), 'utf8'), 'garip{');
-    fs.writeFileSync(ppFile(hedef), JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'hedef' } }));
+    assert.equal(r.status, 200, r.text);
+    assert.ok(fs.existsSync(path.join(hedef, 'prompts', 'plug', 'b.md')));
+    assert.ok(!fs.existsSync(path.join(mk, 'prompts', 'p', 'b.md')), 'kaynak çöp kutusuna gitti');
+    assert.equal(fs.readFileSync(manifestFile(hedef), 'utf8'), 'garip{', 'hedef manifest değişmedi');
     // 3) hedef plugin klasörü kök dışına junction
     const outside = path.join(tmp, 'dis-hedef'); fs.mkdirSync(outside);
     const link = path.join(hedef, 'prompts', 'dis');
     if (!makeLink(outside, link)) return t.skip('bağlantı kurulamadı (EPERM)');
     links.push(link);
-    r = await call('POST', '/api/prompts/transfer', { path: 'prompts/p/b.md', toMp: 'hedef', toPlugin: 'dis' });
+    r = await call('POST', '/api/prompts/transfer', { path: 'prompts/p/c.md', toMp: 'hedef', toPlugin: 'dis' });
     assert.equal(r.status, 400, r.text);
     assert.deepEqual(fs.readdirSync(outside), [], 'dışarıya yazılmadı');
-    assert.ok(fs.existsSync(path.join(mk, 'prompts', 'p', 'b.md')), 'kaynak yerinde');
+    assert.ok(fs.existsSync(path.join(mk, 'prompts', 'p', 'c.md')), 'kaynak yerinde');
   });
 });
 
@@ -481,15 +443,18 @@ test('B-03 (yayın): plugins/ ve .claude-plugin/ kök dışına bağlıysa yayı
   }, { commit: true });
 });
 
-test('E1: GET /api/tree bozuk ayarda marketplace içinde library/ açmaz; sağlam ayarda libraryDir açılır', real, async () => {
+test('E1: GET /api/tree prompts/ yoksa açar (bozuk marketplace.json ve eski pp.config.json fark etmez); library/ ve eski libraryDir açılmaz', real, async () => {
   await withServer(async ({ call, mk }) => {
     fs.rmSync(path.join(mk, 'prompts'), { recursive: true, force: true });
+    assert.equal((await call('GET', '/api/tree')).status, 200);
+    assert.ok(fs.existsSync(path.join(mk, 'prompts')), 'prompts açıldı');
+    fs.rmSync(path.join(mk, 'prompts'), { recursive: true, force: true });
+    fs.writeFileSync(manifestFile(mk), '[]');
     fs.writeFileSync(ppFile(mk), JSON.stringify({ libraryDir: 'icerik/promptlar', marketplace: { name: 'mk' } }));
     assert.equal((await call('GET', '/api/tree')).status, 200);
-    assert.ok(fs.existsSync(path.join(mk, 'icerik', 'promptlar')), 'geçerli libraryDir açıldı');
-    fs.writeFileSync(ppFile(mk), '[]');
-    assert.equal((await call('GET', '/api/tree')).status, 200);
+    assert.ok(fs.existsSync(path.join(mk, 'prompts')), 'bozuk marketplace.json varken de açılır');
     assert.equal(fs.existsSync(path.join(mk, 'library')), false);
+    assert.equal(fs.existsSync(path.join(mk, 'icerik')), false, 'eski libraryDir yok sayıldı');
   });
 });
 
@@ -686,7 +651,7 @@ test('B-19: içe aktarmada .txt BOM\'u önizlemeye ve oluşan prompta sızmaz', 
     assert.equal(r.data.created.length, 1);
     const out = fs.readFileSync(path.join(mk, ...r.data.created[0].to.split('/')), 'utf8');
     assert.ok(!out.includes('﻿'), 'oluşan prompta BOM girmedi');
-    assert.match(out, /\nilk satır\nikinci satır\n/);
+    assert.equal(out, 'ilk satır\nikinci satır\n');
   });
 });
 

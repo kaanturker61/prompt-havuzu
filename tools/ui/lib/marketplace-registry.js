@@ -66,8 +66,7 @@ class MarketplaceRegistry {
       const reasonCode = valid ? null : failure.code;
       items.push({
         name, path: dir, valid, get reason() { return valid ? null : reasonText(reasonCode, failure); }, reasonCode, active: name === active,
-        hasManifest: await exists(path.join(dir, '.claude-plugin', 'marketplace.json')),
-        hasPpConfig: await exists(path.join(dir, 'pp.config.json'))
+        hasManifest: await exists(path.join(dir, '.claude-plugin', 'marketplace.json'))
       });
     }
     return { items, ignored };

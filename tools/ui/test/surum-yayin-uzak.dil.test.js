@@ -196,7 +196,7 @@ test('VersionService: ön kontrol iletileri tr Türkçe, en İngilizce; status, 
         tr: 'Geçersiz seviye. Büyük, küçük veya yama seç.', en: 'Invalid level. Choose major, minor, or patch.' },
       { name: 'note', extra: { note: '  ' }, status: 400, data: { field: 'note' },
         tr: 'Sürüm notu boş olamaz', en: 'The version note cannot be empty' },
-      { name: 'notPrompt', extra: { rel: 'pp.config.json' }, status: 400, data: undefined,
+      { name: 'notPrompt', extra: { rel: 'README.md' }, status: 400, data: undefined,
         tr: 'Sürüm yalnızca prompt dosyaları için oluşturulur', en: 'A version can only be created for prompt files' },
       { name: 'fileNotFound', extra: { abs: path.join(v.mk, 'yok.md') }, status: 404, data: undefined,
         tr: 'Dosya bulunamadı. Silinmiş veya taşınmış olabilir', en: 'File not found. It may have been deleted or moved' },
@@ -437,10 +437,10 @@ test('PackagePublisher: katalog sürümü yorumlanamıyorsa ileti iki dilde', re
   const tmp = tmpDir();
   try {
     const mk = seed(tmp, 'mk');
-    const cfgFile = path.join(mk, 'pp.config.json');
-    const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-    cfg.marketplace.version = 'abc';
-    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + '\n');
+    const manifest = path.join(mk, '.claude-plugin', 'marketplace.json');
+    const mj = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    mj.version = 'abc';
+    fs.writeFileSync(manifest, JSON.stringify(mj, null, 2) + '\n');
     commitAll(mk, tmp);
     const s = buildStack(mk, tmp);
     await assertBothLanguages('katalogSurumYorumlanamadi', () => s.publisher.publish(mk, { name: 'ornek' }), (e, lang) => {
@@ -666,22 +666,22 @@ test('yeni marketplace iskeleti, varsayılan açıklama ve plugins/README.md olu
       await run(() => buildStack(mk, tmp).publisher.updateAll(mk));
       made[lang] = {
         readme: read(created.dir, 'README.md'),
-        description: JSON.parse(read(created.dir, 'pp.config.json')).marketplace.description,
         manifestDescription: JSON.parse(read(created.dir, '.claude-plugin/marketplace.json')).description,
-        ownDescription: JSON.parse(read(own.dir, 'pp.config.json')).marketplace.description,
+        ownDescription: JSON.parse(read(own.dir, '.claude-plugin/marketplace.json')).description,
+        noLegacy: !fs.existsSync(path.join(created.dir, 'pp.config.json')) && !fs.existsSync(path.join(own.dir, 'pp.config.json')),
         pluginsReadme: read(mk, 'plugins/README.md')
       };
       assert.equal(created.name, 'deneme-' + lang);
     }
     assert.equal(made.tr.readme, legacyReadme('deneme-tr'));
     assert.equal(made.tr.pluginsReadme, legacyPluginsReadme);
-    assert.deepEqual([made.tr.description, made.tr.manifestDescription, made.tr.ownDescription], ['Prompt havuzu: deneme-tr', 'Prompt havuzu: deneme-tr', 'Özel açıklama']);
+    assert.deepEqual([made.tr.manifestDescription, made.tr.ownDescription, made.tr.noLegacy], ['Prompt havuzu: deneme-tr', 'Özel açıklama', true]);
     assert.ok(made.en.readme.startsWith('# deneme-en\n\nThis folder is a Claude Code marketplace repository managed with Prompt Havuzu.\n'), made.en.readme);
     assert.ok(made.en.readme.includes('- Prompts are kept as `.md` files under `prompts/`.\n'));
     assert.ok(!DIACRITIC_RE.test(made.en.readme));
     assert.ok(made.en.pluginsReadme.startsWith('# plugins\n\nThe command, agent, and skill files in this folder are generated automatically from the prompts in `prompts/`.\n'), made.en.pluginsReadme);
     assert.ok(!DIACRITIC_RE.test(made.en.pluginsReadme));
-    assert.deepEqual([made.en.description, made.en.manifestDescription, made.en.ownDescription], ['Prompt library: deneme-en', 'Prompt library: deneme-en', 'Özel açıklama']);
+    assert.deepEqual([made.en.manifestDescription, made.en.ownDescription, made.en.noLegacy], ['Prompt library: deneme-en', 'Özel açıklama', true]);
     assert.deepEqual(I18n.missing.filter((entry) => entry.includes(':scaffold.')), []);
   } finally { rmrf(tmp); }
 });

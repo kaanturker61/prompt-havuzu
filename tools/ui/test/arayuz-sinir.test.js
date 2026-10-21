@@ -395,7 +395,8 @@ test('deleteItem: kaydedilmemiş açık dosya silinince başlık sıfırlanır',
 });
 
 test('marketplace\'ler arası taşıma da clearCur kullanır; S.cur elle sıfırlanan yer kalmadı', () => {
-  assert.match(html, /if \(S\.cur && S\.cur\.path === path\) clearCur\(\);/);
+  assert.match(html, /else if \(touched\) clearCur\(\);/);
+  assert.match(html, /if \(touched\) clearCur\(\);/);
   const kalan = html.split('\n').filter((l) => /S\.cur = null; ls\.set\(lsKey\('last'\), null\)/.test(l));
   assert.deepEqual(kalan, ['  S.cur = null; ls.set(lsKey(\'last\'), null);'], 'yalnızca clearCur içinde');
 });
@@ -534,13 +535,13 @@ test('save: commitError toast\'ı Türkçe özet + git ayrıntısını (hook ç�
   assert.equal(toasts[0][0], 'Kaydedildi ama commit atılamadı: Commit bir git kancası tarafından reddedildi. (Ayrıntı: HOOK-RED: mesaj kuralı)');
 });
 
-/* --------------------------------------------- 403 korunanYol / 409 ppConfigBozuk iletileri */
+/* --------------------------------------------- 403 korunanYol / 409 manifestBozuk iletileri */
 
-test('api: 403 korunanYol ve 409 ppConfigBozuk/libraryDirGecersiz sunucunun Türkçe iletisini taşır, kurulum ekranına düşürmez', async () => {
+test('api: 403 korunanYol ve 409 manifestBozuk/libraryDirGecersiz sunucunun Türkçe iletisini taşır, kurulum ekranına düşürmez', async () => {
   const cases = [
     [403, { error: 'Bu yol marketplace yapısının parçası; silinemez veya taşınamaz.', code: 'korunanYol' }],
-    [409, { error: 'pp.config.json okunamadı: JSON bozuk. Dosyayı düzelt.', code: 'ppConfigBozuk' }],
-    [409, { error: 'pp.config.json içindeki libraryDir geçersiz. Düzelt.', code: 'libraryDirGecersiz' }]
+    [409, { error: '.claude-plugin/marketplace.json okunamadı: JSON bozuk. Dosyayı düzelt.', code: 'manifestBozuk' }],
+    [409, { error: '"prompts" klasörü marketplace klasörünün dışına çıkıyor. Düzelt.', code: 'libraryDirGecersiz' }]
   ];
   for (const [status, body] of cases) {
     const toasts = []; let lost = 0;
@@ -567,7 +568,7 @@ function editCtx(raw) {
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const str = (v) => (Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v));
   const base = (p) => p.split('/').pop();
-  const ctx = load({ fns: ['editPaneHtml'] }, {
+  const ctx = load({ fns: ['editPaneHtml', 'pubUsageHtml', 'pubFieldsHtml', 'ccFieldHtml', 'ccHint'], consts: ['CC_HINT_KEYS'] }, {
     S, esc, str, base, stem: (p) => base(p).replace(/\.[^.]+$/, ''), fold: FM.fold, normTur: Rules.normTur,
     toList: (v) => (Array.isArray(v) ? v : String(v == null ? '' : v).split(',')).map((x) => String(x).trim()).filter(Boolean),
     chipsHtml: () => '', curCheck: () => null, curNotice: () => null, pubPill: () => '', libDirOf: () => 'prompts', ls: { get: (k, d) => d }
@@ -595,13 +596,14 @@ const acts = (items) => Array.from(items).map((i) => i.act);
 
 test('menuItemsFor: korunan yollarda Sil/Yeniden adlandır öğeleri yoktur', () => {
   const ctx = menuCtx('prompts');
-  for (const p of ['pp.config.json', '.gitignore', '.gitattributes', 'plugins', '.claude-plugin', '.pp/trash/x', 'PP.CONFIG.JSON', 'prompts']) {
+  for (const p of ['.gitignore', '.gitattributes', 'plugins', '.claude-plugin', '.pp/trash/x', 'PLUGINS', 'prompts']) {
     for (const kind of ['tfile', 'file', 'dir']) {
       const a = acts(ctx.menuItemsFor({ kind, mp: 'mp', path: p, node: { name: p } }));
       assert.ok(!a.includes('delete') && !a.includes('rename') && !a.includes('m-rename-file') && !a.includes('m-move'), p + ' (' + kind + '): ' + a.join(','));
     }
   }
-  assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'pp.config.json', node: { name: 'pp.config.json' } })), []);
+  assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'pp.config.json', node: { name: 'pp.config.json' } })), ['rename', 'delete']);
+  assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: '.gitignore', node: { name: '.gitignore' } })), []);
   // md dosyası ve plugin düğümü de korunan yoldaysa taşıma/ad/silme gizlenir
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'file', mp: 'mp', path: 'prompts', node: { name: 'x' } })).filter((x) => /delete|rename|move/.test(x)), []);
 });
@@ -612,7 +614,7 @@ test('menuItemsFor: korunmayan yollar eskisi gibi; plugin içeriği silinebilir;
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'plugins/mk/commands/a.md', node: {} })), ['rename', 'delete'], 'plugins/<paket> altındaki dosya silinebilir');
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'tfile', mp: 'mp', path: 'README.md', node: {} })), ['rename', 'delete']);
   assert.deepEqual(acts(ctx.menuItemsFor({ kind: 'plugin', mp: 'mp', path: 'prompts/plug', node: { name: 'plug' } })),
-    ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-delete-plugin']);
+    ['m-new-prompt', 'open-package', 'm-desc', 'm-rename-plugin', 'm-move-plugin', 'm-delete-plugin']);
   assert.ok(acts(ctx.menuItemsFor({ kind: 'mp', mp: 'mp', path: '', node: { active: false, state: 'hazir' } })).includes('m-activate'));
   const ic = menuCtx('a/b');
   assert.deepEqual(acts(ic.menuItemsFor({ kind: 'dir', mp: 'mp', path: 'a', node: {} })), []);

@@ -14,6 +14,11 @@ function defaultOwner(cfg) {
   return cfg.marketplace.owner || (() => { try { return os.userInfo().username; } catch (e) { return 'ben'; } })();
 }
 
+/** Summary: Açıklaması olmayan paket ya da katalog girdisi için varsayılan açıklama; marketplace açıklaması boşsa yalnızca ad. */
+function fallbackDescription(name, marketplace) {
+  return marketplace.description ? `${name}: ${marketplace.description}` : name;
+}
+
 class ManifestWriter {
   // root: () => etkin marketplace klasörü
   constructor({ root, fsp, atomicWrite, FM, Rules }) {
@@ -61,7 +66,7 @@ class ManifestWriter {
     const pk = cfg.packages || {};
     const pm = pk[paket] || {};
     const next = { ...cur, name: paket };
-    next.description = String(pm.description || '').trim() || cur.description || (opts && opts.description) || `${paket}: ${cfg.marketplace.description}`;
+    next.description = String(pm.description || '').trim() || cur.description || (opts && opts.description) || fallbackDescription(paket, cfg.marketplace);
     next.author = cur.author || { name: defaultOwner(cfg) };
     if (opts && opts.version) next.version = opts.version;
     await this._write(this.pluginJsonPath(paket), next, undo);
@@ -90,7 +95,7 @@ class ManifestWriter {
     const next = {
       ...cur,
       name: this.FM.slug(mk.name),
-      description: mk.description,
+      description: mk.description || cur.description,
       owner: { ...(cur.owner || {}), name: defaultOwner(cfg) }
     };
     const version = opts && opts.version;
@@ -102,7 +107,7 @@ class ManifestWriter {
     const listed = await this.listed();
     const own = listed.map((l) => {
       const { version: _v, ...rest } = prev.get(l.name) || {};
-      return { ...rest, name: l.name, source: './plugins/' + l.name, description: l.description || `${l.name}: ${mk.description}` };
+      return { ...rest, name: l.name, source: './plugins/' + l.name, description: l.description || fallbackDescription(l.name, mk) };
     });
     const external = (cur.plugins || []).filter((p) => !(typeof p.source === 'string' && p.source.startsWith('./plugins/')));
     next.plugins = own.concat(external);

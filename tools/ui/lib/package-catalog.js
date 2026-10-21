@@ -22,9 +22,10 @@ const EMPTY_DESCRIPTION_KEYS = Object.freeze({
 });
 
 class PackageCatalog {
-  // listPrompts: (cfg) => index.listMd(root, cfg.libraryDir, { includeBig: true })
-  constructor({ listPrompts, exporter, readIfExists, root, Rules, FM }) {
+  // listPrompts: (cfg) => index.listMd(root, cfg.libraryDir, { includeBig: true }); listFolders: (cfg) => libraryDir altındaki klasör adları
+  constructor({ listPrompts, listFolders, exporter, readIfExists, root, Rules, FM }) {
     this.listPrompts = listPrompts;
+    this.listFolders = listFolders || (async () => []);
     this.exporter = exporter;
     this.readIfExists = readIfExists;
     this.root = root;
@@ -42,7 +43,7 @@ class PackageCatalog {
   // plans/skipped/orphans biçimi publishPlan'ınkiyle aynıdır.
   async build(cfg) {
     const { Rules, FM, exporter } = this;
-    const items = await this.listPrompts(cfg);
+    const items = cfg.libraryOk === false ? [] : await this.listPrompts(cfg);
     const exp = cfg.export || { durumlar: ['kararlı', ''], haricKlasorler: [Rules.INBOX_DIR] };
     const plans = []; const skipped = []; const cands = [];
     const packages = new Map();
@@ -81,22 +82,23 @@ class PackageCatalog {
       const tur = Rules.normTur(meta.tur);
       if (!tur) {
         const s = exclude(it.check.code, it.check.level, it.check.reason, it.check.fields ? { fields: it.check.fields } : null);
-        if (s.level === 'warn') cands.push({ s, ad: FM.slug(str(meta.komut_adi) || baseName), paket: res.paket });
+        if (s.level === 'warn') cands.push({ s, ad: FM.slug(str(Rules.ccValue(meta, 'name', tur)) || baseName), paket: res.paket });
         if (BLOCKING_SKIP.has(s.code)) pkg.issues.push({ code: s.code, level: 'error', msg: s.reason, source: it.path });
         continue;
       }
 
-      const ad = FM.slug(str(meta.komut_adi) || baseName);
+      const nameVal = str(Rules.ccValue(meta, 'name', tur));
+      const ad = FM.slug(nameVal || baseName);
       const target = exporter.targetFor(tur, res.paket, ad);
       const expected = exporter.renderTarget(it, tur, ad);
       const cur = await this.readIfExists(path.join(this.root(), target));
       const issues = [];
       if (Rules.isDeviceName(ad)) issues.push({ code: 'aygitAdi', level: 'error', msg: Rules.MSG.aygitAdi(ad) });
       if (!it.body.trim()) issues.push({ code: 'icerikBos', level: 'error', msg: tx('pkg.issue.icerikBos') });
-      if (str(meta.komut_adi) && FM.slug(str(meta.komut_adi)) === 'adsiz') {
-        issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(str(meta.komut_adi)) });
+      if (nameVal && FM.slug(nameVal) === 'adsiz') {
+        issues.push({ code: 'adUretilemedi', level: 'warn', msg: Rules.MSG.adUretilemedi(nameVal) });
       }
-      if (!str(meta.aciklama)) {
+      if (!str(Rules.ccValue(meta, 'description', tur))) {
         issues.push({
           code: 'aciklamaBos',
           level: tur === 'komut' ? 'info' : 'warn',
@@ -148,6 +150,21 @@ class PackageCatalog {
       byTarget: new Map(plans.map((p) => [p.target, p])),
       bySkipped: new Map(skipped.map((x) => [x.source, x]))
     };
+  }
+
+  /** Summary: Promptu olmayan ama klasörü olan plugin için boş paket üretir; klasör yoksa ya da dışa aktarma dışındaysa null döner (built.packages'a dokunmaz). */
+  async emptyPackage(built, name) {
+    const { Rules, FM } = this;
+    const cfg = built.cfg;
+    if (cfg.libraryOk === false) return null;
+    const exp = cfg.export || { haricKlasorler: [Rules.INBOX_DIR] };
+    if ((exp.haricKlasorler || []).some((x) => FM.slug(x) === name)) return null;
+    const folder = (await this.listFolders(cfg)).find((f) => f.charAt(0) !== '.' && FM.slug(f) === name);
+    if (!folder) return null;
+    const pkg = { name, prompts: [], excluded: [], issues: [], paths: new Set([cfg.libraryDir + '/' + folder + '/']) };
+    const nameErr = Rules.checkPluginName(name);
+    if (nameErr) pkg.issues.push({ code: 'paketAdiGecersiz', level: 'error', msg: nameErr });
+    return pkg;
   }
 
   // Bir paketin plugins/ altında kalan ama kaynağı olmayan çıktıları da dahil, işlenecek tüm paket adları.

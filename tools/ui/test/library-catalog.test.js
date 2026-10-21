@@ -6,7 +6,7 @@ const fsp = fs.promises;
 const path = require('path');
 const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
-const ppConfig = require('../lib/pp-config');
+const { MarketplaceSettings } = require('../lib/marketplace-settings');
 const { GitService } = require('../lib/git-service');
 const { MarketplaceRegistry } = require('../lib/marketplace-registry');
 const { PromptIndex } = require('../lib/prompt-index');
@@ -20,7 +20,11 @@ const IGNORE = new Set(Rules.RESERVED_DIRS);
 const EDITABLE = new Set(['.md', '.markdown', '.txt', '.json', '.yml', '.yaml']);
 
 const put = (dir, rel, raw) => { const f = path.join(dir, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, raw); };
-const pp = (extra) => JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'x', plugin: 'varsayilan' }, packages: {}, ...extra }, null, 2);
+const settings = new MarketplaceSettings({ fsp, Rules, FM });
+const pp = (dir, { name = 'x', packages = {} } = {}) => {
+  put(dir, '.claude-plugin/marketplace.json', JSON.stringify({ name, plugins: [] }, null, 2));
+  for (const [folder, description] of Object.entries(packages)) put(dir, 'prompts/' + folder + '/.claude-plugin/plugin.json', JSON.stringify({ description }));
+};
 
 async function build() {
   const d = tmpDir();
@@ -34,7 +38,7 @@ async function build() {
   };
   const versions = new VersionService({ git, files, decode, listPrompts: (r, l) => index.listMd(r, l) });
   const mk = (over = {}) => new LibraryCatalog({
-    registry, index, loadConfigAt: ppConfig.loadConfigAt, versions, Rules, FM, ignore: IGNORE, editable: EDITABLE, ...over
+    registry, index, loadConfigAt: (dir) => settings.load(dir), versions, Rules, FM, ignore: IGNORE, editable: EDITABLE, ...over
   });
   return { d, lib, git, registry, index, versions, mk, catalog: mk() };
 }
@@ -45,7 +49,7 @@ async function fixture() {
   const a = path.join(lib, 'a'); const b = path.join(lib, 'b');
   fs.mkdirSync(a); fs.mkdirSync(b);
   await git.init(a); await git.init(b);
-  put(a, 'pp.config.json', pp({ packages: { ornek: { description: 'Örnek plugin' } } }));
+  pp(a, { name: 'varsayilan', packages: { ornek: 'Örnek plugin' } });
   put(a, 'prompts/ornek/p.md', '---\nbaslik: Merhaba Dünya\netiketler: [ortak, a-ozel]\ndurum: aktif\ntur: komut\npaket: baska\nprojeler: [p1]\n---\nselam dünya\n');
   put(a, 'prompts/ornek/alt/q.md', '---\nbaslik: Alt\netiketler: [ortak]\n---\nalt govde\n');
   put(a, 'prompts/Kod İnceleme/k.md', '---\nbaslik: Kod\n---\nkod\n');
@@ -55,7 +59,7 @@ async function fixture() {
   put(a, 'prompts/.gizli/h.md', 'h');
   put(a, 'plugins/ornek/commands/p.md', '---\ndescription: x\n---\nuretilen');
   put(a, 'README.md', '# a');
-  put(b, 'pp.config.json', pp());
+  pp(b);
   put(b, 'prompts/ornek/p.md', '---\nbaslik: Merhaba B\netiketler: [ortak]\n---\nselam b\n');
   fs.mkdirSync(path.join(lib, 'bozuk')); fs.writeFileSync(path.join(lib, 'bozuk', '.git'), 'bozuk');
   fs.mkdirSync(path.join(lib, 'duz'));
@@ -91,7 +95,10 @@ test('ağaç: gruplar, alt klasör, geçersiz ve git olmayan klasörler', real, 
     assert.equal(a.inbox.name, 'gelen-kutusu'); assert.equal(a.inbox.children[0].meta.baslik, 'Gelen');
     assert.equal(a.plugins.some((p) => p.name === '.gizli'), false);
     assert.equal(a.count, 7); assert.equal(a.libraryDirExists, true);
-    assert.deepEqual(a.teknik.map((n) => n.name), ['plugins', 'pp.config.json', 'README.md']);
+    assert.deepEqual(a.teknik.map((n) => n.name), ['.claude-plugin', 'plugins', 'README.md']);
+    assert.equal(findNode(a, 'prompts/ornek/.claude-plugin'), null, 'kaynak .claude-plugin klasörü ağaçta yok');
+    assert.equal(findNode(a, 'prompts/ornek/.claude-plugin/plugin.json'), null);
+    assert.ok(ornek.children.every((c) => c.name !== '.claude-plugin'));
     assert.equal(findNode(a, 'plugins/ornek/commands/p.md').meta, undefined, 'teknik düğümlerde meta yok');
     assert.equal(findNode(a, 'README.md').meta, undefined);
     const p = findNode(a, 'prompts/ornek/p.md').meta;
@@ -159,7 +166,7 @@ test('surum: yalnızca tag olan marketplace\'te dolu (önbellek anahtarı)', rea
 test('discover TTL içinde bir kez çağrılır; invalidate sonrası tekrar', async () => {
   let n = 0;
   const registry = { discover: async () => { n++; return { items: [], ignored: [] }; } };
-  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: ppConfig.loadConfigAt, versions: null, Rules, FM, ignore: IGNORE, ttlMs: 60000 });
+  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: (dir) => settings.load(dir), versions: null, Rules, FM, ignore: IGNORE, ttlMs: 60000 });
   await cat.marketplaces('/x', ''); await cat.marketplaces('/x', 'a');
   assert.equal(n, 1);
   cat.invalidate();
@@ -172,7 +179,7 @@ test('discover TTL içinde bir kez çağrılır; invalidate sonrası tekrar', as
 test('discover TTL dolunca yenilenir', async () => {
   let n = 0;
   const registry = { discover: async () => { n++; return { items: [], ignored: [] }; } };
-  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: ppConfig.loadConfigAt, versions: null, Rules, FM, ignore: IGNORE, ttlMs: 5 });
+  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: (dir) => settings.load(dir), versions: null, Rules, FM, ignore: IGNORE, ttlMs: 5 });
   await cat.marketplaces('/x', '');
   await new Promise((r) => setTimeout(r, 20));
   await cat.marketplaces('/x', '');
@@ -187,7 +194,7 @@ test('marketplaces: araç reposu reasonCode ile elenir (ileti metni değil), kod
     { name: 'duz', path: '/x/duz', reason: 'Git deposu değil', reasonCode: 'gitDegil' }
   ];
   const registry = { discover: async () => { n++; return { items: [], ignored }; } };
-  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: ppConfig.loadConfigAt, versions: null, Rules, FM, ignore: IGNORE, ttlMs: 60000 });
+  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: (dir) => settings.load(dir), versions: null, Rules, FM, ignore: IGNORE, ttlMs: 60000 });
   const first = await cat.marketplaces('/x', '');
   assert.deepEqual(first.ignored.map((i) => i.name), ['benzer', 'duz']);
   const second = await cat.marketplaces('/x', 'a');
@@ -202,7 +209,7 @@ test('ağaç: gerçek araç reposu library kökündeyse ignored listesine girmez
     const git = new GitService({ env: gitEnv(c.d), forbiddenRoots: [tool] });
     const registry = new MarketplaceRegistry({ git, toolRoot: tool });
     const a = path.join(c.lib, 'a'); fs.mkdirSync(a); await git.init(a);
-    put(a, 'pp.config.json', pp());
+    pp(a);
     fs.mkdirSync(path.join(c.lib, 'duz'));
     const cat = c.mk({ registry });
     const t = await cat.tree(c.lib, 'a');
@@ -262,7 +269,7 @@ async function bigFixture(n) {
   const c = await build();
   const m = path.join(c.lib, 'm'); fs.mkdirSync(m);
   await c.git.init(m);
-  put(m, 'pp.config.json', pp());
+  pp(m);
   for (let i = 0; i < n; i++) put(m, `prompts/p/n${String(i).padStart(4, '0')}.md`, `---\nbaslik: Not ${i}\netiketler: [${i % 2 ? 'tek' : 'cift'}]\n---\ngovde ortaksozcuk ${i}\n`);
   put(m, 'prompts/p/ozel.md', '---\nbaslik: Özel\n---\nsadece benzersizsozcuk\n');
   return { ...c, m };

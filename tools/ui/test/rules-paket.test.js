@@ -161,3 +161,24 @@ test('checkRemoteUrl/normalizeRepoUrl 2048 sınırı, 100025 karakter hızlı d�
   assert.equal(Rules.checkRemoteUrl(''), 'URL gerekli');
   assert.deepEqual(Rules.normalizeRepoUrl('o/r'), { url: 'https://github.com/o/r.git', provider: 'github', slugName: 'r' });
 });
+
+test('paketAfterMove: hedef türü x alan durumu karar tablosu', () => {
+  const keep = { action: 'keep', value: null };
+  const fromPaket = { kind: 'paket', paket: 'kod' };
+  const decide = (alan, from, toKind, toPaket = null) => Rules.paketAfterMove({ alan, from, to: { kind: toKind, paket: toPaket } });
+  assert.equal(Rules.PAKET_FIELD, 'paket');
+  assert.deepEqual(decide(undefined, fromPaket, 'paket', 'yazi'), keep, 'alan yok: dokunma');
+  assert.deepEqual(decide('', fromPaket, 'paket', 'yazi'), keep);
+  assert.deepEqual(decide('Yazi', fromPaket, 'paket', 'yazi'), keep, 'slug hedefe eşit: dokunma');
+  assert.deepEqual(decide('kod', fromPaket, 'paket', 'yazi'), { action: 'set', value: 'yazi' });
+  assert.deepEqual(decide('baska', fromPaket, 'paket', 'yazi'), { action: 'set', value: 'yazi' }, 'klasörle uyuşmayan alan da hedefe eşitlenir');
+  assert.deepEqual(decide(['kod'], { kind: 'klasorsuz', paket: null }, 'paket', 'yazi'), { action: 'set', value: 'yazi' }, 'tek elemanlı dizi tek değerdir');
+  assert.deepEqual(decide(['kod', 'yazi'], fromPaket, 'paket', 'yazi'), keep, 'çok değerli: dokunma');
+  assert.deepEqual(decide('kod', fromPaket, 'klasorsuz'), { action: 'remove', value: null }, 'kaynak klasörüne eşit alan klasörsüze giderken kalkar');
+  assert.deepEqual(decide('baska', fromPaket, 'klasorsuz'), keep, 'klasörsüzde alan belirleyicidir');
+  assert.deepEqual(decide('kod', { kind: 'gelenKutusu', paket: null }, 'klasorsuz'), keep);
+  assert.deepEqual(decide(undefined, fromPaket, 'klasorsuz'), keep);
+  assert.deepEqual(decide(['kod', 'x'], fromPaket, 'klasorsuz'), keep);
+  assert.deepEqual(decide('kod', fromPaket, 'gelenKutusu'), keep, 'gelen kutusu yayınlanmaz: dokunma');
+  assert.deepEqual(decide('x', { kind: 'klasorsuz', paket: null }, 'gelenKutusu'), keep);
+});
