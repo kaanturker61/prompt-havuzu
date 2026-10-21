@@ -6,6 +6,15 @@ const { GitError } = require('./git-service');
 const { UndoStack } = require('./undo');
 const { describeNetError } = require('./net-errors');
 const { BusyError } = require('./op-lock');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
+/** Summary: Kirli dosya listesini en çok 5 öğeyle birleştirir, fazlası için sonuna ' …' ekler. */
+function dirtyList(files) {
+  return files.slice(0, 5).join(', ') + (files.length > 5 ? ' …' : '');
+}
 
 const HOUR = 60 * 60 * 1000;
 
@@ -31,10 +40,10 @@ class RemoteSync {
 
   async _remote(dir, name) {
     const list = await this.git.remotes(dir);
-    if (!list.length) throw new RemoteError(409, 'Uzak depo tanımlı değil. Önce bir uzak depo ekle.', { code: 'remoteYok' });
+    if (!list.length) throw new RemoteError(409, tx('remote.err.remoteYok'), { code: 'remoteYok' });
     if (name) {
       const hit = list.find((r) => r.name === name);
-      if (!hit) throw new RemoteError(404, 'Uzak depo bulunamadı: ' + name);
+      if (!hit) throw new RemoteError(404, tx('remote.err.bulunamadi', { name }));
       return hit;
     }
     return list.find((r) => r.name === 'origin') || list[0];
@@ -43,6 +52,20 @@ class RemoteSync {
   _netFail(e, remote, dir) {
     const code = (e && e.netCode) || 'bilinmiyor';
     return { ok: false, code, error: describeNetError(code, { url: remote && remote.url, dir }), detail: String((e && (e.stderr || e.message)) || '').trim().slice(0, 600) };
+  }
+
+  /** Summary: Diskteki lastCheck kaydını API şekline çevirir; error metni okuma anındaki dilde koddan üretilir (diske yazılmaz). */
+  async _presentLastCheck(dir, last, remotes) {
+    if (!last) return null;
+    if (last.ok !== false) return { ...last, error: null };
+    const code = typeof last.code === 'string' && last.code ? last.code : 'bilinmiyor';
+    let url;
+    if (code === 'kimlik') {
+      const list = remotes || await this.git.remotes(dir).catch(() => []);
+      const hit = list.find((r) => r.name === 'origin') || list[0];
+      url = hit && hit.url;
+    }
+    return { ...last, error: describeNetError(code, { url, dir }) };
   }
 
   async list(dir) {
@@ -60,7 +83,7 @@ class RemoteSync {
     const n = Rules.normalizeRepoUrl(url);
     if (n.error) throw new RemoteError(400, n.error, { code: 'urlGecersiz' });
     return this.lock.run(dir, 'yaz', async () => {
-      if ((await this.git.remotes(dir)).some((r) => r.name === name)) throw new RemoteError(409, 'Bu adda bir uzak depo zaten var: ' + name);
+      if ((await this.git.remotes(dir)).some((r) => r.name === name)) throw new RemoteError(409, tx('remote.err.adVar', { name }));
       await this.git.addRemote(dir, name, n.url);
       return { name, url: n.url, provider: n.provider };
     });
@@ -71,7 +94,7 @@ class RemoteSync {
     const n = Rules.normalizeRepoUrl(url);
     if (n.error) throw new RemoteError(400, n.error, { code: 'urlGecersiz' });
     return this.lock.run(dir, 'yaz', async () => {
-      if (!(await this.git.remotes(dir)).some((r) => r.name === name)) throw new RemoteError(404, 'Uzak depo bulunamadı: ' + name);
+      if (!(await this.git.remotes(dir)).some((r) => r.name === name)) throw new RemoteError(404, tx('remote.err.bulunamadi', { name }));
       await this.git.setRemoteUrl(dir, name, n.url);
       return { name, url: n.url, provider: n.provider };
     });
@@ -95,7 +118,7 @@ class RemoteSync {
       const ab = await this.git.aheadBehind(dir, upstream ? 'refs/remotes/' + upstream : 'refs/remotes/' + r.name + '/' + branch);
       ahead = ab.ahead; behind = ab.behind;
     }
-    return { remotes, branch, upstream, ahead, behind, pendingTags: st.pendingTags, lastCheck: st.lastCheck, folder: dir };
+    return { remotes, branch, upstream, ahead, behind, pendingTags: st.pendingTags, lastCheck: await this._presentLastCheck(dir, st.lastCheck, remotes), folder: dir };
   }
 
   async _compute(dir, remoteName) {
@@ -122,8 +145,8 @@ class RemoteSync {
     const bg = !!opts.background;
     const last = (await this.state.get(dir)).lastCheck;
     if (bg) {
-      if (opts.setting === 'elle') return { ok: true, skipped: 'elle', cached: true, ...(last || {}) };
-      if (last && last.at && last.ok && this.now() - Date.parse(last.at) < HOUR) return { ...last, cached: true };
+      if (opts.setting === 'elle') return { ok: true, skipped: 'elle', cached: true, ...((await this._presentLastCheck(dir, last)) || {}) };
+      if (last && last.at && last.ok && this.now() - Date.parse(last.at) < HOUR) return { ...(await this._presentLastCheck(dir, last)), cached: true };
     }
     let remote;
     try { remote = await this._remote(dir, opts.remote); } catch (e) {
@@ -139,12 +162,12 @@ class RemoteSync {
           if (!(e instanceof GitError)) throw e;
           const f = this._netFail(e, remote, dir);
           const res = { ...f, checkedAt, at: checkedAt };
-          await this.state.setLastCheck(dir, { at: checkedAt, ok: false, code: f.code, error: f.error, behind: 0, newTags: [], newCommits: [] });
+          await this.state.setLastCheck(dir, { at: checkedAt, ok: false, code: f.code, behind: 0, newTags: [], newCommits: [] });
           return res;
         }
         const c = await this._compute(dir, remote.name);
         const res = { ok: true, behind: c.behind, ahead: c.ahead, newCommits: c.newCommits, newTags: c.newTags, checkedAt };
-        await this.state.setLastCheck(dir, { at: checkedAt, ok: true, behind: c.behind, ahead: c.ahead, newTags: c.newTags, newCommits: c.newCommits, error: null });
+        await this.state.setLastCheck(dir, { at: checkedAt, ok: true, behind: c.behind, ahead: c.ahead, newTags: c.newTags, newCommits: c.newCommits });
         return res;
       });
     } catch (e) {
@@ -158,7 +181,7 @@ class RemoteSync {
   async push(dir, opts = {}) {
     const remote = await this._remote(dir, opts.remote);
     const branch = await this.git.currentBranch(dir);
-    if (!branch) throw new RemoteError(409, 'HEAD bir dala bağlı değil, push yapılamaz.', { code: 'dalYok' });
+    if (!branch) throw new RemoteError(409, tx('remote.err.dalYokPush'), { code: 'dalYok' });
     try {
       return await this.lock.run(dir, 'ag', async () => {
         const st = await this.state.get(dir);
@@ -189,18 +212,18 @@ class RemoteSync {
     return this.lock.run(dir, 'yaz', async () => {
       const dirty = await git.isClean(dir, []);
       if (dirty.length) {
-        throw new RemoteError(409, 'Önce bu dosyaları kaydet (commit) ya da geri al: ' + dirty.slice(0, 5).join(', ') + (dirty.length > 5 ? ' …' : ''), { code: 'kirliCalismaAgaci', files: dirty });
+        throw new RemoteError(409, tx('remote.err.kirli', { files: dirtyList(dirty) }), { code: 'kirliCalismaAgaci', files: dirty });
       }
       const { branch, ref } = await this._trackingRef(dir, remote.name);
-      if (!branch) throw new RemoteError(409, 'HEAD bir dala bağlı değil.', { code: 'dalYok' });
+      if (!branch) throw new RemoteError(409, tx('remote.err.dalYok'), { code: 'dalYok' });
       const from = await git.headCommit(dir);
-      if (!from) throw new RemoteError(409, 'Henüz commit yok, ileri sarma yapılamaz.', { code: 'commitYok' });
-      if (!(await git.refExists(dir, ref))) throw new RemoteError(409, 'Uzak depoda "' + branch + '" dalı yok.', { code: 'uzakDalYok' });
+      if (!from) throw new RemoteError(409, tx('remote.err.commitYok'), { code: 'commitYok' });
+      if (!(await git.refExists(dir, ref))) throw new RemoteError(409, tx('remote.err.uzakDalYok', { branch }), { code: 'uzakDalYok' });
       const ab = await git.aheadBehind(dir, ref);
       if (ab.ahead > 0 && ab.behind > 0) {
-        throw new RemoteError(409, 'Yerelde push edilmemiş commit var ve uzak depo da ilerlemiş. Bu araç birleştirme yapmaz; terminalde: git -C ' + dir + ' pull --rebase', { code: 'ayristi' });
+        throw new RemoteError(409, tx('remote.err.ayristi', { dir }), { code: 'ayristi' });
       }
-      if (ab.behind === 0) throw new RemoteError(409, 'Zaten güncel', { code: 'guncel' });
+      if (ab.behind === 0) throw new RemoteError(409, tx('remote.err.guncel'), { code: 'guncel' });
       const undo = new UndoStack();
       try {
         await git.mergeFfOnly(dir, ref);
@@ -219,14 +242,14 @@ class RemoteSync {
           adopted.push(name);
         }
         undo.clear();
-        await this.state.setLastCheck(dir, { at: new Date(this.now()).toISOString(), ok: true, behind: 0, ahead: 0, newTags: [], newCommits: [], error: null });
+        await this.state.setLastCheck(dir, { at: new Date(this.now()).toISOString(), ok: true, behind: 0, ahead: 0, newTags: [], newCommits: [] });
         this.onChanged(dir);
         return { ok: true, from, to, adoptedTags: adopted };
       } catch (e) {
         try { await undo.rollback(); } catch (agg) {
-          throw new RemoteError(500, 'Güncelleme başarısız ve geri alma tamamlanamadı: ' + (agg.errors || [agg]).map((x) => x.message).join('; ') + '. Git panelinden durumu kontrol et.', { code: 'rollbackFailed', rollbackFailed: true });
+          throw new RemoteError(500, tx('remote.err.rollbackFailed', { detail: (agg.errors || [agg]).map((x) => x.message).join('; ') }), { code: 'rollbackFailed', rollbackFailed: true });
         }
-        throw new RemoteError(500, 'Güncelleme başarısız: ' + e.message + '. Yapılan değişiklikler geri alındı.', { code: 'geriAlindi' });
+        throw new RemoteError(500, tx('remote.err.failed', { error: e.message }), { code: 'geriAlindi' });
       }
     });
   }

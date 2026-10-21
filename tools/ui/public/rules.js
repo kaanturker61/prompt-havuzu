@@ -2,10 +2,13 @@
  * Sunucu ve arayüz aynı kuralları paylaşır. Bağımlılığı fm.js'tir (tarayıcıda window.FM).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fm.js'));
-  else root.Rules = factory(root.FM);
-})(typeof self !== 'undefined' ? self : this, function (FM) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./fm.js'), require('./i18n.js'));
+  else root.Rules = factory(root.FM, root.I18n);
+})(typeof self !== 'undefined' ? self : this, function (FM, I18n) {
   'use strict';
+
+  /** Summary: Geçerli dilde düz metin çevirisi (Node'da istek bağlamı, tarayıcıda setLanguage). */
+  const tx = I18n.tx;
 
   const PUBLISH_FIELDS = ['paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model'];
   const DEFAULT_VERSION = '1.0.0';
@@ -14,30 +17,36 @@
   const SEMVER_RE = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/;
   const SEMVER_ANY_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+  /** Summary: "tur" alanının kanonik değerleri (ileti parametresi). */
+  const TUR_VALUES = ['komut', 'ajan', 'skill'];
+
+  /** Summary: Kural iletileri; her değer çağrıldığı andaki dilde üretilir (düz metinler tembel alıcıdır). */
   const MSG = {
-    turYok: function (fields) { return 'Yayın alanları dolu (' + fields.join(', ') + ') ama "tur" yok. Bu prompt yayınlanmayacak.'; },
-    turGecersiz: function (val) { return '"tur" değeri tanınmadı: "' + val + '". Geçerli değerler: komut, ajan, skill. Bu prompt yayınlanmayacak.'; },
-    onYuzKapanmamis: 'Frontmatter kapanmamış (ikinci "---" satırı yok). Alanlar okunamıyor, bu prompt yayınlanmayacak.',
-    dosyaBuyuk: 'Dosya 2 MB\'tan büyük. Dizinlenmiyor ve yayınlanmıyor.',
-    yayinDisi: 'Tür seçilmemiş (yayın dışı).',
-    surumGuncelDegil: function (v) { return 'Son sürümden (v' + v + ') beri dosya değişti ama versiyon aynı. Yeni sürüm için +1\'e bas.'; },
-    adUretilemedi: function (v) { return 'Ad üretilemedi ("' + v + '"), "adsiz" kullanılacak. "Ad" alanına harf veya rakam içeren bir değer yaz.'; },
+    turYok: function (fields) { return tx('rules.turYok', { fields: fields.join(', '), field: 'tur' }); },
+    turGecersiz: function (val) { return tx('rules.turGecersiz', { field: 'tur', value: val, values: TUR_VALUES.join(', ') }); },
+    get onYuzKapanmamis() { return tx('rules.onYuzKapanmamis'); },
+    get dosyaBuyuk() { return tx('rules.dosyaBuyuk'); },
+    get yayinDisi() { return tx('rules.yayinDisi'); },
+    surumGuncelDegil: function (v) { return tx('rules.surumGuncelDegil', { version: v, field: 'versiyon' }); },
+    adUretilemedi: function (v) { return tx('rules.adUretilemedi', { value: v, fallback: 'adsiz' }); },
     paketUyusmuyor: function (klasor, alan) {
-      return 'Dosya "' + klasor + '" paketinin klasöründe ama "paket" alanı "' + alan + '". Paket klasörden alınır; alanı düzelt ya da dosyayı taşı.';
+      return tx('rules.paketUyusmuyor', { folder: klasor, field: 'paket', value: alan });
     },
-    paketCokDegerli: '"paket" tek bir değer olmalı.',
+    get paketCokDegerli() { return tx('rules.paketCokDegerli', { field: 'paket' }); },
     durumHaric: function (durum, liste) {
-      const l = liste.map(function (x) { return x === '' ? '(boş)' : x; }).join(', ');
-      return (durum ? 'Durumu "' + durum + '".' : 'Durumu boş.') + ' Yalnızca şu durumlar dışa aktarılır: ' + l + '.';
+      const l = liste.map(function (x) { return x === '' ? tx('rules.durumBos') : x; }).join(', ');
+      return durum ? tx('rules.durumHaric', { status: durum, allowed: l }) : tx('rules.durumHaricBos', { allowed: l });
     },
-    surumArtirilmamis: function (v) { return 'İçerik değişmiş ama "versiyon" artırılmamış (' + v + '). Yama sayılacak.'; },
+    surumArtirilmamis: function (v) { return tx('rules.surumArtirilmamis', { field: 'versiyon', version: v }); },
     // list: FM.duplicateKeys sonucu [{ key, count }] (düz anahtar adı da kabul edilir)
     anahtarTekrar: function (list) {
       const d = (list || []).map(function (x) { return typeof x === 'string' ? { key: x, count: 2 } : x; });
-      if (d.length === 1) return d[0].key + ' ' + d[0].count + ' kez yazılmış; sonuncusu geçerli.';
-      return d.map(function (x) { return x.key + ' (' + x.count + ' kez)'; }).join(', ') + ' birden fazla kez yazılmış; hepsinde sonuncusu geçerli.';
+      if (d.length === 1) return tx('rules.anahtarTekrar', { key: d[0].key, count: d[0].count });
+      return tx('rules.anahtarTekrarCok', {
+        list: d.map(function (x) { return tx('rules.anahtarTekrarOge', { key: x.key, count: x.count }); }).join(', ')
+      });
     },
-    aygitAdi: function (ad) { return '"' + ad + '" bir Windows aygıt adı; dosya, klasör veya plugin adı olarak kullanılamaz. Başka bir ad seç.'; }
+    aygitAdi: function (ad) { return tx('rules.aygitAdi', { name: ad }); }
   };
 
   function str(v) { return Array.isArray(v) ? v.join(', ') : v == null ? '' : String(v); }
@@ -57,10 +66,10 @@
 
   function checkVersion(v) {
     const s = String(v == null ? '' : v).trim();
-    if (!s) return 'Sürüm boş olamaz (örnek: 1.0.0)';
+    if (!s) return tx('rules.surumBos');
     if (!SEMVER_RE.test(s)) {
-      if (SEMVER_ANY_RE.test(s)) return 'Sürüm bileşenleri en çok 9 basamak olabilir: "' + s + '"';
-      return 'Sürüm X.Y.Z biçiminde olmalı (örnek: 1.0.0): "' + s + '"';
+      if (SEMVER_ANY_RE.test(s)) return tx('rules.surumBasamak', { value: s });
+      return tx('rules.surumBicim', { value: s });
     }
     return null;
   }
@@ -73,7 +82,12 @@
   /* ---- prompt sürümü ve tag kuralları (Aşama 2) ---- */
 
   const VERSION_LEVELS = ['buyuk', 'kucuk', 'yama'];
-  const LEVEL_LABEL = { buyuk: 'Büyük', kucuk: 'Küçük', yama: 'Yama' };
+  /** Summary: Sürüm seviyesi etiketleri; okunduğunda geçerli dilde üretilir (tembel alıcı). */
+  const LEVEL_LABEL = {
+    get buyuk() { return tx('rules.level.buyuk'); },
+    get kucuk() { return tx('rules.level.kucuk'); },
+    get yama() { return tx('rules.level.yama'); }
+  };
   const PROMPT_TAG_PREFIX = 'prompt/';
   const LEGACY_VER_RE = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/;
   const PROMPT_TAG_RE = /^prompt\/(.+)\/v(\d+\.\d+\.\d+)$/;
@@ -136,16 +150,16 @@
   // Yayına girmeyen prompt için neden. Yayına girebiliyorsa null.
   function publishCheck(o) {
     const meta = (o && o.meta) || {};
-    if (o && o.fmBroken) return { code: 'onYuzKapanmamis', level: 'warn', reason: MSG.onYuzKapanmamis };
+    if (o && o.fmBroken) return { code: 'onYuzKapanmamis', level: 'warn', get reason() { return MSG.onYuzKapanmamis; } };
     if (normTur(meta.tur)) return null;
     const rawTur = str(meta.tur).trim();
-    if (rawTur) return { code: 'turGecersiz', level: 'warn', reason: MSG.turGecersiz(rawTur) };
+    if (rawTur) return { code: 'turGecersiz', level: 'warn', get reason() { return MSG.turGecersiz(rawTur); } };
     const fields = PUBLISH_FIELDS.filter(function (k) {
       const v = meta[k];
       return !(v == null || v === '' || (Array.isArray(v) && v.length === 0));
     });
-    if (fields.length) return { code: 'turYok', level: 'warn', reason: MSG.turYok(fields), fields: fields };
-    return { code: 'yayinDisi', level: 'info', reason: MSG.yayinDisi };
+    if (fields.length) return { code: 'turYok', level: 'warn', get reason() { return MSG.turYok(fields); }, fields: fields };
+    return { code: 'yayinDisi', level: 'info', get reason() { return MSG.yayinDisi; } };
   }
 
   /* ---- plugin (klasör) adı kuralları ---- */
@@ -155,17 +169,19 @@
   const RESERVED_DIRS = ['tools', 'node_modules', '.pp', '.git'];
   const BAD_PREFIXES = ['claude-', 'anthropic-', 'anthropics-', 'cc-plugin-'];
   const BAD_NAMES = ['claude', 'anthropic', 'anthropics', 'claude-code', 'claude-mods'];
+  /** Summary: Ayrılmış ad iletisinde örnek olarak gösterilen adlar (ileti parametresi). */
+  const BAD_NAME_EXAMPLES = ['claude', 'anthropic', 'claude-code'];
 
   // Geçerliyse null, değilse Türkçe hata iletisi.
   function checkPluginName(slug) {
     const n = String(slug == null ? '' : slug).trim().toLowerCase();
-    if (!n) return 'Plugin adı gerekli';
+    if (!n) return tx('rules.pluginAdGerekli');
     if (isDeviceName(n)) return MSG.aygitAdi(n);
-    if (n === INBOX_DIR) return '"' + INBOX_DIR + '" içe aktarma klasörüne ayrılmış. Başka bir ad seç.';
-    if (RESERVED_DIRS.indexOf(n) >= 0) return '"' + n + '" adı sistemde ayrılmış. Başka bir ad seç.';
+    if (n === INBOX_DIR) return tx('rules.pluginAdGelenKutusu', { name: INBOX_DIR });
+    if (RESERVED_DIRS.indexOf(n) >= 0) return tx('rules.pluginAdSistem', { name: n });
     const official = /(^|-)(claude|anthropic)-official(-|$)|(^|-)official-(claude|anthropic)(-|$)/.test(n);
     if (BAD_NAMES.indexOf(n) >= 0 || BAD_PREFIXES.some(function (p) { return n.indexOf(p) === 0; }) || official) {
-      return '"' + n + '" adı Anthropic\'e ayrılmış (claude-, anthropic-, anthropics-, cc-plugin- ile başlayamaz; claude, anthropic, claude-code gibi adlar kullanılamaz). Başka bir ad seç.';
+      return tx('rules.pluginAdAnthropic', { name: n, prefixes: BAD_PREFIXES.join(', '), names: BAD_NAME_EXAMPLES.join(', ') });
     }
     return null;
   }
@@ -174,8 +190,8 @@
   function pluginNameWarn(slug) {
     const n = String(slug == null ? '' : slug).trim().toLowerCase();
     const m = /(?:^|-)(claude|anthropic)(?:-|$)/.exec(n);
-    if (m) return '"' + n + '" içinde "' + m[1] + '" kelimesi geçiyor; Claude Code bunu uyarıyla kabul eder.';
-    if (n.length > 128) return 'Plugin adı 128 karakterden uzun; Claude Desktop kabul etmeyebilir.';
+    if (m) return tx('rules.pluginUyariKelime', { name: n, word: m[1] });
+    if (n.length > 128) return tx('rules.pluginUyariUzun');
     return null;
   }
 
@@ -193,11 +209,11 @@
   // Yeni bir dosya ya da klasörün son yol bileşeni için. Geçerliyse null, değilse Türkçe hata iletisi.
   function checkEntryName(ad) {
     const s = String(ad == null ? '' : ad);
-    if (!s) return 'Ad boş olamaz';
-    if (s === '.' || s === '..') return 'Ad "." ya da ".." olamaz';
-    if (new TextEncoder().encode(s).length > MAX_NAME_BYTES) return 'Ad en çok ' + MAX_NAME_BYTES + ' bayt olabilir';
-    if (/[\x00-\x1f\x7f<>:"|?*]/.test(s)) return 'Ad şu karakterleri içeremez: < > : " | ? * ve kontrol karakterleri';
-    if (/[. ]$/.test(s)) return 'Ad nokta ya da boşlukla bitemez';
+    if (!s) return tx('rules.adBos');
+    if (s === '.' || s === '..') return tx('rules.adNokta');
+    if (new TextEncoder().encode(s).length > MAX_NAME_BYTES) return tx('rules.adUzun', { max: MAX_NAME_BYTES });
+    if (/[\x00-\x1f\x7f<>:"|?*]/.test(s)) return tx('rules.adKarakter');
+    if (/[. ]$/.test(s)) return tx('rules.adSon');
     if (isDeviceName(s)) return MSG.aygitAdi(s);
     return null;
   }
@@ -232,20 +248,20 @@
    * Yalnızca sözdizimi denetlenir; gerçek yol (bağlantı) denetimi lib/pp-config.js'te yapılır. */
   function parseLibraryDir(v) {
     const bad = function (why) { return { value: null, error: why }; };
-    if (typeof v !== 'string') return bad('metin olmalı');
+    if (typeof v !== 'string') return bad(tx('rules.libDirMetin'));
     let s = v.trim().replace(/\\/g, '/');
     while (s.indexOf('./') === 0) s = s.slice(2);
     s = s.replace(/\/+$/, '');
-    if (!s) return bad('boş olamaz');
-    if (s.charAt(0) === '/' || /^[A-Za-z]:/.test(s)) return bad('mutlak yol olamaz (marketplace klasörüne göreli olmalı)');
-    if (/[\x00-\x1f\x7f]/.test(s) || /[<>:"|?*]/.test(s)) return bad('geçersiz karakter içeriyor');
+    if (!s) return bad(tx('rules.libDirBos'));
+    if (s.charAt(0) === '/' || /^[A-Za-z]:/.test(s)) return bad(tx('rules.libDirMutlak'));
+    if (/[\x00-\x1f\x7f]/.test(s) || /[<>:"|?*]/.test(s)) return bad(tx('rules.libDirKarakter'));
     const parts = s.split('/');
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      if (p === '..') return bad('".." içeremez');
-      if (p === '' || p === '.') return bad('boş ya da "." bileşeni içeremez');
-      if (/[. ]$/.test(p)) return bad('bir bileşen nokta ya da boşlukla bitemez: "' + p + '"');
-      if (LIBRARY_DIR_RESERVED.indexOf(p.toLowerCase()) >= 0) return bad('"' + p + '" adı ayrılmış');
+      if (p === '..') return bad(tx('rules.libDirIkiNokta'));
+      if (p === '' || p === '.') return bad(tx('rules.libDirBosBilesen'));
+      if (/[. ]$/.test(p)) return bad(tx('rules.libDirNoktaBitis', { part: p }));
+      if (LIBRARY_DIR_RESERVED.indexOf(p.toLowerCase()) >= 0) return bad(tx('rules.libDirAyrilmis', { part: p }));
     }
     return { value: parts.join('/'), error: null };
   }
@@ -338,26 +354,26 @@
   // Geçerliyse null, değilse Türkçe hata iletisi.
   function checkMarketplaceName(n) {
     const raw = String(n == null ? '' : n).trim();
-    if (!raw) return 'Marketplace adı gerekli';
-    if (raw.length > 128) return 'Marketplace adı 128 karakterden uzun olamaz';
+    if (!raw) return tx('rules.mpAdGerekli');
+    if (raw.length > 128) return tx('rules.mpAdUzun');
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(raw) || raw.indexOf('..') >= 0) {
-      return 'Marketplace adı harf ya da rakamla başlamalı; yalnızca harf, rakam, ".", "_" ve "-" içerebilir: ' + raw;
+      return tx('rules.mpAdBicim', { name: raw });
     }
     // Klasör adı olacağı için: Windows sondaki noktayı sessizce atar (yazılan ad ile klasör adı ayrışır) ve aygıt adlarını kabul etmez.
-    if (/\.$/.test(raw)) return 'Marketplace adı nokta ile bitemez: ' + raw;
+    if (/\.$/.test(raw)) return tx('rules.mpAdNokta', { name: raw });
     if (isDeviceName(raw)) return MSG.aygitAdi(raw);
     const k = mpKey(raw);
-    if (MP_OFFICIAL.indexOf(k) >= 0 || /^claudeai-/.test(k)) return "Bu ad resmi Anthropic marketplace'lerine ayrılmış: " + raw;
-    if (MP_COMMUNITY.indexOf(k) >= 0) return 'Bu ad Claude dizinlerine ayrılmış: ' + raw;
-    if (MP_INTERNAL.indexOf(k) >= 0 || MP_SHORT.indexOf(k) >= 0) return 'Bu ad Claude Code tarafından ayrılmış: ' + raw;
+    if (MP_OFFICIAL.indexOf(k) >= 0 || /^claudeai-/.test(k)) return tx('rules.mpAdResmi', { name: raw });
+    if (MP_COMMUNITY.indexOf(k) >= 0) return tx('rules.mpAdDizin', { name: raw });
+    if (MP_INTERNAL.indexOf(k) >= 0 || MP_SHORT.indexOf(k) >= 0) return tx('rules.mpAdAyrilmis', { name: raw });
     return null;
   }
 
   function checkRemoteName(n) {
     const s = String(n == null ? '' : n).trim();
-    if (!s) return 'Uzak depo adı gerekli';
+    if (!s) return tx('rules.uzakAdGerekli');
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(s) || s.indexOf('..') >= 0 || /\.lock$/.test(s)) {
-      return 'Uzak depo adı küçük harf, rakam, ".", "_" ve "-" içermeli, harf ya da rakamla başlamalı (en çok 64 karakter)';
+      return tx('rules.uzakAdBicim');
     }
     return null;
   }
@@ -365,29 +381,30 @@
   function isAbsLocal(u) { return /^\//.test(u) || /^[A-Za-z]:[\\/]/.test(u) || /^\\\\[^\\]/.test(u); }
 
   const MAX_URL_LENGTH = 2048;
-  const URL_TOO_LONG = 'URL en çok ' + MAX_URL_LENGTH + ' karakter olabilir';
+  /** Summary: URL uzunluk sınırı iletisi; çağrıldığı andaki dilde üretilir. */
+  function urlTooLong() { return tx('rules.urlUzun', { max: MAX_URL_LENGTH }); }
 
   function checkRemoteUrl(u) {
     const s = String(u == null ? '' : u).trim();
-    if (!s) return 'URL gerekli';
-    if (s.length > MAX_URL_LENGTH) return URL_TOO_LONG; // regex'lerden önce: çok uzun girdi hızlıca reddedilir
-    if (s.charAt(0) === '-') return 'URL "-" ile başlayamaz';
-    if (/^[A-Za-z0-9+.-]+::/.test(s)) return 'Bu bağlantı türü güvenlik nedeniyle kapalı';
-    if (/[\x00-\x1f\x7f]/.test(s)) return 'URL boşluk veya kontrol karakteri içeremez';
-    if (/\s/.test(s) && !isAbsLocal(s)) return 'URL boşluk veya kontrol karakteri içeremez';
-    if (/^http:\/\//i.test(s)) return 'Şifresiz http kullanılmaz, https kullan';
+    if (!s) return tx('rules.urlGerekli');
+    if (s.length > MAX_URL_LENGTH) return urlTooLong(); // regex'lerden önce: çok uzun girdi hızlıca reddedilir
+    if (s.charAt(0) === '-') return tx('rules.urlTire');
+    if (/^[A-Za-z0-9+.-]+::/.test(s)) return tx('rules.urlTur');
+    if (/[\x00-\x1f\x7f]/.test(s)) return tx('rules.urlKarakter');
+    if (/\s/.test(s) && !isAbsLocal(s)) return tx('rules.urlKarakter');
+    if (/^http:\/\//i.test(s)) return tx('rules.urlHttp');
     if (/^https:\/\//i.test(s)) {
       const m = /^https:\/\/([^/]*)(\/.*)?$/i.exec(s);
-      if (!m || !m[1]) return 'URL geçersiz';
-      if (m[1].indexOf('@') >= 0) return "Parola veya token URL'ye yazılmaz (düz metin olarak .git/config'e kaydedilir). Credential manager kullan.";
-      if (!m[2] || m[2] === '/') return 'URL depo yolunu içermeli (örnek: https://github.com/kullanıcı/depo)';
+      if (!m || !m[1]) return tx('rules.urlGecersiz');
+      if (m[1].indexOf('@') >= 0) return tx('rules.urlParola');
+      if (!m[2] || m[2] === '/') return tx('rules.urlYol');
       return null;
     }
     if (/^ssh:\/\/([^/@\s]+@)?[^/\s:]+(:\d+)?\/\S+/i.test(s)) return null;
     if (/^file:\/\/\/\S+/i.test(s)) return null;
     if (/^[\w.-]+@[\w.-]+:\S+$/.test(s)) return null;
     if (isAbsLocal(s)) return null;
-    return 'Mutlak bir yol ya da URL gir';
+    return tx('rules.urlMutlak');
   }
 
   function repoProvider(url) {
@@ -405,9 +422,9 @@
   // Form girdisini (kısaltma, tarayıcı linki, URL) git URL'sine çevirir. { url, provider, slugName } | { error }
   function normalizeRepoUrl(input) {
     let s = String(input == null ? '' : input).trim();
-    if (s.length > MAX_URL_LENGTH) return { error: URL_TOO_LONG }; // regex'lerden önce
+    if (s.length > MAX_URL_LENGTH) return { error: urlTooLong() }; // regex'lerden önce
     s = s.replace(/\/+$/, '');
-    if (!s) return { error: 'URL gerekli' };
+    if (!s) return { error: tx('rules.urlGerekli') };
     if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s) && s.charAt(0) !== '.') {
       s = 'https://github.com/' + s + '.git';
     } else if (/^https:\/\//i.test(s)) {

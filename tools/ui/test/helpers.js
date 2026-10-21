@@ -4,6 +4,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const vm = require('vm');
 const { spawnSync } = require('child_process');
 
 const gitAvailable = (() => { try { return spawnSync('git', ['--version']).status === 0; } catch (e) { return false; } })();
@@ -57,4 +58,18 @@ function makeBare(tmp, name = 'uzak.git') {
   return dir;
 }
 
-module.exports = { gitAvailable, tmpDir, rmrf, gitEnv, sh, makeRepo, makeBare };
+/** Summary: index.html betik sırasıyla sözlükleri ve çekirdeği boş bir vm bağlamına yükler; tarayıcı kipi I18n döner. */
+function browserI18n() {
+  const pub = path.join(__dirname, '..', 'public');
+  const ctx = vm.createContext({});
+  for (const f of ['lang/tr.js', 'lang/en.js', 'i18n.js']) vm.runInContext(fs.readFileSync(path.join(pub, f), 'utf8'), ctx, { filename: f });
+  return ctx.I18n;
+}
+
+/** Summary: vm bağlamları için çeviri global'leri: gerçek I18n, tx, th (browser: true ise tarayıcı kipi, setLanguage çalışır). */
+function uiGlobals({ browser = false } = {}) {
+  const I18n = browser ? browserI18n() : require('../public/i18n.js');
+  return { I18n, tx: I18n.tx, th: I18n.th };
+}
+
+module.exports = { gitAvailable, tmpDir, rmrf, gitEnv, sh, makeRepo, makeBare, browserI18n, uiGlobals };

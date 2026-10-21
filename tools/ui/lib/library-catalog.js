@@ -5,6 +5,10 @@
 const fsp = require('fs').promises;
 const path = require('path');
 const { str, toList } = require('./prompt-index');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const CONCURRENCY = 4;
 const MD_RE = /\.(md|markdown)$/i;
@@ -51,7 +55,7 @@ class LibraryCatalog {
       promise.catch(() => { if (this._disc === d) this._disc = null; });
     }
     const res = await d.promise;
-    const ignored = res.ignored.filter((i) => i.reason !== 'Araç reposu');
+    const ignored = res.ignored.filter((i) => i.reasonCode !== 'aracReposu').map((i) => ({ ...i }));
     const items = [];
     for (const it of res.items) {
       items.push({ ...it, active: it.name === active, cfg: it.valid ? await this.loadConfigAt(it.path) : null });
@@ -150,7 +154,7 @@ class LibraryCatalog {
         n.slug = slug;
         n.description = str(pm.description);
         n.nameIssue = err ? { level: 'error', message: err }
-          : (slug !== n.name ? { level: 'info', message: 'Yayın adı: ' + slug } : null);
+          : (slug !== n.name ? { level: 'info', message: tx('mp.catalog.publishName', { name: slug }) } : null);
         base.plugins.push(n);
       }
       base.plugins.sort((a, b) => a.name.localeCompare(b.name, 'tr'));

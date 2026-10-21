@@ -8,6 +8,13 @@ const Rules = require('../public/rules.js');
 const { GitError } = require('./git-service');
 const { UndoStack } = require('./undo');
 const { explainGitError, sanitizeDetail } = require('./git-errors');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
+/** Summary: Sürüm bilgisini tutan frontmatter alanının adı (veri sözleşmesi, çevrilmez). */
+const VERSION_FIELD = 'versiyon';
 
 const RELEASE_SUBJECT_RE = /^\S+ v\d+\.\d+\.\d+$/;
 const BATCH = 40;
@@ -159,27 +166,27 @@ class VersionService {
     const { files, git } = this;
     // 1) Ön kontroller (yan etki yok)
     if (!Rules.VERSION_LEVELS.includes(level)) {
-      throw new VersionError(400, 'Geçersiz seviye. Büyük, küçük veya yama seç.', { field: 'level' });
+      throw new VersionError(400, tx('ver.err.level'), { field: 'level' });
     }
     const cleanNote = String(note == null ? '' : note).trim();
-    if (!cleanNote) throw new VersionError(400, 'Sürüm notu boş olamaz', { field: 'note' });
+    if (!cleanNote) throw new VersionError(400, tx('ver.err.noteEmpty'), { field: 'note' });
     const ad = Rules.promptTagAd(rel, libraryDir);
-    if (!ad) throw new VersionError(400, 'Sürüm yalnızca prompt dosyaları için oluşturulur');
+    if (!ad) throw new VersionError(400, tx('ver.err.notPrompt'));
     let st;
     try { st = await files.stat(abs); } catch (e) { st = null; }
-    if (!st) throw new VersionError(404, 'Dosya bulunamadı. Silinmiş veya taşınmış olabilir');
+    if (!st) throw new VersionError(404, tx('ver.err.fileNotFound'));
     if (baseMtime && Math.abs(Math.round(st.mtimeMs) - baseMtime) > 1) {
-      throw new VersionError(409, 'Dosya sen açtıktan sonra diskte değişti', { conflict: true, mtime: Math.round(st.mtimeMs) });
+      throw new VersionError(409, tx('ver.err.diskChanged'), { conflict: true, mtime: Math.round(st.mtimeMs) });
     }
     const origBuf = await files.read(abs);
     const text = typeof raw === 'string' ? raw : this.decode(origBuf);
     const p = FM.parse(text);
     if (Rules.isFmBroken(text, p.hasFm)) {
-      throw new VersionError(400, 'Frontmatter kapanmamış (ikinci "---" satırı yok). versiyon alanı yazılamıyor.', { code: 'onYuzKapanmamis' });
+      throw new VersionError(400, tx('ver.err.fmBroken', { field: VERSION_FIELD }), { code: 'onYuzKapanmamis' });
     }
     for (const it of await this.listPrompts(root, libraryDir)) {
       if (it.path !== rel && Rules.promptTagAd(it.path, libraryDir) === ad) {
-        throw new VersionError(409, 'Bu prompt ile ' + it.path + ' aynı sürüm adını (' + Rules.PROMPT_TAG_PREFIX + ad + ') üretiyor. Birinin dosya adını değiştir.',
+        throw new VersionError(409, tx('ver.err.adCakisiyor', { other: it.path, name: Rules.PROMPT_TAG_PREFIX + ad }),
           { code: 'adCakisiyor', other: it.path });
       }
     }
@@ -187,7 +194,7 @@ class VersionService {
     const c = Rules.coerceVersion(rawVer);
     if (!c) {
       const shown = Array.isArray(rawVer) ? rawVer.join(', ') : String(rawVer);
-      throw new VersionError(400, 'versiyon alanı yorumlanamadı: "' + shown + '". X.Y.Z biçiminde düzelt (örnek: 1.0.0).', { field: 'versiyon' });
+      throw new VersionError(400, tx('ver.err.versiyonYorumlanamadi', { field: VERSION_FIELD, value: shown }), { field: 'versiyon' });
     }
     const entry = (await this._tagsByAd(root)).get(ad);
     const last = entry ? entry.last : null;
@@ -195,14 +202,14 @@ class VersionService {
     const yeni = Rules.bumpVersion(base, level);
     if (!yeni) {
       // base yorumlanabilir ve seviye geçerli olduğu için tek neden: bir bileşen 999999999'u aşacaktı. Hiçbir şey yazılmadı.
-      throw new VersionError(400, 'Sürüm üst sınıra ulaştı (bileşen en çok ' + Rules.VERSION_PART_MAX + ' olabilir). versiyon alanını düzelt.', { field: 'versiyon' });
+      throw new VersionError(400, tx('ver.err.surumSinir', { max: Rules.VERSION_PART_MAX, field: VERSION_FIELD }), { field: 'versiyon' });
     }
     const tag = Rules.promptTag(ad, yeni);
     if (entry && entry.tags.some((t) => t.version === yeni)) {
-      throw new VersionError(409, "Bu sürümün tag'i zaten var: " + tag + '. versiyon alanını kontrol et.', { code: 'tagVar', tag });
+      throw new VersionError(409, tx('ver.err.tagVar', { tag, field: VERSION_FIELD }), { code: 'tagVar', tag });
     }
     if (last && Rules.compareVersions(yeni, last.version) <= 0) {
-      throw new VersionError(409, 'Yeni sürüm (' + yeni + ') son sürümden (' + last.version + ') büyük olmalı. versiyon alanını düzelt.', { code: 'surumGeride' });
+      throw new VersionError(409, tx('ver.err.surumGeride', { version: yeni, last: last.version, field: VERSION_FIELD }), { code: 'surumGeride' });
     }
     const parent = await git.headCommit(root);
     FM.set(p, 'versiyon', yeni);
@@ -219,8 +226,8 @@ class VersionService {
       let commit = null;
       try { commit = await git.headCommit(root); } catch (e) { /* aşağıda ele alınır */ }
       if (!commit) {
-        undo.push(async () => { throw new Error('commit oluştu ama hash okunamadı, commit geri alınamadı'); });
-        throw new Error('commit hash okunamadı');
+        undo.push(async () => { throw new Error(tx('ver.err.hashUnreadableNoUndo')); });
+        throw new Error(tx('ver.err.hashUnreadable'));
       }
       undo.push(() => git.undoCommit(root, { commit, parent }));
       await git.createTag(root, tag, cleanNote, commit);
@@ -233,22 +240,22 @@ class VersionService {
         const xs = (agg.errors || [agg]).map((x) => explainGitError(x, [root]));
         const detay = xs.map((x) => (x.code ? x.error.replace(/\.$/, '') : x.error)).join('; ');
         const gitDetail = sanitizeDetail(xs.map((x) => x.gitDetail).filter(Boolean).join('\n'), [root]);
-        throw new VersionError(500, 'Sürüm oluşturulamadı ve geri alma tamamlanamadı: ' + detay + '. Git panelinden durumu kontrol et.',
+        throw new VersionError(500, tx('ver.err.rollbackFailed', { detail: detay }),
           { rollbackFailed: true, ...(gitDetail ? { gitDetail } : {}) });
       }
       if (e instanceof GitError && e.isIdentityError) {
-        throw new VersionError(400, 'Git, commit yazarını bilmiyor. Ad ve e-posta gir. Sürüm oluşturulmadı, değişiklikler geri alındı.', { needIdentity: true });
+        throw new VersionError(400, tx('ver.err.needIdentity'), { needIdentity: true });
       }
       if (/already exists/i.test(e.message)) {
-        throw new VersionError(409, "Bu sürümün tag'i zaten var: " + tag + '. versiyon alanını kontrol et.', { code: 'tagVar', tag });
+        throw new VersionError(409, tx('ver.err.tagVar', { tag, field: VERSION_FIELD }), { code: 'tagVar', tag });
       }
       // Ham git hatası Türkçe özete çevrilir; git stderr'i (hook çıktısı dahil) arındırılmış olarak gitDetail'de kalır.
       const x = explainGitError(e, [root]);
       if (x.code) {
-        throw new VersionError(500, 'Sürüm oluşturulamadı: ' + x.error + ' Yapılan değişiklikler geri alındı.',
+        throw new VersionError(500, tx('ver.err.failedGit', { error: x.error }),
           { gitCode: x.code, ...(x.gitDetail ? { gitDetail: x.gitDetail } : {}) });
       }
-      throw new VersionError(500, 'Sürüm oluşturulamadı: ' + e.message + '. Yapılan değişiklikler geri alındı.');
+      throw new VersionError(500, tx('ver.err.failed', { error: e.message }));
     }
   }
 }

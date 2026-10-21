@@ -3,6 +3,10 @@
  * Çıktı, tabandaki plugins/<paket> ağacı ile beklenen çıktı karşılaştırılarak bulunur.
  * Prompt tag'leri yeniden okunmaz: VersionService.tagsByAd ve statusMap kullanılır. */
 
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 // Çıktının frontmatter dışındaki gövdesi (yalnızca açıklama değişti mi ayrımı için).
 function bodyOf(text) {
@@ -87,7 +91,7 @@ class VersionAdvisor {
           else if (bodyOf(old) === bodyOf(p.expected)) row.level = 'yama';
           else {
             row.level = 'yama';
-            row.issues.push({ code: 'surumArtirilmamis', level: 'warn', msg: Rules.MSG.surumArtirilmamis(p.versiyon || '(boş)') });
+            row.issues.push({ code: 'surumArtirilmamis', level: 'warn', msg: Rules.MSG.surumArtirilmamis(p.versiyon || tx('ver.adv.bos')) });
           }
         }
       } else {
@@ -118,25 +122,25 @@ class VersionAdvisor {
     const out = { base, prompts, removed, level: null, version: null, tagOnly: false, noChange: false, reasons, descChanged };
     if (!base.kind) {
       out.version = Rules.DEFAULT_VERSION;
-      reasons.push('İlk yayın');
+      reasons.push(tx('ver.adv.ilkYayin'));
     } else if (!hasChange) {
       if (base.kind === 'head') {
         out.tagOnly = true; out.version = base.version;
-        reasons.push('Çıktı HEAD ile aynı, yalnızca etiket atılacak');
+        reasons.push(tx('ver.adv.sadeceEtiket'));
       } else {
         out.noChange = true;
-        reasons.push('Son yayından beri değişiklik yok');
+        reasons.push(tx('ver.adv.degisiklikYok'));
       }
     } else {
       out.level = level;
       out.version = Rules.bumpVersion(base.version, level);
       const n = (c) => changed.filter((p) => p.change === c).length;
-      if (n('yeni')) reasons.push(n('yeni') + ' yeni dosya');
-      if (n('degisti')) reasons.push(n('degisti') + ' değişen dosya');
-      if (removed.length) reasons.push(removed.length + ' kaldırılan dosya');
-      if (descChanged) reasons.push('Paket açıklaması değişti');
+      if (n('yeni')) reasons.push(tx('ver.adv.yeniDosya', { count: n('yeni') }));
+      if (n('degisti')) reasons.push(tx('ver.adv.degisenDosya', { count: n('degisti') }));
+      if (removed.length) reasons.push(tx('ver.adv.kaldirilanDosya', { count: removed.length }));
+      if (descChanged) reasons.push(tx('ver.adv.aciklamaDegisti'));
       // Sürüm bileşeni üst sınıra (999999999) dayandıysa öneri üretilemez: version boş kalır, sürüm elle belirlenir.
-      if (!out.version) reasons.push('Sürüm üst sınıra ulaştı; yeni sürümü elle belirle');
+      if (!out.version) reasons.push(tx('ver.adv.surumSinir'));
     }
     return out;
   }
@@ -144,14 +148,14 @@ class VersionAdvisor {
   /* Seçilen sürümü doğrular. Dönüş: null | { code, status, message } */
   validateChoice(analysis, version) {
     const { Rules } = this;
-    if (analysis.noChange) return { code: 'degisiklikYok', status: 409, message: 'Son yayından beri değişiklik yok, yayınlanacak bir şey yok' };
+    if (analysis.noChange) return { code: 'degisiklikYok', status: 409, message: tx('ver.adv.yayinlanacakYok') };
     const err = Rules.checkVersion(version);
     if (err) return { code: 'surumGecersiz', status: 400, message: err };
     const base = analysis.base;
     if (base.kind) {
       const cmp = Rules.compareVersions(version, base.version);
       if (cmp < 0 || (cmp === 0 && !analysis.tagOnly)) {
-        return { code: 'surumGeride', status: 400, message: 'Sürüm son yayından (' + base.version + ') büyük olmalı' };
+        return { code: 'surumGeride', status: 400, message: tx('ver.adv.surumGeride', { version: base.version }) };
       }
     }
     return null;

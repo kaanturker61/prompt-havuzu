@@ -3,12 +3,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const http = require('http');
 const net = require('net');
 const path = require('path');
 const { spawn } = require('child_process');
 const { gitAvailable, tmpDir, rmrf, gitEnv } = require('./helpers');
 
 const SERVER = path.join(__dirname, '..', 'server.js');
+const PUBLIC = path.join(__dirname, '..', 'public');
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -41,7 +43,7 @@ async function start(tmp) {
     let data; try { data = JSON.parse(text); } catch (e) { data = text; }
     return { status: r.status, data };
   }
-  return { child, cfg, call, stop: () => new Promise((res) => { child.once('exit', res); child.kill(); setTimeout(res, 3000); }) };
+  return { child, cfg, base, call, stop: () => new Promise((res) => { child.once('exit', res); child.kill(); setTimeout(res, 3000); }) };
 }
 
 test('sunucu: kurulum akışı uçtan uca', { skip: !gitAvailable && 'git yok' }, async () => {
@@ -398,4 +400,88 @@ test('sunucu: kaydet-commit ve sürüm (Aşama 2)', { skip: !gitAvailable && 'gi
     r = await srv.call('POST', '/api/version/bump', { path: P, level: 'yama', note: 'n', baseMtime: 12345 });
     assert.equal(r.status, 409); assert.equal(r.data.conflict, true);
   } finally { await srv.stop(); rmrf(tmp); }
+});
+
+/** Summary: Yolu istemci tarafında normalleştirmeden (../ korunur) ham GET gönderir. */
+function rawGet(base, rawPath, headers = {}) {
+  const u = new URL(base);
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: u.hostname, port: u.port, path: rawPath, method: 'GET', headers }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+test('sunucu: i18n çekirdeği ve sözlükler servis edilir, izin listesi dışındaki yollar 404', async () => {
+  const tmp = tmpDir();
+  const srv = await start(tmp);
+  try {
+    for (const file of ['i18n.js', 'lang/tr.js', 'lang/en.js', 'fm.js', 'rules.js']) {
+      const r = await rawGet(srv.base, '/' + file);
+      assert.equal(r.status, 200, file);
+      assert.equal(r.headers['content-type'], 'text/javascript; charset=utf-8', file);
+      assert.equal(r.headers['x-content-type-options'], 'nosniff');
+      assert.equal(r.text, fs.readFileSync(path.join(PUBLIC, file), 'utf8'), file);
+    }
+
+    const index = await rawGet(srv.base, '/');
+    assert.equal(index.status, 200);
+    assert.equal(index.headers['content-type'], 'text/html; charset=utf-8');
+    const srcs = [...index.text.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+    assert.deepEqual(srcs, ['/lang/tr.js', '/lang/en.js', '/i18n.js', '/fm.js', '/rules.js']);
+    for (const src of srcs) assert.equal((await rawGet(srv.base, src)).status, 200, src);
+
+    const denied = [
+      '/lib/git-service.js', '/lib/', '/lang', '/lang/', '/lang/de.js', '/lang/tr.js.map', '/lang/tr.js/', '/lang//tr.js',
+      '/lang/../lib/git-service.js', '/lang/../../server.js', '/../server.js', '/../../package.json',
+      '/lang/%2e%2e/lib/git-service.js', '/%2e%2e/server.js', '/lang/..%2flib%2fgit-service.js', '/lang%2ftr.js',
+      '/server.js', '/package.json', '/test/i18n.test.js', '/I18n.js', '/Lang/tr.js', '/LANG/TR.JS', '/lang/tr.JS'
+    ];
+    for (const p of denied) {
+      const r = await rawGet(srv.base, p);
+      assert.equal(r.status, 404, p);
+      assert.equal(r.text, 'Bulunamadı', p);
+    }
+    assert.equal((await rawGet(srv.base, '/lib/git-service.js', { 'X-PP-Lang': 'en' })).text, 'Not found', 'statik 404 iletisi istek dilinde');
+  } finally {
+    await srv.stop();
+    rmrf(tmp);
+  }
+});
+
+test('sunucu: X-PP-Lang ile API 404 iletisi dile göre; başlıksız ve geçersiz değer Türkçe', async () => {
+  const tmp = tmpDir();
+  const srv = await start(tmp);
+  try {
+    const get = (lang) => srv.call('GET', '/api/yok-boyle-bir-yol', undefined, { headers: lang === undefined ? {} : { 'X-PP-Lang': lang } });
+
+    let r = await get('en');
+    assert.equal(r.status, 404);
+    assert.deepEqual(r.data, { error: 'Not found' });
+    for (const lang of [undefined, 'tr', 'fr', '', 'en-US', 'en, tr', 'null']) {
+      r = await get(lang);
+      assert.equal(r.status, 404, String(lang));
+      assert.deepEqual(r.data, { error: 'Bulunamadı' }, 'dil=' + JSON.stringify(lang));
+    }
+
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      r = await srv.call(method, '/api/yok-boyle-bir-yol', method === 'DELETE' ? undefined : {}, { headers: { 'X-PP-Lang': 'en' } });
+      assert.equal(r.status, 404, method);
+      assert.deepEqual(r.data, { error: 'Not found' }, method);
+    }
+
+    r = await srv.call('PUT', '/api/settings', {}, { headers: { 'X-PP': '0', 'X-PP-Lang': 'en' } });
+    assert.equal(r.status, 403);
+    assert.deepEqual(r.data, { error: 'Missing request header' }, 'başlık hatası istek dilinde');
+
+    const results = await Promise.all(Array.from({ length: 24 }, (_, n) => get(n % 2 ? 'en' : 'tr')));
+    results.forEach((x, n) => assert.equal(x.data.error, n % 2 ? 'Not found' : 'Bulunamadı', 'istek ' + n));
+  } finally {
+    await srv.stop();
+    rmrf(tmp);
+  }
 });

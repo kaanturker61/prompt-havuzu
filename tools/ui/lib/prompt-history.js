@@ -6,6 +6,10 @@
 const crypto = require('crypto');
 const { toList } = require('./prompt-index');
 const { parseWordDiff } = require('./git-service');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const MAX_TAG_LEN = 250;
 const BODY_CAP = 300000;
@@ -208,24 +212,24 @@ class PromptHistory {
   async resolveRef(dir, rel, ref, { libraryDir } = {}) {
     if (ref === 'HEAD') {
       const hash = await this.git.headCommit(dir);
-      if (!hash) throw new HistoryError(404, 'commitYok', 'Henüz commit yok');
+      if (!hash) throw new HistoryError(404, 'commitYok', tx('hist.err.commitYok'));
       const l = await this.git.log(dir, { limit: 1 });
       return { ref: 'HEAD', version: null, commit: hash, short: hash.slice(0, 7), date: l[0] ? l[0].date : null, pathAtRef: rel };
     }
-    const bad = () => new HistoryError(400, 'surumAdiGecersiz', 'Geçersiz sürüm adı: "' + String(ref == null ? '' : ref) + '"');
+    const bad = () => new HistoryError(400, 'surumAdiGecersiz', tx('hist.err.surumAdiGecersiz', { ref: String(ref == null ? '' : ref) }));
     const s = String(ref == null ? '' : ref);
     if (!s || s.length > MAX_TAG_LEN || !s.startsWith(this.Rules.PROMPT_TAG_PREFIX) || !this.Rules.parsePromptTag(s)) throw bad();
     const { tags } = await this.allTags(dir);
-    if (!tags.some((t) => t.name === s)) throw new HistoryError(404, 'surumYok', 'Sürüm bulunamadı: ' + s);
+    if (!tags.some((t) => t.name === s)) throw new HistoryError(404, 'surumYok', tx('hist.err.surumYok', { ref: s }));
     const tl = await this.timeline(dir, rel, { libraryDir });
     const v = tl.versions.find((x) => x.tag === s);
-    if (!v) throw new HistoryError(400, 'surumBaskaDosyanin', 'Bu sürüm bu dosyaya ait değil: ' + s);
+    if (!v) throw new HistoryError(400, 'surumBaskaDosyanin', tx('hist.err.surumBaskaDosyanin', { ref: s }));
     return { ref: s, version: v.version, commit: v.commit, short: v.short, date: v.date, pathAtRef: v.pathAtTag };
   }
 
   async _raw(dir, r) {
     try { return await this.git.showFile(dir, r.commit, r.pathAtRef); } catch (e) {
-      if (e && e.name === 'GitError' && !/Araç reposunda/.test(e.message)) throw new HistoryError(404, 'dosyaYok', 'Bu sürümde dosya yok');
+      if (e && e.name === 'GitError' && e.code !== 'aracReposu') throw new HistoryError(404, 'dosyaYok', tx('hist.err.dosyaYok'));
       throw e;
     }
   }
@@ -240,7 +244,7 @@ class PromptHistory {
     const { FM, Rules } = this;
     const ra = await this.resolveRef(dir, rel, a, { libraryDir });
     const rb = await this.resolveRef(dir, rel, b, { libraryDir });
-    if (ra.commit === rb.commit && ra.pathAtRef === rb.pathAtRef) throw new HistoryError(400, 'ayniSurum', 'Aynı sürüm iki kez seçildi');
+    if (ra.commit === rb.commit && ra.pathAtRef === rb.pathAtRef) throw new HistoryError(400, 'ayniSurum', tx('hist.err.ayniSurum'));
     const [rawA, rawB] = await Promise.all([this._raw(dir, ra), this._raw(dir, rb)]);
     const pA = FM.parse(rawA); const pB = FM.parse(rawB);
     const fmBroken = { a: Rules.isFmBroken(rawA, pA.hasFm), b: Rules.isFmBroken(rawB, pB.hasFm) };

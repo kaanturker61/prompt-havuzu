@@ -10,7 +10,11 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const Rules = require('../public/rules.js');
+const I18n = require('../public/i18n.js');
 const paths = require('./paths');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const DEFAULTS = {
   libraryDir: 'library',
@@ -32,22 +36,59 @@ class PpConfigError extends Error {
 
 const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-function typeLabel(v) {
+/** Summary: Tür kodundan sözlük anahtarına eşleme (null ve bilinmeyen typeof sonuçları olduğu gibi gösterilir). */
+const TYPE_KEYS = Object.freeze({
+  array: 'cfg.type.array',
+  string: 'cfg.type.string',
+  number: 'cfg.type.number',
+  boolean: 'cfg.type.boolean',
+  object: 'cfg.type.object'
+});
+
+/** Summary: Değerin dilden bağımsız tür kodu: null, array ya da typeof sonucu. */
+function typeKind(v) {
   if (v === null) return 'null';
-  if (Array.isArray(v)) return 'dizi';
-  return { string: 'metin', number: 'sayı', boolean: 'mantıksal değer', object: 'nesne' }[typeof v] || typeof v;
+  if (Array.isArray(v)) return 'array';
+  return typeof v;
+}
+
+/** Summary: Tür kodunun geçerli dildeki adı. */
+function typeLabel(kind) {
+  return Object.prototype.hasOwnProperty.call(TYPE_KEYS, kind) ? tx(TYPE_KEYS[kind]) : kind;
 }
 
 // Mutlak yol sızdırmamak için ham fs/JSON iletisi yerine kısa bir neden üretir.
 function readReason(e) {
-  if (e instanceof SyntaxError) return 'JSON biçimi geçersiz: ' + String(e.message).split('\n')[0].slice(0, 120);
-  return 'dosya okunamadı' + (e && e.code ? ' (' + e.code + ')' : '');
+  if (e instanceof SyntaxError) return { code: 'json', detail: String(e.message).split('\n')[0].slice(0, 120) };
+  return e && e.code ? { code: 'unreadableCode', errno: String(e.code) } : { code: 'unreadable' };
 }
 
-const bozukMsg = (why) => `pp.config.json okunamadı (${why}). Geçici olarak varsayılan ayarlar kullanılıyor ve yazma işlemleri kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.`;
-const dirMsg = (why) => `pp.config.json içindeki "libraryDir" geçersiz (${why}). Geçici olarak "${DEFAULTS.libraryDir}" kullanılıyor ve yazma işlemleri kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.`;
-const exportAlanMsg = (alan, v) => `pp.config.json içindeki "export.${alan}" dizi olmalı (şu an: ${typeLabel(v)}). Bu alan için varsayılan kullanılıyor: ${JSON.stringify(DEFAULTS.export[alan])}. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).`;
-const exportMsg = (v) => `pp.config.json içindeki "export" nesne olmalı (şu an: ${typeLabel(v)}). Dışa aktarma için varsayılanlar kullanılıyor: durumlar ${JSON.stringify(DEFAULTS.export.durumlar)}, haricKlasorler ${JSON.stringify(DEFAULTS.export.haricKlasorler)}. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).`;
+/** Summary: Okuma nedenini geçerli dilde metne çevirir. */
+function reasonText(reason) {
+  switch (reason.code) {
+    case 'json': return tx('cfg.reason.json', { detail: reason.detail });
+    case 'unreadableCode': return tx('cfg.reason.unreadableCode', { code: reason.errno });
+    case 'notObject': return tx('cfg.reason.notObject', { type: typeLabel(reason.kind) });
+    default: return tx('cfg.reason.unreadable');
+  }
+}
+
+/** Summary: Uyarı üretir; message okunduğunda geçerli dilde üretilen tembel alıcıdır (önbelleğe giren kayıtta metin değil kod ve parametre kalır). */
+function lazyIssue(code, build) {
+  return { code, level: 'warn', get message() { return build(); } };
+}
+
+const bozukMsg = (why) => tx('cfg.bozuk', { reason: reasonText(why) });
+const dirMsg = (raw, outside) => tx('cfg.libraryDirGecersiz', {
+  field: 'libraryDir', fallback: DEFAULTS.libraryDir, reason: outside ? tx('cfg.outsideMarketplace') : Rules.parseLibraryDir(raw).error
+});
+const exportAlanMsg = (alan, kind) => tx('cfg.exportAlanGecersiz', {
+  field: 'export.' + alan, type: typeLabel(kind), fallback: JSON.stringify(DEFAULTS.export[alan])
+});
+const exportMsg = (kind) => tx('cfg.exportGecersiz', {
+  field: 'export', type: typeLabel(kind),
+  defaults: `durumlar ${JSON.stringify(DEFAULTS.export.durumlar)}, haricKlasorler ${JSON.stringify(DEFAULTS.export.haricKlasorler)}`
+});
 
 /* Ayarı okur ve sağlığını değerlendirir. Diske yazmaz.
  * Dönüş: { cfg, state: 'yok'|'ok'|'bozuk', issues: [{ code, level: 'warn', message }] }.
@@ -62,7 +103,8 @@ async function inspectConfigAt(dir) {
     try { text = await fsp.readFile(configFileAt(dir), 'utf8'); } catch (e) {
       if (e.code !== 'ENOENT' && e.code !== 'ENOTDIR') {
         state = 'bozuk';
-        issues.push({ code: 'ppConfigBozuk', level: 'warn', message: bozukMsg(readReason(e)) });
+        const why = readReason(e);
+        issues.push(lazyIssue('ppConfigBozuk', () => bozukMsg(why)));
       }
     }
     if (text !== null) {
@@ -70,10 +112,11 @@ async function inspectConfigAt(dir) {
       let parsed;
       let why = null;
       try { parsed = JSON.parse(text); } catch (e) { why = readReason(e); }
-      if (why === null && !isPlain(parsed)) why = 'kök bir nesne değil, ' + typeLabel(parsed);
+      if (why === null && !isPlain(parsed)) why = { code: 'notObject', kind: typeKind(parsed) };
       if (why === null) { c = parsed; state = 'ok'; } else {
         state = 'bozuk';
-        issues.push({ code: 'ppConfigBozuk', level: 'warn', message: bozukMsg(why) });
+        const found = why;
+        issues.push(lazyIssue('ppConfigBozuk', () => bozukMsg(found)));
       }
     }
   }
@@ -87,19 +130,26 @@ async function inspectConfigAt(dir) {
   let libraryDir = DEFAULTS.libraryDir;
   if (Object.prototype.hasOwnProperty.call(c, 'libraryDir')) {
     const p = Rules.parseLibraryDir(c.libraryDir);
-    let err = p.error;
+    let bad = !!p.error;
+    let outside = false;
     // Sözdizimi geçerli olsa da gerçek yol (bağlantılar çözülerek) marketplace klasörünün içinde kalmalı.
-    if (!err && dir && !paths.isInside(path.join(dir, p.value), dir)) err = "marketplace klasörünün dışına çıkıyor (bir bağlantı olabilir)";
-    if (err) issues.push({ code: 'libraryDirGecersiz', level: 'warn', message: dirMsg(err) });
-    else libraryDir = p.value;
+    if (!bad && dir && !paths.isInside(path.join(dir, p.value), dir)) { bad = true; outside = true; }
+    if (bad) {
+      const raw = c.libraryDir;
+      issues.push(lazyIssue('libraryDirGecersiz', () => dirMsg(raw, outside)));
+    } else libraryDir = p.value;
   }
   // Anahtar var ama tipi yanlışsa uyar (anahtar yoksa varsayılan sessizce geçerlidir). Yalnızca uyarı: yazmayı engellemez.
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   if (has(c, 'export') && !isPlain(c.export)) {
-    issues.push({ code: 'exportAlanGecersiz', level: 'warn', message: exportMsg(c.export) });
+    const kind = typeKind(c.export);
+    issues.push(lazyIssue('exportAlanGecersiz', () => exportMsg(kind)));
   } else {
     for (const alan of ['durumlar', 'haricKlasorler']) {
-      if (has(ex, alan) && !Array.isArray(ex[alan])) issues.push({ code: 'exportAlanGecersiz', level: 'warn', message: exportAlanMsg(alan, ex[alan]) });
+      if (has(ex, alan) && !Array.isArray(ex[alan])) {
+        const kind = typeKind(ex[alan]);
+        issues.push(lazyIssue('exportAlanGecersiz', () => exportAlanMsg(alan, kind)));
+      }
     }
   }
   const cfg = { ...DEFAULTS, ...c, libraryDir, marketplace, packages: isPlain(c.packages) ? { ...c.packages } : {}, export: exp };

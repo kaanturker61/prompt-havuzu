@@ -9,6 +9,7 @@ const vm = require('node:vm');
 
 const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
+const { uiGlobals } = require('./helpers');
 const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 
 /* ---------------------------------------------------------------- yardımcılar */
@@ -30,7 +31,7 @@ function constSrc(name) {
 // Verilen işlev ve const kaynaklarını tek bağlamda çalıştırır; global yer tutucular `globals` ile verilir.
 // expose: const olarak tanımlı adlar bağlam özelliği yapılır (function bildirimleri zaten özelliktir).
 function load({ fns = [], consts = [], extra = '', expose = [] }, globals = {}) {
-  const ctx = Object.assign({ FM, Rules, console }, globals);
+  const ctx = Object.assign({ FM, Rules, console }, uiGlobals(), globals);
   vm.createContext(ctx);
   vm.runInContext([...consts.map(constSrc), ...fns.map(fnSrc), extra, ...expose.map((n) => 'this.' + n + ' = ' + n + ';')].join('\n'), ctx);
   return ctx;

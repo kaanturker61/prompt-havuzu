@@ -179,7 +179,39 @@ test('discover TTL dolunca yenilenir', async () => {
   assert.equal(n, 2);
 });
 
-test('yayinUyari: paketUyusmuyor engelleyici olunca sayılır; durumu dışarıda kalan (durumHaric) sayılmaz', real, async () => {
+test('marketplaces: araç reposu reasonCode ile elenir (ileti metni değil), kod önbellekte de kalır', async () => {
+  let n = 0;
+  const ignored = [
+    { name: 'arac', path: '/x/arac', reason: 'Tool repository', reasonCode: 'aracReposu' },
+    { name: 'benzer', path: '/x/benzer', reason: 'Araç reposu', reasonCode: 'gitDegil' },
+    { name: 'duz', path: '/x/duz', reason: 'Git deposu değil', reasonCode: 'gitDegil' }
+  ];
+  const registry = { discover: async () => { n++; return { items: [], ignored }; } };
+  const cat = new LibraryCatalog({ registry, index: null, loadConfigAt: ppConfig.loadConfigAt, versions: null, Rules, FM, ignore: IGNORE, ttlMs: 60000 });
+  const first = await cat.marketplaces('/x', '');
+  assert.deepEqual(first.ignored.map((i) => i.name), ['benzer', 'duz']);
+  const second = await cat.marketplaces('/x', 'a');
+  assert.equal(n, 1, 'ikinci çağrı önbellekten');
+  assert.deepEqual(second.ignored.map((i) => [i.name, i.reasonCode]), [['benzer', 'gitDegil'], ['duz', 'gitDegil']]);
+});
+
+test('ağaç: gerçek araç reposu library kökündeyse ignored listesine girmez', real, async () => {
+  const c = await build();
+  try {
+    const tool = path.join(c.lib, 'arac'); fs.mkdirSync(tool);
+    const git = new GitService({ env: gitEnv(c.d), forbiddenRoots: [tool] });
+    const registry = new MarketplaceRegistry({ git, toolRoot: tool });
+    const a = path.join(c.lib, 'a'); fs.mkdirSync(a); await git.init(a);
+    put(a, 'pp.config.json', pp());
+    fs.mkdirSync(path.join(c.lib, 'duz'));
+    const cat = c.mk({ registry });
+    const t = await cat.tree(c.lib, 'a');
+    assert.deepEqual(t.marketplaces.map((m) => m.name), ['a']);
+    assert.deepEqual(t.ignored, [{ name: 'duz', reason: 'Git deposu değil' }]);
+  } finally { rmrf(c.d); }
+});
+
+test('yayinUyari: paketUyusmuyor engelleyici olunca sayılır;durumu dışarıda kalan (durumHaric) sayılmaz', real, async () => {
   const f = await fixture();
   try {
     // p.md: durum "aktif" (dışa aktarılmaz) ve paket alanı uyuşmuyor -> sayılmaz

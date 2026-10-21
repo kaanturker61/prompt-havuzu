@@ -105,7 +105,40 @@ test('rename: saveConfigAt hatasında eski hal geri gelir', async () => {
   } finally { rmrf(d); }
 });
 
-test('rename: yalnızca büyük/küçük harf farkı (Windows dahil) [doğrulandı]', async () => {
+test('hata iletisi işleme göre: create "oluşturulamadı", rename "yeniden adlandırılamadı"', async () => {
+  const failing = { saveConfigAt: async () => { throw new Error('yazılamadı'); } };
+  const a = build(failing);
+  try {
+    await rejectsWith(a.svc.create(a.d, 'prompts', { name: 'yeni', description: 'a' }), 500, /^Plugin oluşturulamadı: yazılamadı\. Yapılan değişiklikler geri alındı\.$/);
+  } finally { rmrf(a.d); }
+  const b = build(failing);
+  try {
+    await assert.rejects(b.svc.rename(b.d, 'prompts', { from: 'eski', to: 'yeni' }), (e) => {
+      assert.ok(e instanceof PackageError);
+      assert.equal(e.status, 500);
+      assert.equal(e.message, 'Plugin yeniden adlandırılamadı: yazılamadı. Yapılan değişiklikler geri alındı.');
+      assert.equal(e.data, undefined);
+      return true;
+    });
+  } finally { rmrf(b.d); }
+});
+
+test('rename: geri alma da başarısız olursa ileti işlem adı taşımaz, rollbackFailed verisi korunur', async () => {
+  let renames = 0;
+  const flaky = { ...fsp, rename: async (x, y) => { renames++; if (renames > 1) throw new Error('geri alinamadi'); return fsp.rename(x, y); } };
+  const { d, svc } = build({ fsp: flaky, saveConfigAt: async () => { throw new Error('yazılamadı'); } });
+  try {
+    await assert.rejects(svc.rename(d, 'prompts', { from: 'eski', to: 'yeni' }), (e) => {
+      assert.ok(e instanceof PackageError);
+      assert.equal(e.status, 500);
+      assert.equal(e.message, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: geri alinamadi. Klasörü elle kontrol et.');
+      assert.deepEqual(e.data, { rollbackFailed: true });
+      return true;
+    });
+  } finally { rmrf(d); }
+});
+
+test('rename: yalnızca büyük/küçük harf farkı (Windows dahil) [doğrulandı]',async () => {
   const { d, svc } = build();
   try {
     fs.mkdirSync(path.join(d, 'prompts', 'Kod'));

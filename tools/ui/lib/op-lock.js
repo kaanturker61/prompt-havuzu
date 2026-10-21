@@ -3,9 +3,14 @@
  * İki tür birbirini engellemez: uzun süren bir arka plan fetch'i yayını bloklamaz.
  * Kilit doluysa BusyError (409, busy: true) fırlatılır; kuyruk yoktur. */
 
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
+
 class BusyError extends Error {
   constructor() {
-    super('Başka bir git işlemi sürüyor, bitmesini bekle');
+    super(tx('err.lock.busy'));
     this.name = 'BusyError';
     this.status = 409;
     this.data = { busy: true };

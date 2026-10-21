@@ -5,18 +5,24 @@
 const { execFile } = require('child_process');
 const path = require('path');
 const { samePath, isInside } = require('./paths');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const HASH_RE = /^[0-9a-f]{7,40}$/;
 const REF_RE = /^[a-z0-9][a-z0-9/._-]*$/;
 const IDENTITY_RE = /Author identity unknown|tell me who you are|empty ident/i;
 
 class GitError extends Error {
-  constructor(message, { stderr = '', exitCode = null, args = [] } = {}) {
+  /** Summary: code, ileti metninden bağımsız hata türüdür (örn. 'aracReposu'); yoksa null. */
+  constructor(message, { stderr = '', exitCode = null, args = [], code = null } = {}) {
     super(message);
     this.name = 'GitError';
     this.stderr = stderr;
     this.exitCode = exitCode;
     this.args = args;
+    this.code = code;
   }
 
   get isIdentityError() { return IDENTITY_RE.test(this.message) || IDENTITY_RE.test(this.stderr); }
@@ -64,13 +70,18 @@ function classifyGitError(stderr, err) {
   return 'bilinmiyor';
 }
 
+/** Summary: Sonuca ileti metninden bağımsız hata kodunu numaralandırılamaz alan olarak ekler (deepEqual ve JSON etkilenmez). */
+function withErrorCode(info, errorCode) {
+  return Object.defineProperty(info, 'errorCode', { value: errorCode });
+}
+
 const ZERO_OID = '0'.repeat(40);
 const ANY_REF_RE = /^[A-Za-z0-9][A-Za-z0-9/._-]*$/;
 const REMOTE_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 class GitNotFoundError extends GitError {
   constructor(args) {
-    super('git bulunamadı. Git kurulu ve PATH içinde olmalı.', { args });
+    super(tx('git.notFound'), { args });
     this.name = 'GitNotFoundError';
   }
 }
@@ -197,7 +208,7 @@ class GitService {
         ro.timeout = opts.timeout;
         // Çocuk süreçler (kimlik penceresi) boruyu açık tutarsa geri çağrı hiç gelmeyebilir.
         timer = setTimeout(() => {
-          const e = new GitError('İşlem zaman aşımına uğradı', { args });
+          const e = new GitError(tx('git.timeout'), { args });
           e.timedOut = true;
           finish(reject, e);
         }, opts.timeout + 2000);
@@ -220,7 +231,7 @@ class GitService {
     const abs = path.resolve(String(dir));
     for (const f of this.forbiddenRoots) {
       if (samePath(abs, f) || isInside(abs, f)) {
-        return Promise.reject(new GitError('Araç reposunda git işlemi yapılamaz', { args }));
+        return Promise.reject(new GitError(tx('git.toolRepo'), { args, code: 'aracReposu' }));
       }
     }
     return this._exec(['-C', abs, '-c', 'core.quotepath=false', ...args], opts);
@@ -243,7 +254,7 @@ class GitService {
     try {
       return await this.run(dir, [...net, ...args], { timeout, env });
     } catch (e) {
-      if (e instanceof GitError && !(e instanceof GitNotFoundError) && e.message !== 'Araç reposunda git işlemi yapılamaz') {
+      if (e instanceof GitError && !(e instanceof GitNotFoundError) && e.code !== 'aracReposu') {
         e.netCode = classifyGitNetError(e.stderr || e.message, e);
       }
       throw e;
@@ -256,10 +267,10 @@ class GitService {
   async toplevelInfo(dir) {
     try {
       const out = (await this.run(dir, ['rev-parse', '--show-toplevel'])).trim();
-      return out ? { path: path.resolve(out), error: null } : { path: null, error: 'Boş yanıt' };
+      return out ? { path: path.resolve(out), error: null } : withErrorCode({ path: null, error: tx('git.emptyResponse') }, 'bosYanit');
     } catch (e) {
       if (e instanceof GitNotFoundError) throw e;
-      if (e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e.code === 'aracReposu') throw e;
       return { path: null, error: e.message };
     }
   }
@@ -321,18 +332,18 @@ class GitService {
   }
 
   _checkHash(hash) {
-    if (!HASH_RE.test(String(hash))) throw new GitError('Geçersiz commit');
+    if (!HASH_RE.test(String(hash))) throw new GitError(tx('git.invalidCommit'));
   }
 
   _checkRef(name, { prefix = false } = {}) {
     const n = String(name);
-    if (!REF_RE.test(n) || n.includes('..') || (!prefix && n.endsWith('/')) || n.endsWith('.lock')) throw new GitError('Geçersiz tag adı');
+    if (!REF_RE.test(n) || n.includes('..') || (!prefix && n.endsWith('/')) || n.endsWith('.lock')) throw new GitError(tx('git.invalidTagName'));
   }
 
   // HEAD'in tam hash'i; doğmamış dalda null.
   async headCommit(dir) {
     try { return (await this.run(dir, ['rev-parse', '--verify', '-q', 'HEAD'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -359,7 +370,7 @@ class GitService {
   async changeLog(dir, { path: rel, follow = false, limit = 300, from, to } = {}) {
     if (from !== undefined || to !== undefined) { this._checkHash(from); this._checkHash(to); }
     const n = Number(limit);
-    if (!Number.isInteger(n) || n < 1) throw new GitError('Geçersiz limit');
+    if (!Number.isInteger(n) || n < 1) throw new GitError(tx('git.invalidLimit'));
     const fmt = '--format=%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s';
     const args = ['log', ...(follow ? ['--follow'] : []), '-M', '--name-status', '-n', String(n), fmt,
       ...(from ? [from + '..' + to] : []), ...(rel ? ['--', rel] : [])];
@@ -374,7 +385,7 @@ class GitService {
   // Salt okunur: iki blob arasında kelime bazlı fark (ham porcelain çıktısı). a/b: { hash, path }.
   async wordDiff(dir, a, b, { context = 3 } = {}) {
     this._checkHash(a.hash); this._checkHash(b.hash);
-    for (const p of [a.path, b.path]) if (!p || String(p).startsWith('-')) throw new GitError('Geçersiz yol');
+    for (const p of [a.path, b.path]) if (!p || String(p).startsWith('-')) throw new GitError(tx('git.invalidPath'));
     const u = Math.max(0, Math.min(50, Number(context) | 0));
     return this.run(dir, ['diff', '--no-color', '--no-ext-diff', '--word-diff=porcelain', '-U' + u, a.hash + ':' + a.path, b.hash + ':' + b.path]);
   }
@@ -388,7 +399,7 @@ class GitService {
       return;
     }
     const ref = (await this.run(dir, ['symbolic-ref', '-q', 'HEAD'])).trim();
-    if (!ref) throw new GitError('HEAD bir dala bağlı değil, ilk commit geri alınamadı');
+    if (!ref) throw new GitError(tx('git.headDetachedUndo'));
     await this.run(dir, ['update-ref', '-d', ref, commit]);
   }
 
@@ -403,7 +414,7 @@ class GitService {
   async blobAt(dir, rev, rel) {
     this._checkHash(rev);
     try { return (await this.run(dir, ['rev-parse', '--verify', '-q', rev + ':' + rel])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -439,17 +450,17 @@ class GitService {
 
   _checkAnyRef(name) {
     const n = String(name);
-    if (n !== 'HEAD' && (!ANY_REF_RE.test(n) || n.includes('..') || n.endsWith('/') || n.endsWith('.lock'))) throw new GitError('Geçersiz ref adı');
+    if (n !== 'HEAD' && (!ANY_REF_RE.test(n) || n.includes('..') || n.endsWith('/') || n.endsWith('.lock'))) throw new GitError(tx('git.invalidRefName'));
   }
 
   _checkRemote(name, url) {
-    if (!REMOTE_NAME_RE.test(String(name)) || String(name).includes('..') || String(name).endsWith('.lock')) throw new GitError('Geçersiz uzak depo adı');
-    if (url !== undefined && (!String(url) || String(url).startsWith('-') || /[\x00-\x1f\x7f]/.test(String(url)))) throw new GitError('Geçersiz URL');
+    if (!REMOTE_NAME_RE.test(String(name)) || String(name).includes('..') || String(name).endsWith('.lock')) throw new GitError(tx('git.invalidRemoteName'));
+    if (url !== undefined && (!String(url) || String(url).startsWith('-') || /[\x00-\x1f\x7f]/.test(String(url)))) throw new GitError(tx('git.invalidUrl'));
   }
 
   async currentBranch(dir) {
     try { return (await this.run(dir, ['symbolic-ref', '--short', 'HEAD'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -457,11 +468,11 @@ class GitService {
   // commit içindeki rel altındaki dosya yolları (rel dosya ya da klasör olabilir). Yoksa [].
   async lsTree(dir, commit, rel) {
     this._checkHash(commit);
-    if (!rel || String(rel).startsWith('-')) throw new GitError('Geçersiz yol');
+    if (!rel || String(rel).startsWith('-')) throw new GitError(tx('git.invalidPath'));
     try {
       return (await this.run(dir, ['ls-tree', '-r', '--name-only', commit, '--', rel])).split('\n').map((s) => s.replace(/\r$/, '')).filter(Boolean);
     } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return [];
     }
   }
@@ -470,7 +481,7 @@ class GitService {
   async showAt(dir, commit, rel) {
     this._checkHash(commit);
     try { return await this.showFile(dir, commit, rel); } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -478,7 +489,7 @@ class GitService {
   // Verilen yollardaki (boşsa tüm ağaçtaki) kirli dosyalar. `.pp/` izlenmeyenleri sayılmaz.
   async isClean(dir, rels = []) {
     const specs = rels.length ? rels : ['.'];
-    for (const r of specs) if (String(r).startsWith('-')) throw new GitError('Geçersiz yol');
+    for (const r of specs) if (String(r).startsWith('-')) throw new GitError(tx('git.invalidPath'));
     const out = await this.run(dir, ['status', '--porcelain=v1', '-z', '-uall', '--', ...specs, ':(exclude).pp']);
     return parseStatus(out).map((f) => f.path);
   }
@@ -486,7 +497,7 @@ class GitService {
   async isAncestor(dir, a, b) {
     this._checkHash(a); this._checkHash(b);
     try { await this.run(dir, ['merge-base', '--is-ancestor', a, b]); return true; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return false;
     }
   }
@@ -495,7 +506,7 @@ class GitService {
   async remotes(dir) {
     let out = '';
     try { out = await this.run(dir, ['config', '--local', '--get-regexp', '^remote\\..*\\.url$']); } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return [];
     }
     const list = [];
@@ -519,7 +530,7 @@ class GitService {
   // 'origin/main' ya da null.
   async upstream(dir) {
     try { return (await this.run(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'])).trim() || null; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return null;
     }
   }
@@ -531,7 +542,7 @@ class GitService {
       const [a, b] = (await this.run(dir, ['rev-list', '--left-right', '--count', 'HEAD...' + ref])).trim().split(/\s+/).map(Number);
       return { ahead: a || 0, behind: b || 0 };
     } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return { ahead: 0, behind: 0 };
     }
   }
@@ -579,7 +590,7 @@ class GitService {
   async logRange(dir, from, to, limit = 50) {
     this._checkAnyRef(from); this._checkAnyRef(to);
     const n = Number(limit);
-    if (!Number.isInteger(n) || n < 1) throw new GitError('Geçersiz limit');
+    if (!Number.isInteger(n) || n < 1) throw new GitError(tx('git.invalidLimit'));
     try {
       return parseLogOutput(await this.run(dir, ['log', '-n', String(n), '--format=%x1e%H%x1f%h%x1f%an%x1f%aI%x1f%s', from + '..' + to]));
     } catch (e) {
@@ -591,7 +602,7 @@ class GitService {
   async refExists(dir, ref) {
     this._checkAnyRef(ref);
     try { await this.run(dir, ['rev-parse', '--verify', '-q', ref + '^{commit}']); return true; } catch (e) {
-      if (e instanceof GitNotFoundError || e.message === 'Araç reposunda git işlemi yapılamaz') throw e;
+      if (e instanceof GitNotFoundError || e.code === 'aracReposu') throw e;
       return false;
     }
   }
@@ -605,7 +616,7 @@ class GitService {
   async resetKeep(dir, { expect, to } = {}) {
     this._checkHash(expect); this._checkHash(to);
     const head = await this.headCommit(dir);
-    if (head !== expect) throw new GitError('HEAD beklenen commit değil, geri alma yapılmadı');
+    if (head !== expect) throw new GitError(tx('git.headMismatch'));
     await this.run(dir, ['reset', '--keep', to]);
   }
 
@@ -617,8 +628,8 @@ class GitService {
 
   // parentDir altında dirName klasörüne klonlar. Hata: GitError (netCode ile).
   async clone(parentDir, url, dirName, { interactive = true, timeout = 300000 } = {}) {
-    if (!String(url) || String(url).startsWith('-')) throw new GitError('Geçersiz URL');
-    if (!dirName || String(dirName).startsWith('-') || /[\\/]/.test(dirName)) throw new GitError('Geçersiz klasör adı');
+    if (!String(url) || String(url).startsWith('-')) throw new GitError(tx('git.invalidUrl'));
+    if (!dirName || String(dirName).startsWith('-') || /[\\/]/.test(dirName)) throw new GitError(tx('git.invalidDirName'));
     await this._net(parentDir, ['clone', '--no-recurse-submodules', '--origin', 'origin', '--', url, dirName], { interactive, timeout });
   }
 }

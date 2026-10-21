@@ -1,6 +1,10 @@
 'use strict';
 /* Yeni marketplace iskelet dosyalarının içerikleri. */
 const { DEFAULT_VERSION } = require('../public/rules.js');
+const I18n = require('../public/i18n.js');
+
+/** Summary: Geçerli dilde düz metin çevirisi (istek bağlamındaki dil). */
+const tx = I18n.tx;
 
 const GITIGNORE = '.pp/\nnode_modules/\n*.pp-tmp\ndesktop.ini\n';
 const GITATTRIBUTES = '*.md text eol=lf\n*.json text eol=lf\n';
@@ -18,7 +22,12 @@ function ppConfig({ name, description, owner }) {
 }
 
 function readme(name) {
-  return `# ${name}\n\nBu klasör Prompt Havuzu ile yönetilen bir Claude Code marketplace deposudur.\n\n- Promptlar \`prompts/\` altında \`.md\` dosyaları olarak tutulur.\n- \`plugins/\` ve \`.claude-plugin/\` arayüzden yayınlanınca üretilir, elle düzenlenmez.\n- İlk commit'i Prompt Havuzu'nun Git panelinden atabilirsin.\n`;
+  return tx('scaffold.readme', { name });
 }
 
-module.exports = { GITIGNORE, GITATTRIBUTES, marketplaceJson, ppConfig, readme };
+/** Summary: Açıklaması verilmeyen yeni marketplace için varsayılan açıklama (oluşturma anındaki dilde). */
+function defaultDescription(slug) {
+  return tx('scaffold.defaultDescription', { slug });
+}
+
+module.exports = { GITIGNORE, GITATTRIBUTES, marketplaceJson, ppConfig, readme, defaultDescription };
