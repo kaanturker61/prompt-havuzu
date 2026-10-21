@@ -9,7 +9,7 @@ const FM = require('../public/fm.js');
 const Rules = require('../public/rules.js');
 const TR = require('../public/lang/tr.js');
 const EN = require('../public/lang/en.js');
-const ppConfig = require('../lib/pp-config');
+const { MarketplaceSettings, SettingsError } = require('../lib/marketplace-settings');
 const { ConfigStore } = require('../lib/config-store');
 const { GitService } = require('../lib/git-service');
 const { SetupService } = require('../lib/setup-service');
@@ -25,7 +25,7 @@ const { makeLink, removeLink } = require('./links');
 
 const LIB = path.join(__dirname, '..', 'lib');
 const SOURCES = [
-  'setup-service.js', 'pp-config.js', 'marketplace-registry.js', 'marketplace-factory.js',
+  'setup-service.js', 'marketplace-settings.js', 'marketplace-registry.js', 'marketplace-factory.js',
   'library-catalog.js', 'package-service.js', 'package-catalog.js', 'version-advisor.js'
 ];
 const NAMESPACES = ['setup.', 'cfg.', 'mp.', 'pkg.', 'ver.adv.'];
@@ -36,23 +36,24 @@ const real = { skip: !gitAvailable && 'git yok' };
 const EXPECTED_KEYS = [
   'setup.ayarDosyasiBozuk', 'setup.kokAyarlanmadi', 'setup.kokYok', 'setup.kokAracReposunda', 'setup.gitBulunamadi',
   'setup.kokBaskaDepoda', 'setup.kokAracReposunuIceriyor', 'setup.marketplaceYok', 'setup.marketplaceSecilmedi',
-  'setup.marketplaceBulunamadi', 'setup.marketplaceGitYok', 'setup.marketplaceGitYokNeden', 'setup.ppConfigYok',
+  'setup.marketplaceBulunamadi', 'setup.marketplaceGitYok', 'setup.marketplaceGitYokNeden', 'setup.ppConfigEski',
   'cfg.type.array', 'cfg.type.string', 'cfg.type.number', 'cfg.type.boolean', 'cfg.type.object',
-  'cfg.reason.json', 'cfg.reason.unreadable', 'cfg.reason.unreadableCode', 'cfg.reason.notObject', 'cfg.outsideMarketplace',
-  'cfg.bozuk', 'cfg.libraryDirGecersiz', 'cfg.exportAlanGecersiz', 'cfg.exportGecersiz',
+  'cfg.reason.json', 'cfg.reason.unreadable', 'cfg.reason.unreadableCode', 'cfg.reason.notObject',
+  'cfg.manifestBozuk', 'cfg.promptsDisarida', 'cfg.pluginBozuk',
   'mp.reason.aracReposu', 'mp.reason.gitDegil', 'mp.reason.kokDepoDegil', 'mp.reason.gitOkunamadi', 'mp.reason.gitOkunamadiDetay',
   'mp.catalog.publishName', 'mp.err.invalidName', 'mp.err.folderExists', 'mp.err.createFailed', 'mp.err.cloneFailed',
   'mp.err.cloneNotRoot', 'mp.err.folderNotFound', 'mp.err.alreadyGit', 'mp.err.initFailed',
-  'mp.warn.ppConfigYok', 'mp.warn.manifestYok', 'mp.warn.bosDepo',
+  'mp.warn.manifestYok', 'mp.warn.bosDepo',
   'pkg.err.exists', 'pkg.err.notFound', 'pkg.err.sameName', 'pkg.err.descriptionEmpty', 'pkg.err.createFailed',
-  'pkg.err.renameFailed', 'pkg.err.rollbackFailed', 'pkg.skip.paketDisiKlasor', 'pkg.issue.icerikBos',
+  'pkg.err.renameFailed', 'pkg.err.rollbackFailed', 'pkg.err.moveFailed', 'pkg.err.linkInside', 'pkg.err.outside',
+  'pkg.skip.paketDisiKlasor', 'pkg.issue.icerikBos',
   'pkg.issue.aciklamaBosKomut', 'pkg.issue.aciklamaBosAjan', 'pkg.issue.aciklamaBosSkill', 'pkg.issue.hedefCakisiyor',
   'ver.adv.ilkYayin', 'ver.adv.sadeceEtiket', 'ver.adv.degisiklikYok', 'ver.adv.yeniDosya', 'ver.adv.degisenDosya',
   'ver.adv.kaldirilanDosya', 'ver.adv.aciklamaDegisti', 'ver.adv.surumSinir', 'ver.adv.bos', 'ver.adv.yayinlanacakYok',
   'ver.adv.surumGeride'
 ].sort();
-/** Summary: Bilinçli olarak çevrilmeyen Türkçe dize değişmezleri (pp-config varsayılan verisi ve durum değerleri). */
-const ALLOWED_TURKISH_LITERALS = ['Kişisel prompt havuzu', 'kararlı'];
+/** Summary: Bilinçli olarak çevrilmeyen Türkçe dize değişmezleri (veri sözleşmesi: durum değerleri). */
+const ALLOWED_TURKISH_LITERALS = ['kararlı'];
 const IGNORE = new Set(Rules.RESERVED_DIRS);
 const EDITABLE = new Set(['.md', '.markdown', '.txt', '.json', '.yml', '.yaml']);
 
@@ -309,156 +310,58 @@ test('setup: marketplaceGitYok nedenleri (.git yok, kök başka, git ayrıntıs�
   } finally { rmrf(d); }
 });
 
-test('setup: ppConfigYok ve pp-config sorunları (ppConfigBozuk, libraryDirGecersiz, exportAlanGecersiz) önbellekte dil taşımaz', async () => {
+test('setup: ppConfigEski, manifestBozuk ve libraryDirGecersiz uyarıları önbellekte dil taşımaz; eski dosya yoksa uyarı yok', async () => {
   const d = tmpDir();
+  const out = tmpDir();
+  const link = path.join(d, 'lib', 'a', 'prompts');
   try {
     const lib = path.join(d, 'lib');
     const a = path.join(lib, 'a');
     fs.mkdirSync(path.join(a, '.git'), { recursive: true });
     const git = stubGit({ toplevelInfo: async (dir) => ({ path: dir, error: null }) });
     const { svc } = await buildSetup(d, { cfg: { libraryRoot: lib, activeMarketplace: 'a' }, git });
-    await evaluateBoth(svc, 'ppConfigYok', {
-      tr: "Bu marketplace'te pp.config.json yok. Prompt Havuzu ayarlarını oluştur.",
-      en: 'This marketplace has no pp.config.json. Create the Prompt Havuzu settings.'
+    await inEn(() => svc.evaluate());
+    assert.deepEqual(svc.current.issues, [], 'eski dosya ve manifest yokken uyarı yok');
+    assert.equal(svc.current.ok, true);
+
+    const legacy = path.join(a, 'pp.config.json');
+    fs.writeFileSync(legacy, JSON.stringify({ libraryDir: 'library', marketplace: { version: '9.9.9' }, export: { durumlar: ['taslak'] } }));
+    svc.invalidate();
+    await evaluateBoth(svc, 'ppConfigEski', {
+      tr: 'pp.config.json artık kullanılmıyor ve içindeki değerler yok sayılıyor. Ayarlar .claude-plugin/marketplace.json dosyasından ve plugin klasörlerindeki plugin.json dosyalarından okunuyor, bu dosyayı silebilirsin.',
+      en: 'pp.config.json is no longer used and the values in it are ignored. Settings are read from .claude-plugin/marketplace.json and from the plugin.json files in the plugin folders, so you can delete this file.'
     }, 'warn');
-    assert.equal(svc.current.issues[0].action, 'ppConfigOlustur');
-    const file = path.join(a, 'pp.config.json');
-    fs.writeFileSync(file, '[]');
+    assert.deepEqual(svc.current.issues.map((i) => i.code), ['ppConfigEski'], 'varsayılan dışı değerler yok sayılır, başka uyarı çıkmaz');
+    assert.equal(svc.current.issues[0].action, 'ppConfigSil');
+    assert.equal(svc.current.issues[0].path, legacy);
+    assert.equal(svc.current.ok, true);
+    fs.rmSync(legacy);
+
+    const manifest = path.join(a, '.claude-plugin', 'marketplace.json');
+    fs.mkdirSync(path.dirname(manifest));
+    fs.writeFileSync(manifest, '[]');
     svc.invalidate();
     await inEn(() => svc.evaluate());
     const bozuk = svc.current.issues[0];
-    assert.equal(bozuk.code, 'ppConfigBozuk');
-    assert.equal(bozuk.path, file);
-    assert.match(inTr(() => bozuk.message), /^pp\.config\.json okunamadı \(kök bir nesne değil, dizi\)\. Geçici olarak/);
-    assert.match(inEn(() => bozuk.message), /^pp\.config\.json could not be read \(the root is not an object, found: array\)\. Default settings/);
-    fs.writeFileSync(file, JSON.stringify({ libraryDir: '../disari', export: { durumlar: 'a' } }));
-    svc.invalidate();
-    await inTr(() => svc.evaluate());
-    const [dir, exp] = svc.current.issues;
-    assert.deepEqual([dir.code, exp.code], ['libraryDirGecersiz', 'exportAlanGecersiz']);
-    assert.match(inEn(() => dir.message), /^The "libraryDir" value in pp\.config\.json is invalid \(cannot contain "\.\."\)\. "library" is used temporarily/);
-    assert.match(inTr(() => dir.message), /^pp\.config\.json içindeki "libraryDir" geçersiz \("\.\." içeremez\)\. Geçici olarak "library" kullanılıyor/);
-    assert.match(inEn(() => exp.message), /^The "export\.durumlar" value in pp\.config\.json must be an array \(currently: string\)/);
-    assert.match(inTr(() => exp.message), /^pp\.config\.json içindeki "export\.durumlar" dizi olmalı \(şu an: metin\)/);
-    assert.deepEqual(inEn(() => JSON.parse(JSON.stringify(svc.current.issues)).map((i) => [i.code, i.level, /^The "/.test(i.message)])), [
-      ['libraryDirGecersiz', 'warn', true], ['exportAlanGecersiz', 'warn', true]
-    ]);
-  } finally { rmrf(d); }
-});
+    assert.equal(bozuk.code, 'manifestBozuk');
+    assert.equal(bozuk.level, 'warn');
+    assert.equal(bozuk.path, manifest);
+    assert.match(inTr(() => bozuk.message), /^\.claude-plugin\/marketplace\.json okunamadı \(kök bir nesne değil, dizi\)\. Ad klasör adından/);
+    assert.match(inEn(() => bozuk.message), /^\.claude-plugin\/marketplace\.json could not be read \(the root is not an object, found: array\)\. The name falls back/);
+    assert.equal(svc.current.ok, true, 'bozuk manifest kurulumu durdurmaz');
+    fs.rmSync(manifest);
 
-/** Summary: Verilen içerikle geçici bir pp.config.json klasörü kurar. */
-function configDir(content) {
-  const d = tmpDir();
-  if (content !== undefined) fs.writeFileSync(ppConfig.configFileAt(d), content);
-  return d;
-}
-
-test('pp-config: inspectConfigAt iletileri okunduğu dilde üretilir (bir dilde inspect, öbüründe okuma)', async () => {
-  const cases = [
-    ['null', /\(kök bir nesne değil, null\)/, /\(the root is not an object, found: null\)/],
-    ['[]', /\(kök bir nesne değil, dizi\)/, /\(the root is not an object, found: array\)/],
-    ['5', /\(kök bir nesne değil, sayı\)/, /\(the root is not an object, found: number\)/],
-    ['"x"', /\(kök bir nesne değil, metin\)/, /\(the root is not an object, found: string\)/],
-    ['true', /\(kök bir nesne değil, mantıksal değer\)/, /\(the root is not an object, found: boolean\)/],
-    ['garip{', /\(JSON biçimi geçersiz: .+\)\. Geçici olarak varsayılan ayarlar kullanılıyor ve yazma işlemleri kapalı\. Dosyayı düzelt \(Teknik dosyalar bölümünden açabilirsin\), sonra yeniden dene\.$/,
-      /\(invalid JSON format: .+\)\. Default settings are used temporarily and write operations are disabled\. Fix the file \(you can open it from the Technical files section\), then try again\.$/]
-  ];
-  for (const [raw, wantTr, wantEn] of cases) {
-    const d = configDir(raw);
-    try {
-      const r = await inTr(() => ppConfig.inspectConfigAt(d));
-      assert.equal(r.issues.length, 1, raw);
-      const issue = r.issues[0];
-      assert.deepEqual(Object.keys(issue), ['code', 'level', 'message']);
-      assert.equal(issue.code, 'ppConfigBozuk'); assert.equal(issue.level, 'warn');
-      assert.match(inTr(() => issue.message), wantTr, raw);
-      assert.match(inEn(() => issue.message), wantEn, raw);
-      assert.match(inTr(() => issue.message), wantTr, raw + ' (tekrar tr)');
-      const spread = inEn(() => ({ ...issue }));
-      assert.match(spread.message, wantEn, raw + ' spread');
-      assert.match(inEn(() => JSON.parse(JSON.stringify(r.issues))[0].message), wantEn, raw + ' json');
-    } finally { rmrf(d); }
-  }
-  const d = configDir('garip{');
-  try {
-    const issue = (await inTr(() => ppConfig.inspectConfigAt(d))).issues[0];
-    const detailTr = /JSON biçimi geçersiz: (.+)\)\. Geçici/.exec(inTr(() => issue.message))[1];
-    const detailEn = /invalid JSON format: (.+)\)\. Default/.exec(inEn(() => issue.message))[1];
-    assert.ok(detailTr.length > 0);
-    assert.equal(detailEn, detailTr, 'motor ayrıntısı çevrilmeden parametre olarak görünür');
-  } finally { rmrf(d); }
-});
-
-test('pp-config: okunamayan dosya, libraryDir ve export iletileri iki dilde', async () => {
-  const d = tmpDir();
-  try {
-    fs.mkdirSync(ppConfig.configFileAt(d));
-    const r = await inTr(() => ppConfig.inspectConfigAt(d));
-    assert.match(inTr(() => r.issues[0].message), /^pp\.config\.json okunamadı \(dosya okunamadı \(E[A-Z]+\)\)\./);
-    assert.match(inEn(() => r.issues[0].message), /^pp\.config\.json could not be read \(the file could not be read \(E[A-Z]+\)\)\./);
-    fs.rmdirSync(ppConfig.configFileAt(d));
-
-    const put = (o) => fs.writeFileSync(ppConfig.configFileAt(d), JSON.stringify(o));
-    put({ libraryDir: '../disari' });
-    let issue = (await inEn(() => ppConfig.inspectConfigAt(d))).issues[0];
-    assert.equal(inTr(() => issue.message),
-      'pp.config.json içindeki "libraryDir" geçersiz (".." içeremez). Geçici olarak "library" kullanılıyor ve yazma işlemleri kapalı. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin), sonra yeniden dene.');
-    assert.equal(inEn(() => issue.message),
-      'The "libraryDir" value in pp.config.json is invalid (cannot contain ".."). "library" is used temporarily and write operations are disabled. Fix the file (you can open it from the Technical files section), then try again.');
-    put({ libraryDir: 5 });
-    issue = (await inEn(() => ppConfig.inspectConfigAt(d))).issues[0];
-    assert.match(inTr(() => issue.message), /geçersiz \(metin olmalı\)/);
-    assert.match(inEn(() => issue.message), /is invalid \(must be text\)/);
-    put({ libraryDir: 'a/plugins' });
-    issue = (await inTr(() => ppConfig.inspectConfigAt(d))).issues[0];
-    assert.match(inTr(() => issue.message), /geçersiz \("plugins" adı ayrılmış\)/);
-    assert.match(inEn(() => issue.message), /is invalid \("plugins" is a reserved name\)/);
-
-    put({ export: 5 });
-    issue = (await inTr(() => ppConfig.inspectConfigAt(d))).issues[0];
-    assert.equal(inTr(() => issue.message),
-      'pp.config.json içindeki "export" nesne olmalı (şu an: sayı). Dışa aktarma için varsayılanlar kullanılıyor: durumlar ["kararlı",""], haricKlasorler ["gelen-kutusu"]. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).');
-    assert.equal(inEn(() => issue.message),
-      'The "export" value in pp.config.json must be an object (currently: number). Defaults are used for export: durumlar ["kararlı",""], haricKlasorler ["gelen-kutusu"]. Fix the file (you can open it from the Technical files section).');
-    put({ export: { durumlar: null, haricKlasorler: {} } });
-    const both = (await inEn(() => ppConfig.inspectConfigAt(d))).issues;
-    assert.deepEqual(both.map((i) => i.code), ['exportAlanGecersiz', 'exportAlanGecersiz']);
-    assert.equal(inTr(() => both[0].message),
-      'pp.config.json içindeki "export.durumlar" dizi olmalı (şu an: null). Bu alan için varsayılan kullanılıyor: ["kararlı",""]. Dosyayı düzelt (Teknik dosyalar bölümünden açabilirsin).');
-    assert.equal(inEn(() => both[1].message),
-      'The "export.haricKlasorler" value in pp.config.json must be an array (currently: object). The default is used for this field: ["gelen-kutusu"]. Fix the file (you can open it from the Technical files section).');
-    assert.match(inTr(() => both[1].message), /\(şu an: nesne\)/);
-  } finally { rmrf(d); }
-});
-
-test('pp-config: kök dışına çıkan bağlantı iletisi iki dilde', async (t) => {
-  const d = tmpDir(); const out = tmpDir();
-  const link = path.join(d, 'prompts');
-  try {
-    if (!makeLink(out, link)) return t.skip('bağlantı kurulamadı (EPERM)');
-    fs.writeFileSync(ppConfig.configFileAt(d), JSON.stringify({ libraryDir: 'prompts' }));
-    const issue = (await inEn(() => ppConfig.inspectConfigAt(d))).issues[0];
-    assert.equal(issue.code, 'libraryDirGecersiz');
-    assert.match(inTr(() => issue.message), /geçersiz \(marketplace klasörünün dışına çıkıyor \(bir bağlantı olabilir\)\)/);
-    assert.match(inEn(() => issue.message), /is invalid \(points outside the marketplace folder \(it may be a link\)\)/);
+    if (makeLink(out, link)) {
+      svc.invalidate();
+      await inTr(() => svc.evaluate());
+      const [dir] = svc.current.issues;
+      assert.equal(dir.code, 'libraryDirGecersiz');
+      assert.equal(dir.path, link);
+      assert.match(inTr(() => dir.message), /^"prompts" klasörü marketplace klasörünün dışına çıkıyor/);
+      assert.match(inEn(() => dir.message), /^The "prompts" folder points outside the marketplace folder/);
+      assert.deepEqual(inEn(() => JSON.parse(JSON.stringify(svc.current.issues)).map((i) => [i.code, i.level, /^The "/.test(i.message)])), [['libraryDirGecersiz', 'warn', true]]);
+    }
   } finally { removeLink(link); rmrf(d); rmrf(out); }
-});
-
-test('pp-config: PpConfigError iletisi fırlatıldığı istek dilinde, kod ve durum sabit', async () => {
-  const d = configDir('garip{');
-  try {
-    const noWrite = async () => { throw new Error('yazılmamalıydı'); };
-    const errEn = await inEn(() => ppConfig.saveConfigAt(d, {}, noWrite).then(() => assert.fail('fırlatmadı'), (e) => e));
-    assert.ok(errEn instanceof ppConfig.PpConfigError);
-    assert.equal(errEn.status, 409); assert.deepEqual(errEn.data, { code: 'ppConfigBozuk' });
-    assert.match(errEn.message, /^pp\.config\.json could not be read \(invalid JSON format: /);
-    const errTr = await inTr(() => ppConfig.assertHealthy(d).then(() => assert.fail('fırlatmadı'), (e) => e));
-    assert.match(errTr.message, /^pp\.config\.json okunamadı \(JSON biçimi geçersiz: /);
-    fs.writeFileSync(ppConfig.configFileAt(d), JSON.stringify({ libraryDir: '' }));
-    const dirEn = await inEn(() => ppConfig.assertHealthy(d).then(() => assert.fail('fırlatmadı'), (e) => e));
-    assert.equal(dirEn.data.code, 'libraryDirGecersiz');
-    assert.match(dirEn.message, /is invalid \(cannot be empty\)/);
-  } finally { rmrf(d); }
 });
 
 test('registry: reason tembel alıcı, reasonCode sabit; önbelleğe alınmış sonuç iki dilde doğru okunur', async () => {
@@ -501,7 +404,7 @@ test('registry: reason tembel alıcı, reasonCode sabit; önbelleğe alınmış 
       });
     }
     assert.equal(res.items.find((i) => i.name === 'iyi').valid, true);
-    assert.deepEqual(Object.keys(res.items[0]), ['name', 'path', 'valid', 'reason', 'reasonCode', 'active', 'hasManifest', 'hasPpConfig']);
+    assert.deepEqual(Object.keys(res.items[0]), ['name', 'path', 'valid', 'reason', 'reasonCode', 'active', 'hasManifest']);
   } finally { rmrf(d); }
 });
 
@@ -527,7 +430,6 @@ test('library-catalog: 3 sn discover önbelleği dil sızdırmaz (aynı örnek �
     const tool = path.join(lib, 'arac'); fs.mkdirSync(tool);
     for (const n of ['bozuk', 'ust', 'iyi']) fs.mkdirSync(path.join(lib, n, '.git'), { recursive: true });
     fs.mkdirSync(path.join(lib, 'duz'));
-    fs.writeFileSync(path.join(lib, 'iyi', 'pp.config.json'), JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'iyi', plugin: 'iyi' } }));
     fs.mkdirSync(path.join(lib, 'iyi', 'prompts', 'Kod İnceleme'), { recursive: true });
     fs.mkdirSync(path.join(lib, 'iyi', 'prompts', 'claude-x'), { recursive: true });
     const answers = {
@@ -539,7 +441,7 @@ test('library-catalog: 3 sn discover önbelleği dil sızdırmaz (aynı örnek �
     const git = stubGit({ toplevelInfo: async (dir) => { calls++; return answers[path.basename(dir)]; } });
     const registry = new MarketplaceRegistry({ git, toolRoot: tool });
     const catalog = new LibraryCatalog({
-      registry, index: {}, loadConfigAt: ppConfig.loadConfigAt, versions: { statusMap: async () => new Map() },
+      registry, index: {}, loadConfigAt: (dir) => newSettings().load(dir), versions: { statusMap: async () => new Map() },
       Rules, FM, ignore: IGNORE, editable: EDITABLE, ttlMs: 600000
     });
     const shape = (tree) => ({
@@ -665,14 +567,12 @@ test('factory: cloneRemote hataları ve uyarıları iki dilde', async () => {
     const empty = stubFactory({ clone: async (root, u, slug) => fs.mkdirSync(path.join(root, slug)), isRepoRoot: async () => true, hasCommits: async () => false });
     const en = await inEn(() => empty.cloneRemote(lib, url, {}));
     assert.deepEqual(en.warnings, [
-      { code: 'ppConfigYok', message: 'This repository has no pp.config.json. Create the Prompt Havuzu settings.' },
       { code: 'manifestYok', message: '.claude-plugin/marketplace.json is missing.' },
       { code: 'bosDepo', message: 'The repository is empty (no commits yet).' }
     ]);
     fs.rmSync(path.join(lib, 'r'), { recursive: true, force: true });
     const tr = await inTr(() => empty.cloneRemote(lib, url, {}));
     assert.deepEqual(tr.warnings, [
-      { code: 'ppConfigYok', message: 'Bu depoda pp.config.json yok. Prompt Havuzu ayarlarını oluştur.' },
       { code: 'manifestYok', message: '.claude-plugin/marketplace.json yok.' },
       { code: 'bosDepo', message: 'Depo boş (henüz commit yok).' }
     ]);
@@ -681,17 +581,158 @@ test('factory: cloneRemote hataları ve uyarıları iki dilde', async () => {
 
 const atomicWrite = async (abs, data) => { const t = abs + '.tmp'; await fsp.writeFile(t, data, 'utf8'); await fsp.rename(t, abs); };
 
-/** Summary: PackageService için geçici marketplace kurar (prompts/eski klasörü ve eski paket açıklaması hazır). */
-function buildPackages(over = {}) {
+/** Summary: Gerçek dosya sistemiyle MarketplaceSettings kurar. */
+function newSettings() {
+  return new MarketplaceSettings({ fsp, atomicWrite, Rules, FM });
+}
+
+/** Summary: Geçici marketplace klasörüne marketplace.json yazar (nesne ya da ham metin). */
+function writeManifest(dir, content) {
+  fs.mkdirSync(path.join(dir, '.claude-plugin'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude-plugin', 'marketplace.json'), typeof content === 'string' ? content : JSON.stringify(content));
+}
+
+test('settings: inspect tablosu (manifest yok, metadata.version önceliği, bozuk dosya, prompts bağlantısı, plugin açıklamaları) iki dilde', async (t) => {
+  const settings = newSettings();
   const d = tmpDir();
-  const cfgFile = path.join(d, 'pp.config.json');
-  fs.writeFileSync(cfgFile, JSON.stringify({ libraryDir: 'prompts', marketplace: { name: 'm', plugin: 'm' }, packages: { eski: { description: 'Eski aciklama' } } }, null, 2) + '\n');
-  fs.mkdirSync(path.join(d, 'prompts', 'eski'), { recursive: true });
+  const out = tmpDir();
+  const mk = path.join(d, 'Kod Havuzu');
+  fs.mkdirSync(mk);
+  try {
+    const none = await settings.inspect(mk);
+    assert.equal(none.manifestState, 'yok');
+    assert.deepEqual(none.issues, []);
+    assert.deepEqual(none.cfg, {
+      libraryDir: 'prompts', libraryOk: true,
+      marketplace: { name: 'kod-havuzu', owner: '', plugin: 'kod-havuzu', description: '', version: '1.0.0' },
+      packages: {}, export: { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu'] }
+    });
+    const blank = await settings.inspect('');
+    assert.deepEqual(blank.cfg.marketplace, { name: '', owner: '', plugin: '', description: '', version: '1.0.0' });
+    none.cfg.export.durumlar.push('x');
+    assert.deepEqual((await settings.load(mk)).export.durumlar, ['kararlı', ''], 'her çağrıda taze dizi kopyaları');
+
+    writeManifest(mk, { name: 'Ornek Mp', version: '1.0.1', owner: { name: 'Ben' }, description: 'Ust', metadata: { version: '2.0.0', description: 'Meta' } });
+    let cfg = await settings.load(mk);
+    assert.deepEqual(cfg.marketplace, { name: 'Ornek Mp', owner: 'Ben', plugin: 'ornek-mp', description: 'Ust', version: '2.0.0' });
+    writeManifest(mk, { name: 'x', version: '1.0.1', metadata: { description: 'Meta' } });
+    cfg = await settings.load(mk);
+    assert.deepEqual([cfg.marketplace.version, cfg.marketplace.description], ['1.0.1', 'Meta']);
+    writeManifest(mk, '﻿' + JSON.stringify({ name: 'bomlu', version: '3.0.0' }));
+    cfg = await settings.load(mk);
+    assert.deepEqual([cfg.marketplace.name, cfg.marketplace.version], ['bomlu', '3.0.0']);
+
+    writeManifest(mk, 'garip{');
+    const bad = await settings.inspect(mk);
+    assert.equal(bad.manifestState, 'bozuk');
+    assert.deepEqual(bad.issues.map((i) => [i.code, i.level]), [['manifestBozuk', 'warn']]);
+    assert.equal(bad.cfg.marketplace.name, 'kod-havuzu');
+    assert.equal(bad.cfg.marketplace.version, '1.0.0');
+    assert.match(inTr(() => bad.issues[0].message), /^\.claude-plugin\/marketplace\.json okunamadı \(JSON biçimi geçersiz: .+\)\. Ad klasör adından/);
+    assert.match(inEn(() => bad.issues[0].message), /^\.claude-plugin\/marketplace\.json could not be read \(invalid JSON format: .+\)\. The name falls back to the folder name/);
+    assert.ok(!bad.issues[0].message.includes(mk), 'ileti mutlak yol içermemeli');
+    const manifestFile = path.join(mk, '.claude-plugin', 'marketplace.json');
+    const before = fs.readFileSync(manifestFile);
+    for (const [run, wantMsg] of [[inTr, /okunamadı/], [inEn, /could not be read/]]) {
+      const err = await run(() => rejected(settings.loadStrict(mk, { manifest: true })));
+      assert.ok(err instanceof SettingsError);
+      assert.equal(err.status, 409);
+      assert.deepEqual(err.data, { code: 'manifestBozuk' });
+      assert.match(err.message, wantMsg);
+    }
+    assert.equal((await settings.loadStrict(mk)).marketplace.name, 'kod-havuzu', 'manifest istenmezse bozuk dosya engellemez');
+    assert.deepEqual(fs.readFileSync(manifestFile), before, 'bayt aynı');
+    for (const kind of ['[]', 'null', '5']) {
+      writeManifest(mk, kind);
+      assert.equal((await settings.inspect(mk)).manifestState, 'bozuk', kind);
+    }
+
+    writeManifest(mk, { name: 'iyi' });
+    fs.mkdirSync(path.join(mk, 'prompts', 'Kod İnceleme', '.claude-plugin'), { recursive: true });
+    fs.mkdirSync(path.join(mk, 'prompts', 'ornek', '.claude-plugin'), { recursive: true });
+    fs.mkdirSync(path.join(mk, 'prompts', 'kirik', '.claude-plugin'), { recursive: true });
+    fs.writeFileSync(path.join(mk, 'prompts', 'Kod İnceleme', '.claude-plugin', 'plugin.json'), JSON.stringify({ description: ' Kod komutları ' }));
+    fs.writeFileSync(path.join(mk, 'prompts', 'ornek', '.claude-plugin', 'plugin.json'), JSON.stringify({ author: 'a' }));
+    fs.writeFileSync(path.join(mk, 'prompts', 'kirik', '.claude-plugin', 'plugin.json'), 'garip{');
+    cfg = await settings.load(mk);
+    assert.deepEqual(cfg.packages, { 'kod-inceleme': { description: 'Kod komutları' } });
+    assert.equal(cfg.libraryOk, true);
+
+    fs.rmSync(path.join(mk, 'prompts'), { recursive: true, force: true });
+    const link = path.join(mk, 'prompts');
+    if (!makeLink(out, link)) return t.skip('bağlantı kurulamadı (EPERM)');
+    try {
+      const linked = await settings.inspect(mk);
+      assert.equal(linked.cfg.libraryOk, false);
+      assert.equal(linked.cfg.libraryDir, 'prompts');
+      assert.deepEqual(linked.cfg.packages, {});
+      assert.deepEqual(linked.issues.map((i) => i.code), ['libraryDirGecersiz']);
+      assert.match(inTr(() => linked.issues[0].message), /^"prompts" klasörü marketplace klasörünün dışına çıkıyor/);
+      assert.match(inEn(() => linked.issues[0].message), /^The "prompts" folder points outside the marketplace folder/);
+      const err = await rejected(settings.loadStrict(mk));
+      assert.equal(err.status, 409);
+      assert.equal(err.data.code, 'libraryDirGecersiz');
+      assert.equal((await settings.loadStrict(mk, { library: false })).libraryOk, false);
+    } finally { removeLink(link); }
+  } finally { rmrf(d); rmrf(out); }
+});
+
+test('settings: setPluginDescription diğer anahtarları korur, bozuk dosyada 409 pluginJsonBozuk ve bayt aynı, dışarıya yazmaz', async (t) => {
+  const settings = newSettings();
+  const d = tmpDir();
+  const out = tmpDir();
+  try {
+    const file = settings.pluginFile(d, 'prompts', 'ornek');
+    assert.equal(await settings.setPluginDescription(d, 'prompts', 'ornek', 'Ilk'), true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { description: 'Ilk' });
+    fs.writeFileSync(file, JSON.stringify({ author: { name: 'ben' }, description: 'Eski', keywords: ['a'] }));
+    assert.equal(await settings.setPluginDescription(d, 'prompts', 'ornek', 'Yeni'), true);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { author: { name: 'ben' }, description: 'Yeni', keywords: ['a'] });
+    assert.ok(fs.readFileSync(file, 'utf8').endsWith('}\n'));
+
+    for (const raw of ['garip{', '[]', 'null']) {
+      fs.writeFileSync(file, raw);
+      for (const [run, wantMsg] of [[inTr, /^prompts\/ornek\/\.claude-plugin\/plugin\.json okunamadı/], [inEn, /^prompts\/ornek\/\.claude-plugin\/plugin\.json could not be read/]]) {
+        const err = await run(() => rejected(settings.setPluginDescription(d, 'prompts', 'ornek', 'Yeni')));
+        assert.ok(err instanceof SettingsError);
+        assert.equal(err.status, 409);
+        assert.deepEqual(err.data, { code: 'pluginJsonBozuk' });
+        assert.match(err.message, wantMsg);
+        assert.ok(!err.message.includes(d), 'ileti mutlak yol içermemeli');
+      }
+      assert.equal(fs.readFileSync(file, 'utf8'), raw, 'bayt aynı');
+    }
+
+    for (const unsafe of ['../x', 'a/b', '.gizli', '', null]) assert.equal(await settings.setPluginDescription(d, 'prompts', unsafe, 'x'), false, String(unsafe));
+    const link = path.join(d, 'prompts', 'dis');
+    if (!makeLink(out, link)) return t.skip('bağlantı kurulamadı (EPERM)');
+    try {
+      assert.equal(await settings.setPluginDescription(d, 'prompts', 'dis', 'Sızmamalı'), false);
+      assert.deepEqual(fs.readdirSync(out), [], 'bağlantının hedefine hiçbir şey yazılmadı');
+    } finally { removeLink(link); }
+  } finally { rmrf(d); rmrf(out); }
+});
+
+/** Summary: Açıklama yazarken yarım bir dosya bırakıp hata veren ayar saplaması; geri kalan her şey gerçek ayar sınıfıdır. */
+const failingSettings = (settings) => ({
+  loadStrict: (...args) => settings.loadStrict(...args),
+  setPluginDescription: async (dir, lib, folder) => {
+    const file = settings.pluginFile(dir, lib, folder);
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await atomicWrite(file, '{kismen');
+    throw new Error('yazılamadı');
+  }
+});
+
+/** Summary: PackageService için geçici marketplace kurar (prompts/eski klasörü ve kaynak plugin.json açıklaması hazır). */
+function buildPackages({ wrap, ...over } = {}) {
+  const d = tmpDir();
+  fs.mkdirSync(path.join(d, 'prompts', 'eski', '.claude-plugin'), { recursive: true });
   fs.writeFileSync(path.join(d, 'prompts', 'eski', 'a.md'), 'a');
-  const svc = new PackageService({
-    fsp, atomicWrite, loadConfigAt: ppConfig.loadConfigAt, saveConfigAt: ppConfig.saveConfigAt, Rules, FM, ...over
-  });
-  return { d, svc, cfgFile };
+  fs.writeFileSync(path.join(d, 'prompts', 'eski', '.claude-plugin', 'plugin.json'), JSON.stringify({ description: 'Eski aciklama' }) + '\n');
+  const real = newSettings();
+  const svc = new PackageService({ fsp, atomicWrite, settings: wrap ? wrap(real) : real, Rules, FM, ...over });
+  return { d, svc };
 }
 
 test('package-service: doğrulama ve çakışma hataları iki dilde, durum kodları sabit', async () => {
@@ -719,39 +760,41 @@ test('package-service: doğrulama ve çakışma hataları iki dilde, durum kodla
   } finally { rmrf(d); }
 });
 
-test('package-service: geri alınan işlem iletisi işleme göre ve dile göre; geri alma başarısızlığı; bozuk ayar aynen geçer', async () => {
-  const failing = { saveConfigAt: async () => { throw new Error('yazılamadı'); } };
-  const a = buildPackages(failing);
+test('package-service: geri alınan işlem iletisi işleme göre ve dile göre; geri alma başarısızlığı; bozuk plugin.json aynen geçer', async () => {
+  const a = buildPackages({ wrap: failingSettings });
   try {
     const en = await inEn(() => rejected(a.svc.create(a.d, 'prompts', { name: 'yeni', description: 'a' })));
     assert.equal(en.status, 500);
     assert.equal(en.message, 'Could not create the plugin: yazılamadı. The changes were rolled back.');
     const tr = await inTr(() => rejected(a.svc.create(a.d, 'prompts', { name: 'yeni', description: 'a' })));
     assert.equal(tr.message, 'Plugin oluşturulamadı: yazılamadı. Yapılan değişiklikler geri alındı.');
+    assert.equal(fs.existsSync(path.join(a.d, 'prompts', 'yeni')), false);
   } finally { rmrf(a.d); }
-  const b = buildPackages(failing);
+  const b = buildPackages({ fsp: { ...fsp, rename: async () => { throw new Error('yazılamadı'); } } });
   try {
     const en = await inEn(() => rejected(b.svc.rename(b.d, 'prompts', { from: 'eski', to: 'yeni' })));
     assert.equal(en.message, 'Could not rename the plugin: yazılamadı. The changes were rolled back.');
-    assert.equal(en.data, undefined);
+    assert.deepEqual(en.data, { code: 'geriAlindi' });
     const tr = await inTr(() => rejected(b.svc.rename(b.d, 'prompts', { from: 'eski', to: 'yeni' })));
     assert.equal(tr.message, 'Plugin yeniden adlandırılamadı: yazılamadı. Yapılan değişiklikler geri alındı.');
   } finally { rmrf(b.d); }
-  let renames = 0;
-  const flaky = { ...fsp, rename: async (x, y) => { renames++; if (renames > 1) throw new Error('geri alinamadi'); return fsp.rename(x, y); } };
-  const c = buildPackages({ fsp: flaky, saveConfigAt: async () => { throw new Error('yazılamadı'); } });
+  const c = buildPackages({ fsp: { ...fsp, rm: async () => { throw new Error('geri alinamadi'); } }, wrap: failingSettings });
   try {
-    const en = await inEn(() => rejected(c.svc.rename(c.d, 'prompts', { from: 'eski', to: 'yeni' })));
+    const en = await inEn(() => rejected(c.svc.create(c.d, 'prompts', { name: 'yeni', description: 'a' })));
     assert.equal(en.message, 'The plugin operation failed and the rollback could not be completed: geri alinamadi. Check the folder manually.');
-    assert.deepEqual(en.data, { rollbackFailed: true });
+    assert.deepEqual(en.data, { code: 'rollbackFailed', rollbackFailed: true });
+    const tr = await inTr(() => rejected(c.svc.create(c.d, 'prompts', { name: 'yeni2', description: 'a' })));
+    assert.equal(tr.message, 'Plugin işlemi başarısız ve geri alma tamamlanamadı: geri alinamadi. Klasörü elle kontrol et.');
   } finally { rmrf(c.d); }
-  const e = buildPackages({ assertHealthy: ppConfig.assertHealthy });
+  const e = buildPackages();
   try {
-    fs.writeFileSync(e.cfgFile, 'garip{');
-    const en = await inEn(() => rejected(e.svc.create(e.d, 'prompts', { name: 'yeni' })));
-    assert.ok(en instanceof ppConfig.PpConfigError);
-    assert.equal(en.status, 409); assert.equal(en.data.code, 'ppConfigBozuk');
-    assert.match(en.message, /^pp\.config\.json could not be read/);
+    fs.writeFileSync(path.join(e.d, 'prompts', 'eski', '.claude-plugin', 'plugin.json'), 'garip{');
+    const en = await inEn(() => rejected(e.svc.setDescription(e.d, 'prompts', { name: 'eski', description: 'x' })));
+    assert.ok(en instanceof SettingsError);
+    assert.equal(en.status, 409); assert.equal(en.data.code, 'pluginJsonBozuk');
+    assert.match(en.message, /^prompts\/eski\/\.claude-plugin\/plugin\.json could not be read \(invalid JSON format: /);
+    const tr = await inTr(() => rejected(e.svc.setDescription(e.d, 'prompts', { name: 'eski', description: 'x' })));
+    assert.match(tr.message, /^prompts\/eski\/\.claude-plugin\/plugin\.json okunamadı \(JSON biçimi geçersiz: /);
   } finally { rmrf(e.d); }
 });
 
@@ -892,9 +935,7 @@ test('version-advisor: paket açıklaması değişti nedeni iki dilde', real, as
     const mk = seed(tmp);
     const s = buildStack(mk, tmp);
     await s.publisher.publish(mk, { name: 'ornek' });
-    const cfgFile = path.join(mk, 'pp.config.json');
-    const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); c.packages.ornek.description = 'Yeni açıklama';
-    fs.writeFileSync(cfgFile, JSON.stringify(c, null, 2) + '\n');
+    write(mk, 'prompts/ornek/.claude-plugin/plugin.json', JSON.stringify({ description: 'Yeni açıklama' }, null, 2) + '\n');
     commitAll(mk, tmp);
     const cfg = await s.config.load();
     const built = await s.catalog.build(cfg);
@@ -928,8 +969,9 @@ test('sözlük: setup.*, cfg.*, mp.*, pkg.*, ver.adv.* anahtar kümesi, yer tutu
     }
   }
   assert.deepEqual(placeholders(TR['setup.marketplaceGitYokNeden']), ['name', 'reason']);
-  assert.deepEqual(placeholders(TR['cfg.libraryDirGecersiz']), ['fallback', 'field', 'reason']);
-  assert.deepEqual(placeholders(TR['cfg.exportGecersiz']), ['defaults', 'field', 'type']);
+  assert.deepEqual(placeholders(TR['cfg.manifestBozuk']), ['reason']);
+  assert.deepEqual(placeholders(TR['cfg.promptsDisarida']), ['dir']);
+  assert.deepEqual(placeholders(TR['cfg.pluginBozuk']), ['file', 'reason']);
 });
 
 test('en değerlerinde Türkçe diyakritik ve en-GB yazım yok; terim tablosuna uyum', () => {
@@ -942,7 +984,7 @@ test('en değerlerinde Türkçe diyakritik ve en-GB yazım yok; terim tablosuna 
   assert.match(EN['setup.kokAyarlanmadi'], /Library root/);
   assert.match(EN['setup.kokAyarlanmadi'], /Settings/);
   assert.match(EN['setup.marketplaceGitYok'], /Git is not initialized/);
-  assert.match(EN['cfg.bozuk'], /Technical files/);
+  assert.match(EN['cfg.manifestBozuk'], /Technical files/);
   assert.match(EN['pkg.skip.paketDisiKlasor'], /Inbox/);
 });
 

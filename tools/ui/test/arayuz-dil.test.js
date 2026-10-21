@@ -458,7 +458,7 @@ const STATIC_TR = {
   'ui.static.typeCommand': 'Komut',
   'ui.static.typeAgent': 'Ajan',
   'ui.static.typeSkill': 'Skill',
-  'ui.static.notPublished': 'Yayın dışı',
+  'ui.static.typePrompt': 'Prompt',
   'ui.static.searchInFiles': 'Marketplace dosyalarında da ara (plugins/)',
   'ui.static.library': 'Kütüphane',
   'ui.static.clearFilters': 'Filtreyi temizle',
@@ -469,7 +469,7 @@ const STATIC_TR = {
   'ui.static.close': 'Kapat',
   'ui.settings.language': 'Dil / Language'
 };
-const SAME_IN_EN = ['ui.settings.language', 'ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
+const SAME_IN_EN = ['ui.settings.language', 'ui.static.title', 'ui.static.brand', 'ui.static.git', 'ui.static.marketplace', 'ui.static.typeSkill', 'ui.static.typePrompt', 'ui.static.addMarketplace', 'ui.static.addPlugin', 'ui.static.addPrompt'];
 
 /** Summary: <title> ve gövdedeki (ilk <script>'e kadar) data-i18n* öznitelikli etiketleri sahte öğelere çevirir. */
 function staticNodes() {
@@ -513,7 +513,7 @@ test('statik işaretleme: seçenek değerleri (veri) korunur; her seçeneğin an
   const opts = [...html.matchAll(/<option value="([^"]*)" data-i18n="([^"]+)"><\/option>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(opts, [
     ['', 'ui.static.allStatuses'], ['taslak', 'ui.static.statusDraft'], ['kararlı', 'ui.static.statusStable'], ['arşiv', 'ui.static.statusArchived'],
-    ['', 'ui.static.allTypes'], ['komut', 'ui.static.typeCommand'], ['ajan', 'ui.static.typeAgent'], ['skill', 'ui.static.typeSkill'], ['yok', 'ui.static.notPublished']
+    ['', 'ui.static.allTypes'], ['komut', 'ui.static.typeCommand'], ['ajan', 'ui.static.typeAgent'], ['skill', 'ui.static.typeSkill'], ['yok', 'ui.static.typePrompt']
   ]);
 });
 
@@ -592,8 +592,8 @@ const XSS_ESCAPED = '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;';
 const LEGACY_TEMPLATES = {
   bos: { label: 'Boş', meta: {}, body: '' },
   rgc: { label: 'Rol, görev, çıktı', meta: {}, body: 'Rol:\n\nGörev:\n\nBağlam:\n- \n\nKısıtlar:\n- \n\nÇıktı biçimi:\n1. \n' },
-  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
-  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
+  komut: { label: 'Claude Code komutu', meta: { tur: 'komut', 'argument-hint': '[argüman]' }, body: 'Görev: $ARGUMENTS\n\nArgüman boşsa ne yapılacağını sor ve dur.\n\nÇıktı biçimi:\n1. \n' },
+  ajan: { label: 'Claude Code ajanı', meta: { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' }, body: 'Rol:\n\nGirdi dosyaları:\n- \n\nÇıktı dosyaları:\n- \n\nYasaklı davranışlar:\n- \n' }
 };
 
 test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizce; meta iki dilde aynı kanonik Türkçe; dil değişince bayatlamaz', () => {
@@ -606,8 +606,8 @@ test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizc
   const en = snapshot();
   assert.deepEqual(Object.keys(en), Object.keys(LEGACY_TEMPLATES));
   for (const id of Object.keys(en)) assert.deepEqual(en[id].meta, LEGACY_TEMPLATES[id].meta, 'meta kanonik: ' + id);
-  assert.deepEqual(en.komut.meta, { tur: 'komut', arguman_ipucu: '[argüman]' });
-  assert.deepEqual(en.ajan.meta, { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' });
+  assert.deepEqual(en.komut.meta, { tur: 'komut', 'argument-hint': '[argüman]' });
+  assert.deepEqual(en.ajan.meta, { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' });
   assert.deepEqual(Object.values(en).map((tpl) => tpl.label), ['Blank', 'Role, task, output', 'Claude Code command', 'Claude Code agent']);
   assert.equal(en.bos.body, '');
   assert.equal(en.rgc.body, 'Role:\n\nTask:\n\nContext:\n- \n\nConstraints:\n- \n\nOutput format:\n1. \n');
@@ -621,7 +621,6 @@ test('templates: tr çıktısı eski şablonlarla birebir; en gövdesi İngilizc
 test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik Türkçe, gövde arayüz dilinde; kullanıcı girdisi kaçışlı', async () => {
   const mp = { name: XSS_INPUT, libraryDir: 'prompts', plugins: [{ name: 'kod' }, { name: XSS_INPUT }] };
   const env = regionCtx(['templates', 'openNewPrompt'], mp);
-  const today = new Date().toLocaleDateString('sv-SE');
   const render = async (lang, tpl) => {
     env.g.I18n.setLanguage(lang);
     env.calls.modal.length = 0; env.calls.api.length = 0; env.calls.toast.length = 0;
@@ -639,6 +638,8 @@ test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik T�
   assert.equal(en.title, 'New prompt');
   assert.match(tr.html, /<option value="komut">Claude Code komutu<\/option>/);
   assert.match(en.html, /<option value="komut">Claude Code command<\/option>/);
+  assert.match(tr.html, /<label>Ad<input id="npTitle" name="title"/);
+  assert.match(en.html, /<label>Name<input id="npTitle" name="title"/);
   assert.match(tr.html, /<label>Şablon<select name="tpl">/);
   assert.match(en.html, /<label>Template<select name="tpl">/);
   assert.ok(tr.html.includes('Marketplace: <b>' + XSS_ESCAPED + '</b>'));
@@ -647,7 +648,7 @@ test('openNewPrompt: pencere ve yazılan dosya iki dilde; frontmatter kanonik T�
     assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
     assert.ok(rendered.includes('<option value="' + XSS_ESCAPED + '" >' + XSS_ESCAPED + '</option>'));
   }
-  const frontmatter = '---\nbaslik: Başlık\netiketler: [a, b]\ndurum: taslak\nolusturma: ' + today + '\ntur: komut\narguman_ipucu: "[argüman]"';
+  const frontmatter = '---\netiketler: [a, b]\ntur: komut\nargument-hint: "[argüman]"';
   assert.equal(tr.head, frontmatter);
   assert.equal(en.head, frontmatter, 'frontmatter anahtarları ve değerleri dilden bağımsız');
   assert.equal(tr.body, LEGACY_TEMPLATES.komut.body);
@@ -687,10 +688,10 @@ test('openImport: tara ve sonuç iletileri çoğul (tr/en); atlananlar, önizlem
   assert.ok(enOne.scanned.includes('<h3>1 file found</h3>') && enOne.scanned.includes('<span class="hint">1 line</span>'));
   const skippedList = 'x.txt (' + XSS_ESCAPED + '), y.txt (Boş dosya)';
   assert.ok(trOne.done.includes('<h3>1 prompt oluşturuldu</h3>'));
-  assert.ok(trOne.done.includes('<p>Taslak olarak <code>prompts/' + XSS_ESCAPED + '</code> içine kaydedildi.'));
+  assert.ok(trOne.done.includes('<p><code>prompts/' + XSS_ESCAPED + '</code> içine kaydedildi.'));
   assert.ok(trOne.done.includes('<p class="issue warn">2 dosya atlandı: ' + skippedList + '</p>'));
   assert.ok(enOne.done.includes('<h3>1 prompt created</h3>'));
-  assert.ok(enOne.done.includes('<p>Saved as drafts in <code>prompts/' + XSS_ESCAPED + '</code>.'));
+  assert.ok(enOne.done.includes('<p>Saved in <code>prompts/' + XSS_ESCAPED + '</code>.'));
   assert.ok(enOne.done.includes('<p class="issue warn">2 files skipped: ' + skippedList + '</p>'));
   for (const rendered of [trOne.scanned, trOne.done, enOne.scanned, enOne.done]) assert.ok(!rendered.includes('<img'), 'kullanıcı girdisi kaçışlı');
   assert.ok(trOne.done.includes('data-path="prompts/' + XSS_ESCAPED + '"'));
@@ -926,16 +927,14 @@ function browserRulesGlobals() {
 }
 
 /** Summary: Marketplace paneli işlevlerinin yüklü olduğu vm bağlamı, verilen arayüz dilinde. */
-function marketCtx(lang, { hasPpConfig = true } = {}) {
+function marketCtx(lang) {
   const g = browserRulesGlobals();
   g.I18n.setLanguage(lang);
-  return load({ fns: ['turLabel', 'mkStateText', 'mkListHtml', 'mkCmdsHtml', 'mkPackagesHtml', 'marketHtml'], consts: ['esc', 'cmdLine', 'DURUM_OPTS'] }, {
-    ...g, activeName: () => 'mp', mpByName: () => ({ name: 'mp', hasPpConfig })
-  });
+  return load({ fns: ['turLabel', 'mkStateText', 'mkListHtml', 'mkCmdsHtml', 'mkPackagesHtml', 'marketHtml'], consts: ['esc', 'cmdLine'] }, { ...g, activeName: () => 'mp' });
 }
 
 const MK_STATE = {
-  config: { owner: 'O', plugin: 'p', version: '1.0.0', description: '' }, marketplaceName: 'mp', export: { durumlar: ['kararlı'] },
+  config: { owner: 'O', plugin: 'p', version: '1.0.0', description: '' }, marketplaceName: 'mp',
   marketplaceExists: true, marketplacePlugins: ['a', 'b'],
   items: [{ source: 'a.md', baslik: XSS_INPUT, tur: 'ajan', paket: 'kod', target: 'plugins/kod/agents/a.md', issues: [], state: 'eski' }],
   orphans: [{ target: 'plugins/x.md', likelySource: { source: 'b.md', reason: XSS_INPUT } }],
@@ -943,19 +942,21 @@ const MK_STATE = {
   commands: { validate: 'v', add: 'a', alternatives: [], pinHint: XSS_INPUT, install: [] }
 };
 
-test('Marketplace paneli: durum seçenekleri, çoğullar, kopyala düğmesi ve "Kaynağı kalmayan dosyalar" başlığı iki dilde; veri değerleri ve kullanıcı girdisi korunur', () => {
+test('Marketplace paneli: sade ayar formu, çoğullar, kopyala düğmesi ve "Kaynağı kalmayan dosyalar" başlığı iki dilde; veri değerleri ve kullanıcı girdisi korunur', () => {
   const trCtx = marketCtx('tr');
   const enCtx = marketCtx('en');
   const trOut = trCtx.marketHtml(MK_STATE);
   const enOut = enCtx.marketHtml(MK_STATE);
-  assert.ok(trOut.includes('value="kararlı" checked> Kararlı</label>') && trOut.includes('value="taslak" > Taslak</label>') && trOut.includes('value="arşiv" > Arşiv</label>') && trOut.includes('value="" > Durumu boş</label>'));
-  assert.ok(enOut.includes('value="kararlı" checked> Stable</label>') && enOut.includes('value="taslak" > Draft</label>') && enOut.includes('value="arşiv" > Archived</label>') && enOut.includes('value="" > No status</label>'));
+  for (const rendered of [trOut, enOut]) {
+    for (const name of ['name', 'owner', 'version', 'description']) assert.ok(rendered.includes('<input name="' + name + '"'), name + ' alanı');
+    assert.ok(!rendered.includes('name="plugin"') && !rendered.includes('exdurum') && !rendered.includes('mk-ppconfig') && !rendered.includes('mkExpErr'), 'eski ayar alanları yok');
+  }
   assert.ok(trOut.includes('<h3>Kaynağı kalmayan dosyalar</h3>') && enOut.includes('<h3>Files without a source</h3>'));
   assert.ok(trOut.includes('Kaynağı muhtemelen <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
   assert.ok(enOut.includes('The source is probably <button class="link" data-act="open-close" data-path="b.md">B</button>: ' + XSS_ESCAPED));
   assert.ok(trOut.includes('<span class="pill">ajan</span>') && enOut.includes('<span class="pill">agent</span>'));
-  assert.ok(trOut.includes('<p class="hint">1 prompt bilinçli olarak yayın dışı (tür seçilmemiş).</p>'));
-  assert.ok(enOut.includes('<p class="hint">1 prompt is intentionally not published (no type selected).</p>'));
+  assert.ok(trOut.includes('<p class="hint">1 prompt bilinçli olarak yayın dışı (Prompt türü ya da tür seçilmemiş).</p>'));
+  assert.ok(enOut.includes('<p class="hint">1 prompt is intentionally not published (Prompt type or no type selected).</p>'));
   assert.ok(enCtx.mkListHtml({ ...MK_STATE, unpublishedCount: 3 }).includes('3 prompts are intentionally not published'));
   assert.ok(trOut.includes('data-act="mk-update">Marketplace\'i güncelle</button>') && enOut.includes('data-act="mk-update">Update marketplace</button>'));
   assert.ok(trOut.includes('"Marketplace\'i güncelle" bunları çöp kutusuna taşır.') && enOut.includes('"Update marketplace" moves them to the trash.'));
@@ -972,10 +973,7 @@ test('Marketplace paneli: durum seçenekleri, çoğullar, kopyala düğmesi ve "
   const states = (lang) => [{ marketplaceExists: false }, { marketplaceExists: true, marketplacePlugins: [] }, MK_STATE].map((st) => marketCtx(lang).mkStateText(st));
   assert.deepEqual(states('tr'), ['Henüz yazılmadı', 'marketplace.json mevcut: paket yok', 'marketplace.json mevcut: a, b']);
   assert.deepEqual(states('en'), ['Not written yet', 'marketplace.json exists: no packages', 'marketplace.json exists: a, b']);
-  const noCfg = marketCtx('en', { hasPpConfig: false }).marketHtml(MK_STATE);
-  assert.ok(noCfg.includes('has no Prompt Havuzu settings (pp.config.json). <button class="btn sm" data-act="mk-ppconfig" data-name="mp">Create settings file</button>'));
-  assert.ok(marketCtx('tr', { hasPpConfig: false }).marketHtml(MK_STATE).includes("Bu marketplace'te Prompt Havuzu ayarı (pp.config.json) yok. <button"));
-  assert.equal(trCtx.marketHtml(MK_STATE), trOut, 'tr yeniden aynı: DURUM_OPTS ve etiketler bayatlamaz');
+  assert.equal(trCtx.marketHtml(MK_STATE), trOut, 'tr yeniden aynı: etiketler bayatlamaz');
 });
 
 /** Summary: "Marketplace'i güncelle" onay penceresini ve sonuç toast'ını verilen dilde çalıştırır; askChoice ve toast çağrılarını kaydeder. */
@@ -1162,7 +1160,7 @@ test('Kurulum ekranı: rozetler, eylem düğmeleri ve ipuçları iki dilde; sunu
     { level: 'error', message: 'Kök yok', action: 'ayarlar' },
     { level: 'error', message: XSS_INPUT, action: 'gitBaslat' },
     { level: 'warn', message: 'Seç', action: 'marketplaceSec' },
-    { level: 'warn', message: 'Eksik', action: 'ppConfigOlustur' },
+    { level: 'warn', message: 'Eksik', action: 'ppConfigSil' },
     { level: 'error', message: 'Yok', action: 'yeniMarketplace' },
     { level: 'warn', message: 'Eylemsiz', action: 'bilinmeyen' }
   ];
@@ -1175,22 +1173,22 @@ test('Kurulum ekranı: rozetler, eylem düğmeleri ve ipuçları iki dilde; sunu
   assert.ok(trOut.includes('<span class="pill bad">Hata</span><span class="msg">Kök yok</span><button class="btn sm" data-act="settings">Ayarları aç</button>'));
   assert.ok(trOut.includes('<span class="pill warn">Uyarı</span><span class="msg">Eylemsiz</span></li>'));
   assert.ok(trOut.includes('data-act="mk-git-init" data-confirm data-name="' + XSS_ESCAPED + '">Git&#39;i başlat</button>'));
-  assert.ok(trOut.includes('Ağaçtan seç') && trOut.includes('Ayar dosyası oluştur') && trOut.includes('>Yeni marketplace</button>'));
+  assert.ok(trOut.includes('Ağaçtan seç') && trOut.includes('<button class="btn sm" data-act="mk-ppconfig-sil">Sil (çöp kutusuna taşı)</button>') && trOut.includes('>Yeni marketplace</button>'));
   assert.ok(trOut.includes('Ayar dosyası: <code>' + XSS_ESCAPED + '</code>'));
   assert.ok(enOut.includes('<h1 id="setupTitle" tabindex="-1">Continue setup</h1>'));
   assert.ok(enOut.includes('<span class="pill bad">Error</span><span class="msg">Kök yok</span><button class="btn sm" data-act="settings">Open Settings</button>'));
   assert.ok(enOut.includes('<span class="pill warn">Warning</span><span class="msg">Eylemsiz</span></li>'));
   assert.ok(enOut.includes('data-name="' + XSS_ESCAPED + '">Initialize git</button>'));
-  assert.ok(enOut.includes('Select from the tree') && enOut.includes('Create settings file') && enOut.includes('>New marketplace</button>'));
+  assert.ok(enOut.includes('Select from the tree') && enOut.includes('<button class="btn sm" data-act="mk-ppconfig-sil">Delete (move to trash)</button>') && enOut.includes('>New marketplace</button>'));
   assert.ok(enOut.includes('Settings file: <code>' + XSS_ESCAPED + '</code>'));
   assert.ok(enOut.includes('<span class="msg">' + XSS_ESCAPED + '</span>'), 'sunucu iletisi çevrilmeden, kaçışlı');
   assert.ok(!trOut.includes('<img') && !enOut.includes('<img'));
   assert.equal(render('tr'), trOut, 'tr yeniden aynı');
-  const codes = ['ayarlar', 'yeniMarketplace', 'marketplaceSec', 'gitBaslat', 'ppConfigOlustur', 'bilinmeyen'];
+  const codes = ['ayarlar', 'yeniMarketplace', 'marketplaceSec', 'gitBaslat', 'ppConfigSil', 'bilinmeyen'];
   const labels = (lang) => { g.I18n.setLanguage(lang); return codes.map((code) => ctx.actionLabel(code)); };
   const trLabels = labels('tr');
-  assert.deepEqual(trLabels, ['Ayarları aç', 'Yeni marketplace', 'Ağaçtan seç', "Git'i başlat", 'Ayar dosyası oluştur', '']);
-  assert.deepEqual(labels('en'), ['Open Settings', 'New marketplace', 'Select from the tree', 'Initialize git', 'Create settings file', '']);
+  assert.deepEqual(trLabels, ['Ayarları aç', 'Yeni marketplace', 'Ağaçtan seç', "Git'i başlat", 'Sil (çöp kutusuna taşı)', '']);
+  assert.deepEqual(labels('en'), ['Open Settings', 'New marketplace', 'Select from the tree', 'Initialize git', 'Delete (move to trash)', '']);
   assert.deepEqual(labels('tr'), trLabels, 'etiket tablosu dil değişince bayatlamaz');
   const pick = (lang, code) => { g.I18n.setLanguage(lang); S.info.setup.issues = [{ code }]; ctx.renderPick(); return dom.els['#main'].innerHTML; };
   assert.ok(pick('tr', 'marketplaceYok').includes('<h1 id="pickTitle" tabindex="-1">Bir marketplace seç</h1>') && pick('tr', 'marketplaceYok').includes('<p>Henüz marketplace yok. Yeni bir tane oluştur.</p>'));
@@ -1208,7 +1206,7 @@ test('Korunan metin kartı, uyarı bandı ve etkin marketplace göstergesi iki d
   dom.els['#warnBand'].remove = () => {};
   let name = XSS_INPUT;
   const S = {
-    info: { setup: { ok: true, issues: [{ level: 'warn', message: XSS_INPUT, action: 'ppConfigOlustur' }, { level: 'warn', message: 'Ayar', action: 'ayarlar' }] } },
+    info: { setup: { ok: true, issues: [{ level: 'warn', message: XSS_INPUT, action: 'ppConfigSil' }, { level: 'warn', message: 'Ayar', action: 'ayarlar' }] } },
     warnHidden: false, lostEdit: { mp: XSS_INPUT, path: 'prompts/' + XSS_INPUT + '.md', raw: XSS_INPUT, commitMsg: XSS_INPUT }
   };
   const ctx = load({ fns: ['actionLabel', 'lostEditHtml', 'lostCopy', 'lostDrop', 'paintMkCur', 'paintWarnBand'], consts: ['esc', 'base', 'ACTION_LABEL_KEYS'] }, {
@@ -1233,9 +1231,9 @@ test('Korunan metin kartı, uyarı bandı ve etkin marketplace göstergesi iki d
   const band = (lang) => { g.I18n.setLanguage(lang); name = 'mp'; ctx.paintWarnBand(); return bandNode.innerHTML; };
   const trBand = band('tr');
   const enBand = band('en');
-  assert.ok(trBand.includes('<span class="pill warn">Uyarı</span> ' + XSS_ESCAPED + ' <button class="link" data-act="mk-ppconfig" data-name="mp">Ayar dosyası oluştur</button>'));
+  assert.ok(trBand.includes('<span class="pill warn">Uyarı</span> ' + XSS_ESCAPED + ' <button class="link" data-act="mk-ppconfig-sil">Sil (çöp kutusuna taşı)</button>'));
   assert.ok(trBand.includes('data-act="settings">Ayarları aç</button>') && trBand.includes('aria-label="Uyarıyı kapat">Kapat</button>'));
-  assert.ok(enBand.includes('<span class="pill warn">Warning</span> ' + XSS_ESCAPED + ' <button class="link" data-act="mk-ppconfig" data-name="mp">Create settings file</button>'));
+  assert.ok(enBand.includes('<span class="pill warn">Warning</span> ' + XSS_ESCAPED + ' <button class="link" data-act="mk-ppconfig-sil">Delete (move to trash)</button>'));
   assert.ok(enBand.includes('data-act="settings">Open Settings</button>') && enBand.includes('aria-label="Dismiss the warning">Close</button>'));
   const copy = async (lang, ok) => { g.I18n.setLanguage(lang); ctx.copyOk = ok; calls.toast.length = 0; await ctx.lostCopy(); return plain(calls.toast); };
   assert.deepEqual(await copy('tr', true), [['Metin panoya kopyalandı', 'ok']]);
@@ -1260,7 +1258,7 @@ test('Ayarlar: bölüm başlıkları, seçenek etiketleri ve marketplace satırl
     askChoice: async (o) => { choices.push(plain(o)); return 'no'; },
     api: async () => { const e = new Error('Klasör bulunamadı'); e.status = 404; e.data = { notFound: true }; throw e; }
   });
-  const rows = { items: [{ name: 'a', path: '/l/a', valid: true, active: true, hasManifest: false, hasPpConfig: false }, { name: 'b', path: '/l/b', valid: false, reason: XSS_INPUT, hasManifest: true }], ignored: [{ name: 'd', path: '/l/d', reason: 'Git deposu değil', reasonCode: 'gitDegil' }] };
+  const rows = { items: [{ name: 'a', path: '/l/a', valid: true, active: true, hasManifest: false }, { name: 'b', path: '/l/b', valid: false, reason: XSS_INPUT, hasManifest: true }], ignored: [{ name: 'd', path: '/l/d', reason: 'Git deposu değil', reasonCode: 'gitDegil' }] };
   const empty = { items: [], ignored: [] };
   const withNote = { libraryRoot: '', suggestedRoot: XSS_INPUT, suggestedRootNote: '', configPath: XSS_INPUT, setup: { issues: [{ code: 'kokAyarlanmadi' }] }, remoteCheck: 'elle', language: 'auto' };
   const ready = { libraryRoot: '/lib', suggestedRoot: '', suggestedRootNote: '', configPath: '/c', setup: { issues: [] }, remoteCheck: 'acilista', language: 'tr' };
@@ -1282,12 +1280,12 @@ test('Ayarlar: bölüm başlıkları, seçenek etiketleri ve marketplace satırl
   assert.ok(out('en', ready, empty).includes('>Marketplace repositories are kept under this folder. It must be outside the tool folder.</p>'));
   const trRows = out('tr', ready, rows);
   const enRows = out('en', ready, rows);
-  assert.ok(trRows.includes('<span class="pill ok">etkin</span> <span class="pill warn">manifest yok</span> <span class="pill warn">Prompt Havuzu ayarı yok</span>'));
+  assert.ok(trRows.includes('<span class="pill ok">etkin</span> <span class="pill warn">manifest yok</span>'));
   assert.ok(trRows.includes('<span class="pill bad">geçersiz: ' + XSS_ESCAPED + '</span>') && trRows.includes('data-act="mk-activate" data-name="b">Etkinleştir</button>'));
-  assert.ok(trRows.includes('data-act="mk-ppconfig" data-name="a">Ayar dosyası oluştur</button>') && trRows.includes('data-act="mk-git-init" data-confirm data-name="d">Git&#39;i başlat</button>'));
-  assert.ok(enRows.includes('<span class="pill ok">active</span> <span class="pill warn">no manifest</span> <span class="pill warn">no Prompt Havuzu settings</span>'));
+  assert.ok(!trRows.includes('mk-ppconfig') && trRows.includes('data-act="mk-git-init" data-confirm data-name="d">Git&#39;i başlat</button>'));
+  assert.ok(enRows.includes('<span class="pill ok">active</span> <span class="pill warn">no manifest</span>'));
   assert.ok(enRows.includes('<span class="pill bad">invalid: ' + XSS_ESCAPED + '</span>') && enRows.includes('data-act="mk-activate" data-name="b">Activate</button>'));
-  assert.ok(enRows.includes('data-act="mk-ppconfig" data-name="a">Create settings file</button>') && enRows.includes('data-act="mk-git-init" data-confirm data-name="d">Initialize git</button>'));
+  assert.ok(!enRows.includes('mk-ppconfig') && enRows.includes('data-act="mk-git-init" data-confirm data-name="d">Initialize git</button>'));
   assert.ok(enRows.includes('<span class="pill warn">Git deposu değil</span>'), 'sunucudan gelen neden ham');
   assert.equal(out('tr', ready, rows), trRows, 'tr yeniden aynı');
   g.I18n.setLanguage('tr');
@@ -1301,18 +1299,17 @@ test('Ayarlar: bölüm başlıkları, seçenek etiketleri ve marketplace satırl
 test('Olay işleyicileri ve açılış: plugin silme metni (çoğul), açıklama/panoya/kimlik/ayar toast\'ları, mk-init iletileri ve sunucu yok ekranı iki dilde', async () => {
   const g = uiGlobals({ browser: true });
   const handlers = {};
-  const toasts = []; const fieldErrs = []; const deletes = [];
+  const toasts = []; const deletes = [];
   const clickSrc = /document\.addEventListener\('click', async \(ev\) => \{[\s\S]*?\n\}\);\n/.exec(html);
   const changeSrc = /document\.addEventListener\('change', \(ev\) => \{[\s\S]*?\n\}\);\n/.exec(html);
   assert.ok(clickSrc && changeSrc, 'olay işleyicileri bulunamadı');
-  const form = { durum: [] };
-  const ctx = load({ consts: ['esc', 'fold', 'DURUM_OPTS'], fns: ['init'] }, {
+  const ctx = load({ consts: ['esc', 'fold'], fns: ['init'] }, {
     ...g, FM, Rules, document: { addEventListener: (type, fn) => { handlers[type] = fn; } },
-    S: { info: { activeMarketplace: 'mp' }, pk: { name: 'k' }, mk: { export: { durumlar: [], haricKlasorler: [] } } },
+    S: { info: { activeMarketplace: 'mp' }, pk: { name: 'k' }, mk: {} },
     $: (selector) => ({ '#pkDesc': { value: 'aç' }, '#mkForm': {}, '#mkVerErr': { hidden: true }, '#mkForm [name="version"]': { setAttribute() {}, removeAttribute() {}, focus() {} } }[selector] || null),
-    FormData: class { get() { return '1.0.0'; } getAll() { return form.durum; } entries() { return [['version', '1.0.0']]; } },
+    FormData: class { get() { return '1.0.0'; } },
     activeName: () => 'mp', pathSep: () => '/', pluginsOf: () => [{ name: 'k', path: 'prompts/k', count: ctx.count }], activeMp: () => ({}),
-    deleteItem: async (p, text) => { deletes.push(text); }, toast: (message) => toasts.push(message), showFieldErr: (id, message) => fieldErrs.push(message), fail(e) { throw e; },
+    deleteItem: async (p, text) => { deletes.push(text); }, toast: (message) => toasts.push(message), fail(e) { throw e; },
     api: async () => ({ packages: ['a', 'b'] }), get: async () => ({}), pkLoad: async () => {}, afterWrite() {}, mkReload: async () => {},
     copyText: async () => ctx.copyOk
   });
@@ -1320,17 +1317,16 @@ test('Olay işleyicileri ve açılış: plugin silme metni (çoğul), açıklama
   const click = (act, dataset = {}) => handlers.click({ target: { closest: () => ({ dataset: { act, ...dataset }, closest: () => null }) }, preventDefault() {}, stopPropagation() {} });
   const run = async (lang) => {
     g.I18n.setLanguage(lang);
-    toasts.length = 0; fieldErrs.length = 0; deletes.length = 0;
+    toasts.length = 0; deletes.length = 0;
     for (const count of [1, 3]) { ctx.count = count; await click('m-delete-plugin', { name: 'k' }); }
     ctx.copyOk = true; await click('copy-text', { text: 'x' });
     ctx.copyOk = false; await click('copy-text', { text: 'x' });
     await click('m-copy-path', { mp: 'mp' });
     await click('pk-desc');
-    form.durum = []; await click('mk-init');
-    form.durum = ['kararlı']; await click('mk-init');
+    await click('mk-init');
     handlers.change({ target: { id: 'setRemoteCheck', value: 'elle', dataset: {}, closest: () => null } });
     await new Promise((resolve) => setImmediate(resolve));
-    return plain({ toasts, fieldErrs: fieldErrs.filter(Boolean), deletes });
+    return plain({ toasts, deletes });
   };
   const trRun = await run('tr');
   const enRun = await run('en');
@@ -1338,7 +1334,6 @@ test('Olay işleyicileri ve açılış: plugin silme metni (çoğul), açıklama
   assert.deepEqual(enRun.deletes, ['The "k" plugin and its 1 prompt are moved to the trash (.pp/trash).', 'The "k" plugin and its 3 prompts are moved to the trash (.pp/trash).']);
   assert.deepEqual(trRun.toasts, ['Kopyalandı', 'Kopyalanamadı', 'Kopyalanamadı', 'Açıklama kaydedildi', 'Marketplace dosyaları yazıldı: a, b', 'Ayar kaydedildi']);
   assert.deepEqual(enRun.toasts, ['Copied', 'Could not copy', 'Could not copy', 'Description saved', 'Marketplace files written: a, b', 'Setting saved']);
-  assert.deepEqual([trRun.fieldErrs, enRun.fieldErrs], [['En az bir durum seçilmeli'], ['Select at least one status']]);
   assert.deepEqual(await run('tr'), trRun, 'tr yeniden aynı');
   const down = async (lang) => {
     g.I18n.setLanguage(lang);

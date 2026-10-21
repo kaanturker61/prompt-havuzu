@@ -13,6 +13,8 @@ const tx = I18n.tx;
 const CONCURRENCY = 4;
 const MD_RE = /\.(md|markdown)$/i;
 const SEARCH_LIMIT = 300;
+/** Summary: Prompt klasörlerindeki plugin kaynak meta klasörü; ağaçta gösterilmez. */
+const SOURCE_META_DIR = '.claude-plugin';
 
 // En fazla `limit` görev aynı anda çalışır; sonuçlar giriş sırasındadır.
 async function pool(items, limit, fn) {
@@ -73,6 +75,7 @@ class LibraryCatalog {
     for (const e of ents) {
       if (this.ignore.has(e.name)) continue;
       if (e.isSymbolicLink()) continue; // bağlantılar ağaçta görünmez (kök dışına çıkabilir)
+      if (o.meta && e.name === SOURCE_META_DIR) continue;
       if (!rel && o.skip && o.skip.has(e.name)) continue;
       const childRel = rel ? rel + '/' + e.name : e.name;
       const childAbs = path.join(abs, e.name);
@@ -126,7 +129,7 @@ class LibraryCatalog {
     const { Rules, FM } = this;
     const base = {
       name: m.name, state: m.valid ? 'hazir' : 'gecersiz', reason: m.reason || null, active: !!m.active,
-      libraryDir: null, libraryDirExists: false, hasPpConfig: !!m.hasPpConfig, defaultPlugin: null,
+      libraryDir: null, libraryDirExists: false, defaultPlugin: null,
       count: 0, yayinUyari: 0, plugins: [], loose: [], inbox: null, teknik: []
     };
     if (!m.valid) return base;
@@ -136,11 +139,11 @@ class LibraryCatalog {
     base.libraryDir = libDir;
     base.defaultPlugin = FM.slug(cfg.marketplace.plugin);
 
-    const vmap = await this.versions.statusMap(m.path, libDir).catch(() => new Map());
     const items = [];
     const libAbs = path.join(m.path, libDir);
-    const st = await fsp.stat(libAbs).catch(() => null);
+    const st = cfg.libraryOk === false ? null : await fsp.stat(libAbs).catch(() => null);
     if (st && st.isDirectory()) {
+      const vmap = await this.versions.statusMap(m.path, libDir).catch(() => new Map());
       base.libraryDirExists = true;
       const top = await this._walk(libAbs, libDir, { meta: { dir: m.path, libraryDir: libDir, vmap, items } });
       for (const n of top.sort(byName)) {
@@ -183,7 +186,7 @@ class LibraryCatalog {
     const { items } = await this.marketplaces(libraryRoot, active);
     const valid = items.filter((m) => m.valid);
     return pool(valid, CONCURRENCY, async (m) => {
-      let list = await this.index.listMd(m.path, m.cfg.libraryDir, { includeBig });
+      let list = m.cfg.libraryOk === false ? [] : await this.index.listMd(m.path, m.cfg.libraryDir, { includeBig });
       if (scopeAll) list = list.concat(await this.index.listMd(m.path, 'plugins', { includeBig }));
       return { m, list };
     });

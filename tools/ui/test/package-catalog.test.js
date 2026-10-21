@@ -184,6 +184,61 @@ test('scanPluginFiles: sembolik bağlantı dosya ve klasörleri bileşen sayılm
   } finally { links.forEach(removeLink); rmrf(tmp); }
 });
 
+const GOLD_SOURCES = {
+  komut: '---\nbaslik: Kod Gözden Geçir\ntur: komut\naciklama: Kodu gözden geçir\narguman_ipucu: "[x]"\nizinli_araclar: [Bash(git diff:*), Read]\nmodel: sonnet\n---\nGövde komut\n',
+  ajan: '---\nbaslik: Ajan Örnek\ntur: ajan\nizinli_araclar: Read, Grep\n---\nGövde ajan\n',
+  skill: '---\nbaslik: Beceri\ntur: skill\nkomut_adi: "Kod İnceleme"\naciklama: "Kod: gözden geçir"\narguman_ipucu: [dosya]\nizinli_araclar: [Read, Grep]\nmodel: opus\n---\nGövde skill\n'
+};
+const GOLD_OUTPUT = {
+  'plugins/ornek/commands/gk.md': '---\ndescription: Kodu gözden geçir\nargument-hint: "[x]"\nallowed-tools: Bash(git diff:*), Read\nmodel: sonnet\n---\nGövde komut\n',
+  'plugins/ornek/agents/gj.md': '---\nname: gj\ndescription: Ajan Örnek\ntools: Read, Grep\n---\nGövde ajan\n',
+  'plugins/ornek/skills/kod-inceleme/SKILL.md': '---\nname: kod-inceleme\ndescription: "Kod: gözden geçir"\nargument-hint: dosya\nallowed-tools: Read, Grep\nmodel: opus\n---\nGövde skill\n'
+};
+
+test('altın çıktı: eski Türkçe alanlı komut, ajan ve skill çıktısı bayt bayt kilitli', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    write(mk, 'prompts/ornek/gk.md', GOLD_SOURCES.komut);
+    write(mk, 'prompts/ornek/gj.md', GOLD_SOURCES.ajan);
+    write(mk, 'prompts/ornek/gs.md', GOLD_SOURCES.skill);
+    const s = buildStack(mk, tmp);
+    const built = await s.catalog.build(await s.config.load());
+    for (const src of ['gk', 'gj', 'gs']) {
+      const p = built.bySource.get(`prompts/ornek/${src}.md`);
+      assert.equal(p.expected, GOLD_OUTPUT[p.target], p.target);
+    }
+  } finally { rmrf(tmp); }
+});
+
+test('İngilizce anahtarlar aynı çıktıyı üretir; yeni alanlar türe göre sırayla, doğru biçimde yazılır', real, async () => {
+  const tmp = tmpDir();
+  try {
+    const mk = seed(tmp);
+    write(mk, 'prompts/ornek/gk.md', '---\nbaslik: Kod Gözden Geçir\ntur: komut\ndescription: Kodu gözden geçir\nargument-hint: "[x]"\nallowed-tools: [Bash(git diff:*), Read]\nmodel: sonnet\n---\nGövde komut\n');
+    write(mk, 'prompts/ornek/gj.md', '---\nbaslik: Ajan Örnek\ntur: ajan\ntools: Read, Grep\n---\nGövde ajan\n');
+    write(mk, 'prompts/ornek/gs.md', '---\nbaslik: Beceri\ntur: skill\nname: "Kod İnceleme"\ndescription: "Kod: gözden geçir"\nargument-hint: [dosya]\nallowed-tools: [Read, Grep]\nmodel: opus\n---\nGövde skill\n');
+    write(mk, 'prompts/ornek/ns.md', '---\nbaslik: Yeni Beceri\ntur: skill\ndescription: Yeni\nmetadata:\n  eski: 1\nwhen_to_use: Bir şey olunca\ndisable-model-invocation: true\nuser-invocable: no\neffort: low\npaths: ["src/**/*.{ts,tsx}", "lib/**"]\narguments: dosya hedef\nhooks:\n  PreToolUse:\n    - matcher: Bash\n\n      hooks:\n        - type: command\nmetadata:\n  author: ben\n---\nGövde\n');
+    write(mk, 'prompts/ornek/na.md', '---\nbaslik: Yeni Ajan\ntur: ajan\ndescription: Ajan açıklaması\ntools: Read, Grep\nmaxTurns: 5\nskills: a, b\nmemory: project\nbackground: TRUE\npermissionMode: plan\nhooks:\n  Stop:\n    - hooks: []\nallowed-tools: Bash\nexperimental:\n  cacheTtl: 1h\n---\nGövde\n');
+    write(mk, 'prompts/ornek/nk.md', '---\nbaslik: Komut\ntur: komut\nname: ozel-ad\ndescription: K\npaths: [x]\narguments: [a, b]\nwhen_to_use: Ne zaman\nhooks:\nmetadata:\n  a: 1\nexperimental: x\n---\nGövde\n');
+    const s = buildStack(mk, tmp);
+    const built = await s.catalog.build(await s.config.load());
+    for (const src of ['gk', 'gj', 'gs']) {
+      const p = built.bySource.get(`prompts/ornek/${src}.md`);
+      assert.equal(p.expected, GOLD_OUTPUT[p.target], p.target);
+    }
+    assert.equal(built.bySource.get('prompts/ornek/ns.md').expected,
+      '---\nname: ns\ndescription: Yeni\nwhen_to_use: Bir şey olunca\narguments: dosya hedef\ndisable-model-invocation: true\nuser-invocable: false\neffort: low\n'
+      + 'paths: ["src/**/*.{ts,tsx}", lib/**]\nhooks:\n  PreToolUse:\n    - matcher: Bash\n\n      hooks:\n        - type: command\nmetadata:\n  author: ben\n---\nGövde\n');
+    assert.equal(built.bySource.get('prompts/ornek/na.md').expected,
+      '---\nname: na\ndescription: Ajan açıklaması\ntools: Read, Grep\nmaxTurns: 5\nskills: [a, b]\nmemory: project\nbackground: true\nexperimental:\n  cacheTtl: 1h\n---\nGövde\n');
+    const nk = built.bySource.get('prompts/ornek/nk.md');
+    assert.equal(nk.target, 'plugins/ornek/commands/ozel-ad.md');
+    assert.equal(nk.expected, '---\ndescription: K\nwhen_to_use: Ne zaman\narguments: [a, b]\nmetadata:\n  a: 1\n---\nGövde\n');
+    assert.equal(s.catalog.blocking(built.packages.get('ornek')).length, 0);
+  } finally { rmrf(tmp); }
+});
+
 test('komut_adi CON -> aygitAdi (error), paket engellenir; diğer paketler etkilenmez', real, async () => {
   const tmp = tmpDir();
   try {

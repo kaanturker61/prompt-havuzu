@@ -11,9 +11,13 @@
 
   const KEY_RE = /^([A-Za-z_][\w-]*)[ \t]*:(?:[ \t]+(.*))?$/;
 
-  // Yeni anahtarlar bu sırayla eklenir (okunabilirlik için)
-  const CANON = ['baslik', 'etiketler', 'projeler', 'durum', 'versiyon', 'olusturma',
-    'tur', 'paket', 'komut_adi', 'aciklama', 'arguman_ipucu', 'izinli_araclar', 'model'];
+  /** Summary: Yeni anahtarların eklendiği sıra. */
+  const CANON = ['baslik', 'etiketler', 'projeler', 'durum', 'versiyon', 'olusturma', 'tur', 'paket',
+    'name', 'komut_adi', 'description', 'aciklama', 'when_to_use', 'argument-hint', 'arguman_ipucu', 'arguments',
+    'allowed-tools', 'tools', 'izinli_araclar', 'disallowed-tools', 'disallowedTools', 'model', 'effort',
+    'disable-model-invocation', 'user-invocable', 'context', 'agent', 'background', 'paths', 'shell',
+    'maxTurns', 'autoCompactWindow', 'skills', 'memory', 'omitClaudeMd', 'isolation', 'color',
+    'license', 'compatibility', 'hooks', 'metadata', 'experimental'];
 
   /* ---------- metin yardımcıları ---------- */
 
@@ -127,8 +131,10 @@
     return (needsQuote(s) || /[,\[\]"']/.test(s)) ? quote(s) : s;
   }
 
+  /** Summary: Değeri tek satırlık YAML metnine çevirir. */
   function fmtValue(v) {
     if (Array.isArray(v)) return '[' + v.map(fmtItem).join(', ') + ']';
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
     return fmtScalar(v);
   }
 
@@ -200,8 +206,9 @@
       for (let k = p.entries.length - 1; k >= 0; k--) { if (p.entries[k].key === key) p.entries.splice(k, 1); }
       return p;
     }
-    if (typeof value === 'number') value = String(value);
-    const entry = { key: key, value: value, lines: [key + ': ' + fmtValue(value)] };
+    const line = key + ': ' + fmtValue(value);
+    if (typeof value === 'number' || typeof value === 'boolean') value = String(value);
+    const entry = { key: key, value: value, lines: [line] };
     if (i >= 0) {
       if (!same(p.entries[i].value, value)) p.entries[i] = entry;
       return p;
@@ -217,6 +224,25 @@
     }
     p.entries.splice(pos, 0, entry);
     p.hasFm = true;
+    return p;
+  }
+
+  /** Summary: Anahtarı satır bazlı yeniden adlandırır; kaynak yoksa ya da hedef varsa false döner. */
+  function rename(p, from, to) {
+    if (from === to || !/^[A-Za-z_][\w-]*$/.test(to)) return false;
+    const hits = p.entries.filter(function (e) { return e.key === from; });
+    if (!hits.length || p.entries.some(function (e) { return e.key === to; })) return false;
+    for (const e of hits) {
+      e.lines[0] = e.lines[0].replace(/^[A-Za-z_][\w-]*/, function () { return to; });
+      e.key = to;
+    }
+    return true;
+  }
+
+  /** Summary: Gövdeyi yazar; ön yüz varsa ya da metin "---" ile başlıyorsa başa boş satır koyar. */
+  function setBody(p, text) {
+    text = String(text == null ? '' : text);
+    p.body = (p.entries.length || /^---[ \t]*(\n|$)/.test(text)) ? '\n' + text : text;
     return p;
   }
 
@@ -245,5 +271,5 @@
   }
 
   return { parse: parse, stringify: stringify, set: set, meta: meta, fold: fold, slug: slug,
-    fmtScalar: fmtScalar, placeholders: placeholders, fill: fill, same: same, CANON: CANON, stripComment: stripComment, duplicateKeys: duplicateKeys };
+    fmtScalar: fmtScalar, fmtValue: fmtValue, rename: rename, setBody: setBody, placeholders: placeholders, fill: fill, same: same, CANON: CANON, stripComment: stripComment, duplicateKeys: duplicateKeys };
 });

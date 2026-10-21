@@ -91,6 +91,19 @@ test('sunucu: paket listesi, sayfa, yayın, push, marketplace güncelle ve durum
     assert.equal((await srv.call('GET', '/api/package?name=yok')).data.error, 'Paket bulunamadı: yok');
     assert.equal((await srv.call('GET', '/api/package?name=yok')).status, 404);
 
+    // promptu olmayan plugin'in paket sayfası açılır; açıklama klasördeki plugin.json'a yazılır; gelen kutusu paket değildir
+    assert.equal((await srv.call('POST', '/api/package', { name: 'Kod İnceleme', description: 'Kodu inceler' })).status, 200);
+    r = await srv.call('GET', '/api/package?name=kod-inceleme');
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.description, 'Kodu inceler'); assert.equal(r.data.exportedCount, 0); assert.deepEqual(r.data.prompts, []);
+    assert.equal(r.data.blocking, 0);
+    assert.equal((await srv.call('PUT', '/api/package', { name: 'kod-inceleme', description: 'Yeni açıklama' })).status, 200);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(mk, 'prompts/kod-inceleme/.claude-plugin/plugin.json'), 'utf8')).description, 'Yeni açıklama');
+    assert.equal((await srv.call('GET', '/api/package?name=kod-inceleme')).data.description, 'Yeni açıklama');
+    assert.equal((await srv.call('GET', '/api/package?name=gelen-kutusu')).status, 404);
+    assert.equal((await srv.call('GET', '/api/packages')).data.packages.length, 1, 'boş plugin paket listesine girmez');
+    sh(mk, ['add', '-A'], env); sh(mk, ['commit', '-q', '-m', 'bos plugin'], env);
+
     // uzak depo ekle (bare), doğrulamalar
     const bare = makeBare(tmp);
     assert.equal((await srv.call('POST', '/api/git/remotes', { name: 'Origin', url: bare })).status, 400);
@@ -133,7 +146,8 @@ test('sunucu: paket listesi, sayfa, yayın, push, marketplace güncelle ve durum
     sh(mk, ['add', '-A'], env); sh(mk, ['commit', '-q', '-m', 'taslak kararlı'], env);
     r = await srv.call('POST', '/api/marketplace/update', {});
     assert.ok(r.data.commit); assert.deepEqual(r.data.written, ['plugins/ornek/commands/tt.md']);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(mk, 'pp.config.json'), 'utf8')).marketplace.version, '1.0.1');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(mk, '.claude-plugin/marketplace.json'), 'utf8')).version, '1.0.1');
+    assert.equal(fs.existsSync(path.join(mk, 'pp.config.json')), false);
     assert.equal(sh(mk, ['tag', '-l', 'paket/*'], env).trim().split('\n').length, 1);
 
     // marketplace durumu: update komutu yok, uzak depo yerel yol
@@ -181,19 +195,20 @@ test('sunucu: X-PP-MP kapsamı ve iki marketplace\'te yayın yalnızca etkin dep
     assert.match(sh(mk, ['tag', '-l'], env), /paket\/ornek\/v1\.0\.0/);
     assert.equal(sh(other, ['tag', '-l'], env).trim(), '');
     assert.equal(fs.existsSync(path.join(other, 'plugins')), false);
-    // klonlama ve pp-config etkin marketplace'ten bağımsız (yanlış başlık engellemez)
-    r = await srv.call('POST', '/api/marketplaces/pp-config', { name: 'diger' }, bad);
-    assert.equal(r.status, 409, 'diger zaten pp.config.json içeriyor');
+    // klonlama etkin marketplace'ten bağımsız (yanlış başlık engellemez)
+    r = await srv.call('POST', '/api/marketplaces/clone', { url: 'ext::sh -c x' }, bad);
+    assert.equal(r.status, 400); assert.equal(r.data.code, 'urlGecersiz');
+    assert.equal((await srv.call('POST', '/api/marketplaces/pp-config', { name: 'diger' })).status, 404, 'rota kaldırıldı');
   } finally { await srv.stop(); rmrf(tmp); }
 });
 
-test('sunucu: klonlama, pp-config oluşturma, taşıma engeli', real, async () => {
+test('sunucu: klonlanan depo ayar dosyası istemez; taşıma hedefte ayar dosyası aramaz', real, async () => {
   const tmp = tmpDir();
   const srv = await start(tmp);
   try {
     const mk = await setupMk(srv, tmp);
     const env = gitEnv(tmp);
-    // ayarsız bir kaynak depo (pp.config.json yok)
+    // manifestli, prompts/ klasörü olmayan bir kaynak depo
     const src = makeRepo(tmp, 'ayarsiz');
     fs.mkdirSync(path.join(src, '.claude-plugin'));
     fs.writeFileSync(path.join(src, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: 'uzak-mp', description: 'Uzak açıklama', owner: { name: 'Sahip' }, plugins: [] }));
@@ -214,32 +229,32 @@ test('sunucu: klonlama, pp-config oluşturma, taşıma engeli', real, async () =
     // etkinleştirmeden (activate:false) ve X-PP-MP başlığı olmadan çalışır
     r = await srv.call('POST', '/api/marketplaces/clone', { url: bare, name: 'uzak', activate: false });
     assert.equal(r.status, 200, JSON.stringify(r.data));
-    assert.deepEqual(r.data.warnings.map((w) => w.code), ['ppConfigYok']);
-    assert.equal(r.data.marketplace.name, 'uzak'); assert.equal(r.data.marketplace.hasPpConfig, false);
+    assert.deepEqual(r.data.warnings, []);
+    assert.equal(r.data.marketplace.name, 'uzak'); assert.equal('hasPpConfig' in r.data.marketplace, false);
     assert.equal((await srv.call('GET', '/api/info')).data.activeMarketplace, 'mk');
+    assert.equal(fs.existsSync(path.join(tmp, 'lib', 'uzak', 'pp.config.json')), false, 'ayar dosyası yazılmadı');
 
-    // taşıma hedefinde pp.config.json yok
-    fs.mkdirSync(path.join(tmp, 'lib', 'uzak', 'library', 'p'), { recursive: true });
+    // taşıma hedefinde ayar dosyası aranmaz
+    fs.mkdirSync(path.join(tmp, 'lib', 'uzak', 'prompts', 'p'), { recursive: true });
     r = await srv.call('POST', '/api/prompts/transfer', { path: 'prompts/ornek/a.md', toMp: 'uzak', toPlugin: 'p' });
-    assert.equal(r.status, 400); assert.equal(r.data.code, 'hedefPpConfigYok');
-    assert.ok(fs.existsSync(path.join(mk, 'prompts/ornek/a.md')), 'kaynak yerinde');
-
-    // pp-config oluştur
-    r = await srv.call('POST', '/api/marketplaces/pp-config', { name: 'uzak' }, { headers: { 'X-PP-MP': 'baska' } });
     assert.equal(r.status, 200, JSON.stringify(r.data));
-    const pc = JSON.parse(fs.readFileSync(path.join(tmp, 'lib', 'uzak', 'pp.config.json'), 'utf8'));
-    assert.equal(pc.libraryDir, 'prompts'); assert.equal(pc.marketplace.name, 'uzak-mp'); assert.equal(pc.marketplace.owner, 'Sahip');
-    assert.equal(pc.marketplace.description, 'Uzak açıklama');
-    assert.equal(sh(path.join(tmp, 'lib', 'uzak'), ['log', '--oneline'], env).trim().split('\n').length, 1, 'commit atılmadı');
-    assert.equal((await srv.call('POST', '/api/marketplaces/pp-config', { name: 'uzak' })).status, 409);
-    assert.equal((await srv.call('POST', '/api/marketplaces/pp-config', { name: 'yok' })).status, 404);
+    assert.ok(fs.existsSync(path.join(tmp, 'lib', 'uzak', 'prompts', 'p', 'a.md')), 'hedefe yazıldı');
+    assert.ok(!fs.existsSync(path.join(mk, 'prompts/ornek/a.md')), 'kaynak çöp kutusuna gitti');
+    assert.equal(sh(path.join(tmp, 'lib', 'uzak'), ['log', '--oneline'], env).trim().split('\n').length, 1, 'hedefte commit atılmadı');
+    assert.equal((await srv.call('POST', '/api/marketplaces/pp-config', { name: 'uzak' })).status, 404, 'rota kaldırıldı');
 
     // etkinleştirerek klonla
     r = await srv.call('POST', '/api/marketplaces/clone', { url: bare, name: 'uzak2' });
     assert.equal(r.status, 200);
     assert.equal((await srv.call('GET', '/api/info')).data.activeMarketplace, 'uzak2');
-    assert.ok(r.data.setup.issues.some((i) => i.code === 'ppConfigYok'));
+    assert.deepEqual(r.data.setup.issues, []);
     assert.equal(r.data.setup.ok, true);
+    assert.equal((await srv.call('GET', '/api/tree')).status, 200);
+    r = await srv.call('GET', '/api/marketplace/status');
+    assert.equal(r.data.marketplaceName, 'uzak-mp', 'ad marketplace.json içinden gelir');
+    assert.equal(r.data.config.owner, 'Sahip'); assert.equal(r.data.config.description, 'Uzak açıklama'); assert.equal(r.data.config.plugin, 'uzak-mp');
+    assert.equal(sh(path.join(tmp, 'lib', 'uzak2'), ['status', '--porcelain'], env).trim(), '', 'git durumu temiz: pp.config.json ve library/ oluşmadı');
+    assert.equal(fs.existsSync(path.join(tmp, 'lib', 'uzak2', 'library')), false);
   } finally { await srv.stop(); rmrf(tmp); }
 });
 
@@ -301,7 +316,7 @@ test('sunucu: fetch, pull, ileri sarma ve ayarlar (remoteCheck)', real, async ()
   } finally { await srv.stop(); rmrf(tmp); }
 });
 
-test('sunucu: paket alanı klasörle uyuşmazsa yayın engellenir; /api/file publishCheck; init export ayarı', real, async () => {
+test('sunucu: paket alanı klasörle uyuşmazsa yayın engellenir; /api/file publishCheck; init yalnızca marketplace.json yazar', real, async () => {
   const tmp = tmpDir();
   const srv = await start(tmp);
   try {
@@ -319,15 +334,18 @@ test('sunucu: paket alanı klasörle uyuşmazsa yayın engellenir; /api/file pub
     assert.equal(sh(mk, ['tag', '-l'], env).trim(), '');
     r = await srv.call('GET', '/api/facets');
     assert.equal(r.data.yayinUyari, 1);
-    // durum süzgeci ayarı
-    r = await srv.call('POST', '/api/marketplace/init', { config: { export: { durumlar: [] } } });
-    assert.equal(r.status, 400); assert.equal(r.data.error, 'En az bir durum seçilmeli');
-    r = await srv.call('POST', '/api/marketplace/init', { config: { export: { durumlar: ['kararlı'] } } });
+    // init yalnızca marketplace.json yazar; plugin ve export alanları yok sayılır
+    r = await srv.call('POST', '/api/marketplace/init', { config: { name: 'Yeni Ad', owner: 'Sahip', description: 'Yeni açıklama', plugin: 'baska', export: { durumlar: [] } } });
     assert.equal(r.status, 200, JSON.stringify(r.data));
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(mk, 'pp.config.json'), 'utf8')).export.durumlar, ['kararlı']);
+    const mj = JSON.parse(fs.readFileSync(path.join(mk, '.claude-plugin/marketplace.json'), 'utf8'));
+    assert.equal(mj.name, 'yeni-ad'); assert.equal(mj.owner.name, 'Sahip'); assert.equal(mj.description, 'Yeni açıklama');
+    assert.equal(fs.existsSync(path.join(mk, 'pp.config.json')), false, 'init pp.config.json yazmaz');
     assert.equal(fs.existsSync(path.join(mk, 'plugins')), false, 'init plugin.json yazmaz');
+    r = await srv.call('GET', '/api/marketplace/status');
+    assert.deepEqual(r.data.config, { name: 'yeni-ad', owner: 'Sahip', plugin: 'yeni-ad', description: 'Yeni açıklama', version: '1.0.0' });
+    assert.deepEqual(r.data.export, { durumlar: ['kararlı', ''], haricKlasorler: ['gelen-kutusu'] });
     assert.equal((await srv.call('POST', '/api/marketplace/init', { config: { name: 'claude-plugins-official' } })).status, 400);
     r = await srv.call('GET', '/api/package?name=ornek');
-    assert.equal(r.data.prompts.length, 0, 'boş durumlu promptlar artık dışarıda');
+    assert.equal(r.data.prompts.length, 3, 'boş durumlu promptlar hâlâ dışa aktarılır, durum süzgeci sabit');
   } finally { await srv.stop(); rmrf(tmp); }
 });

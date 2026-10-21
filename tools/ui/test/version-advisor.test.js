@@ -109,9 +109,7 @@ test('aynı versiyon + farklı içerik: yama ve surumArtirilmamis; etiketler de�
     assert.equal(a.version, '1.0.1');
     await s.publisher.publish(mk, { name: 'ornek' });
     // yalnızca açıklama
-    const cfgFile = path.join(mk, 'pp.config.json');
-    const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); c.packages.ornek.description = 'Yeni açıklama';
-    fs.writeFileSync(cfgFile, JSON.stringify(c, null, 2) + '\n');
+    write(mk, 'prompts/ornek/.claude-plugin/plugin.json', JSON.stringify({ description: 'Yeni açıklama' }, null, 2) + '\n');
     commitAll(mk, tmp);
     a = await analyze(s);
     assert.equal(a.descChanged, true); assert.equal(a.level, 'yama'); assert.equal(a.version, '1.0.2');

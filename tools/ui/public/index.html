@@ -5,325 +5,584 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title data-i18n="ui.static.title"></title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230B7C84'/%3E%3Cpath d='M5 13c3-3 6-3 9 0s6 3 9 0M5 20c3-3 6-3 9 0s6 3 9 0' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='8.5' cy='8.5' r='7' fill='%23C6F135' stroke='%23121116' stroke-width='1.6'/%3E%3Cpath d='M17 16V2a14 14 0 0 1 14 14z' fill='%23FF5B37'/%3E%3Crect x='2' y='18' width='13' height='13' rx='3' fill='%233D63FF'/%3E%3Cpath d='M17 30a7 7 0 0 1 14 0z' fill='%23FFC233'/%3E%3C/svg%3E">
 <style>
+/* Görsel dil "Pop Stüdyo": canlı düz renkler (asit lime, domates, kobalt, güneş, şeker pembe, nane), kalın mürekkep hatlar
+   ve sert gölgeli neo-brütalist bileşenler, bento ön sayfa, Memphis geometrik şekiller, yaylı mikro animasyonlar.
+   Plugin, marketplace ve etiketler adlarından türeyen sabit bir renk alır (data-c="0..5", hueOf).
+   Yazı tipleri yereldir (OFL, fonts/OFL.txt): Bricolage Grotesque (başlık), Figtree (arayüz), Fragment Mono (metin). */
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%; font-display: swap; src: url("/fonts/bricolage-grotesque-latin-standard-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 200 800; font-stretch: 75% 100%; font-display: swap; src: url("/fonts/bricolage-grotesque-latin-ext-standard-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 300 900; font-display: swap; src: url("/fonts/figtree-latin-wght-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 300 900; font-display: swap; src: url("/fonts/figtree-latin-ext-wght-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Fragment Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/fragment-mono-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Fragment Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/fragment-mono-latin-ext-400-normal.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
 :root {
-  --paper: #E8EDF0; --panel: #F7FAFA; --card: #FFFFFF; --ink: #12252E; --muted: #587080;
-  --line: #CCD7DD; --line2: #DCE5E9; --code: #F0F4F6;
-  --pool: #0B7C84; --pool-ink: #FFFFFF; --pool-tint: #D5ECEE; --pool-deep: #075A61;
-  --amber: #9A6005; --green: #2B7A4B; --red: #B3361F;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --mono: "Cascadia Code", "SF Mono", Consolas, ui-monospace, "Liberation Mono", monospace;
+  color-scheme: light;
+  /* yüzeyler */
+  --paper: #F1F0EA; --panel: #FFFFFF; --card: #FFFFFF; --soft: #F1F0EA; --soft2: #E6E4DC; --ink: #121116; --muted: #605D68;
+  --line: #E2E0D8; --line2: #ECEAE3; --code: #F8F7F3; --rule: #121116; --field: #D8D5CB; --hard: #121116;
+  /* canlı palet */
+  --lime: #C6F135; --tomato: #FF5B37; --cobalt: #3D63FF; --sun: #FFC233; --pink: #FF72CF; --mint: #2CD49B;
+  --lime-ink: #4C6B00; --tomato-ink: #D23A16; --cobalt-ink: #2446E6; --sun-ink: #8F6100; --pink-ink: #B8248A; --mint-ink: #0B7F58;
+  /* anlamsal */
+  --accent: var(--lime); --accent-ink: #121116; --focus: var(--cobalt); --link: var(--cobalt-ink);
+  --amber: var(--sun-ink); --green: var(--mint-ink); --red: var(--tomato-ink);
+  --tint: 24%; --dots: rgba(18, 17, 22, .13); --scrim: rgba(18, 17, 22, .42); --on-cobalt: #FFFFFF;
+  --display: "Bricolage Grotesque", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --sans: "Figtree", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Fragment Mono", "Cascadia Code", "SF Mono", Consolas, ui-monospace, monospace;
+  --spring: cubic-bezier(.34, 1.56, .64, 1); --ease: cubic-bezier(.2, .8, .2, 1);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #0C181E; --panel: #10212A; --card: #142730; --ink: #E1EDF0; --muted: #8CA5B0;
-    --line: #25414D; --line2: #1D3540; --code: #0E1D24;
-    --pool: #46BFC6; --pool-ink: #052A2E; --pool-tint: #133C43; --pool-deep: #7FDDE2;
-    --amber: #E0A53C; --green: #5CC389; --red: #F0806B;
+    color-scheme: dark;
+    --paper: #0E0E12; --panel: #15151B; --card: #1A1A21; --soft: #23232C; --soft2: #2D2D38; --ink: #F4F3EE; --muted: #A6A3AE;
+    --line: #2B2B35; --line2: #22222A; --code: #16161C; --rule: #F4F3EE; --field: #3A3A46; --hard: #000000;
+    --lime: #D2FF48; --tomato: #FF6B4A; --cobalt: #6F8CFF; --sun: #FFCF4D; --pink: #FF86D8; --mint: #3FE0AA;
+    --lime-ink: #D2FF48; --tomato-ink: #FF8A6E; --cobalt-ink: #93A9FF; --sun-ink: #FFD36A; --pink-ink: #FF9EDF; --mint-ink: #5BE8B7;
+    --accent-ink: #121116; --tint: 22%; --dots: rgba(244, 243, 238, .08); --scrim: rgba(0, 0, 0, .6); --on-cobalt: #121116;
   }
 }
-* { box-sizing: border-box; }
+/* adından türeyen sabit renk */
+[data-c="0"] { --hue: var(--lime); --hue-ink: var(--lime-ink); }
+[data-c="1"] { --hue: var(--tomato); --hue-ink: var(--tomato-ink); }
+[data-c="2"] { --hue: var(--cobalt); --hue-ink: var(--cobalt-ink); }
+[data-c="3"] { --hue: var(--sun); --hue-ink: var(--sun-ink); }
+[data-c="4"] { --hue: var(--pink); --hue-ink: var(--pink-ink); }
+[data-c="5"] { --hue: var(--mint); --hue-ink: var(--mint-ink); }
+
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--soft2) transparent; }
 html, body { height: 100%; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+body { margin: 0; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); font: 450 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 body.noscroll { overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--pool); outline-offset: 2px; }
+input[type=checkbox], input[type=radio] { accent-color: var(--cobalt); width: 15px; height: 15px; }
+::selection { background: var(--lime); color: #121116; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 [hidden] { display: none !important; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
-h1, h2, h3 { margin: 0; font-weight: 600; }
+/* mono yalnızca 400 ağırlıkta: kalın bağlamda sahte kalın üretilmesin */
+code, .mono, pre, textarea { font-synthesis: none; }
+h1, h2, h3 { margin: 0; font-weight: 700; }
 .hint { color: var(--muted); font-size: 12.5px; }
 .grow { flex: 1; }
+select { appearance: none; -webkit-appearance: none; padding-right: 30px !important; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+select option { background: var(--card); color: var(--ink); }
+input[list]::-webkit-calendar-picker-indicator { opacity: .4; cursor: pointer; }
 
-/* üst çubuk */
-.top { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 9px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
-.brand { font: 600 20px/1 var(--serif); display: flex; align-items: center; gap: 9px; white-space: nowrap; }
-.brand svg { color: var(--pool); }
-.searchbox { flex: 1 1 260px; max-width: 560px; }
-.searchbox input { width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-.langsw { margin: 0; }
-.langsw button { padding: 6px 10px; line-height: 1.4; }
+/* ---------------------------------------------------------------- üst çubuk */
+.top { position: relative; z-index: 20; flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; padding: 12px 22px; background: var(--panel); border-bottom: 2px solid var(--rule); }
+.brand { display: flex; align-items: center; gap: 11px; white-space: nowrap; font: 800 22px/1 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -.035em; }
+.brand .mark { flex: none; overflow: visible; }
+.mark > * { transform-box: fill-box; transform-origin: center; animation: shape-pop .7s var(--spring) backwards; transition: transform .45s var(--spring); }
+.mark .m1 { fill: var(--lime); stroke: var(--rule); stroke-width: 1.6; }
+.mark .m2 { fill: var(--tomato); animation-delay: .08s; }
+.mark .m3 { fill: var(--cobalt); animation-delay: .16s; }
+.mark .m4 { fill: var(--sun); animation-delay: .24s; }
+.brand:hover .m1 { transform: scale(1.15); }
+.brand:hover .m2 { transform: rotate(90deg); }
+.brand:hover .m3 { transform: rotate(-12deg) scale(.9); }
+.brand:hover .m4 { transform: translateY(-3px); }
+#mkCur { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: var(--soft); box-shadow: none; border-radius: 999px; padding: 5px 13px 5px 11px; font: 600 12px/1.4 var(--sans); color: var(--muted); }
+#mkCur::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); margin-right: 7px; vertical-align: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint) 30%, transparent); }
+#mkCur:empty { display: none; }
+#mkCur:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--soft2); color: var(--ink); }
+#mkCur b { color: var(--ink); }
+.searchbox { flex: 1 1 260px; max-width: 520px; }
+.searchbox input { width: 100%; padding: 9px 18px; border: 2px solid transparent; border-radius: 999px; background: var(--soft); font-size: 14px; font-weight: 500; transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+.searchbox input::placeholder { color: var(--muted); }
+.searchbox input:hover { border-color: var(--field); }
+.searchbox input:focus { outline: 0; border-color: var(--rule); background: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 25%, transparent); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+/* üst çubuktaki ikincil düğmeler: her biri üzerine gelince kendi renginde parlar */
+.top .actions > .btn:not(.primary) { border: 0; border-radius: 999px; background: transparent; box-shadow: none; padding: 8px 14px; font-weight: 650; }
+.top .actions > .btn:not(.primary):hover:not(:disabled) { transform: translateY(-1px); box-shadow: none; background: color-mix(in srgb, var(--cobalt) var(--tint), var(--panel)); }
+.top .actions > .btn:nth-of-type(3):hover:not(:disabled) { background: color-mix(in srgb, var(--tomato) var(--tint), var(--panel)); }
+.top .actions > .btn:nth-of-type(4):hover:not(:disabled) { background: color-mix(in srgb, var(--pink) var(--tint), var(--panel)); }
+.top .actions > .btn:nth-of-type(5):hover:not(:disabled) { background: color-mix(in srgb, var(--sun) 32%, var(--panel)); }
+.top .actions > .btn.primary { border-radius: 999px; margin-right: 6px; padding: 7px 16px; }
+.langsw { margin: 0 0 0 6px !important; border-radius: 999px !important; }
+.langsw button { padding: 4px 10px !important; font-size: 11.5px !important; }
 .only-narrow { display: none; }
 
-/* düğmeler */
-.btn { border: 1px solid var(--line); background: var(--card); border-radius: 5px; padding: 6px 13px; line-height: 1.4; }
-.btn:hover:not(:disabled) { border-color: var(--pool); color: var(--pool-deep); }
-.btn.primary { background: var(--pool); border-color: var(--pool); color: var(--pool-ink); font-weight: 600; }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.08); color: var(--pool-ink); }
+/* ---------------------------------------------------------------- düğmeler */
+.btn { position: relative; border: 2px solid var(--rule); background: var(--card); color: var(--ink); border-radius: 12px; padding: 6px 14px; line-height: 1.35;
+  font-weight: 700; font-size: 13.5px; box-shadow: 3px 3px 0 var(--hard); transition: transform .25s var(--spring), box-shadow .25s var(--spring), background-color .2s, color .2s; }
+.btn:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--hard); }
+.btn:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--hard); transition-duration: .06s; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
 .btn.danger { color: var(--red); }
-.btn.ghost { border-color: transparent; background: transparent; }
-.btn.sm { padding: 2px 9px; font-size: 12.5px; }
-.btn:disabled { opacity: .5; cursor: default; }
-.link { border: 0; background: none; padding: 0; color: var(--pool-deep); text-align: left; text-decoration: underline; text-underline-offset: 2px; }
-.badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--pool); color: var(--pool-ink); font-size: 11.5px; text-align: center; margin-left: 4px; }
-.badge.warn { background: var(--amber); color: #fff; }
+.btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
+.btn.ghost:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--soft); }
+.btn.ghost:active:not(:disabled) { transform: scale(.97); }
+.btn.sm { padding: 2px 10px; font-size: 12px; border-radius: 9px; box-shadow: 2px 2px 0 var(--hard); }
+.btn.sm:hover:not(:disabled) { box-shadow: 3px 3px 0 var(--hard); transform: translate(-1px, -1px); }
+.btn.sm:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--hard); }
+.btn.ghost.sm, .btn.ghost.sm:hover:not(:disabled) { box-shadow: none; }
+.btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.link { border: 0; background: none; padding: 0; color: var(--link); text-align: left; font-weight: 600; text-decoration: underline 1.5px; text-decoration-color: color-mix(in srgb, var(--link) 35%, transparent); text-underline-offset: 3px; transition: text-decoration-color .2s; }
+.link:hover { text-decoration-color: currentColor; }
+.badge { display: inline-block; min-width: 19px; height: 19px; padding: 0 6px; border-radius: 999px; background: var(--tomato); color: #fff; font: 800 11px/19px var(--sans); text-align: center; margin-left: 6px; vertical-align: 1px; }
+.badge.warn { background: var(--sun); color: #121116; }
 
-/* yerleşim */
-.shell { display: grid; grid-template-columns: minmax(270px, 340px) minmax(0, 1fr); height: calc(100vh - 54px); }
-aside { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
-main { overflow: auto; padding: 22px 28px 70px; min-width: 0; }
-.filters { padding: 12px 12px 6px; border-bottom: 1px solid var(--line2); }
+/* ---------------------------------------------------------------- yerleşim */
+.shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(290px, 356px) minmax(0, 1fr); }
+aside { border-right: 2px solid var(--rule); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+/* sağ alan: nokta ızgaralı tuval */
+main { overflow: auto; padding: 32px 36px 80px; min-width: 0; background-image: radial-gradient(var(--dots) 1.2px, transparent 1.6px); background-size: 22px 22px; background-attachment: local; }
+@media (min-width: 901px) {
+  aside { animation: slide-in .6s var(--ease) backwards .1s; }
+  main { animation: fade .5s ease backwards .2s; }
+}
+.filters { padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
 .frow { display: flex; gap: 8px; }
-.frow select { flex: 1; min-width: 0; padding: 5px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
-.chk { display: flex; align-items: center; gap: 7px; margin: 8px 0 2px; color: var(--muted); font-size: 12.5px; }
-.tagbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 4px; }
-.tagbtn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 0 9px; font-size: 12.5px; color: var(--muted); }
-.tagbtn:hover { border-color: var(--pool); }
-.tagbtn.on { background: var(--pool); border-color: var(--pool); color: var(--pool-ink); }
-.tagbtn .n { opacity: .7; margin-left: 3px; }
-.listhead { display: flex; align-items: center; gap: 4px; padding: 8px 12px 4px; color: var(--muted); font-size: 12.5px; }
-.list { overflow: auto; flex: 1; padding-bottom: 40px; }
-.empty { padding: 14px 14px; color: var(--muted); }
+.chk { display: flex; align-items: center; gap: 8px; margin: 10px 2px 2px; color: var(--muted); font-size: 12.5px; }
+.tagbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 2px; }
+.tagbtn { border: 1.5px solid transparent; background: var(--soft); border-radius: 999px; padding: 1px 10px; font: 650 12px/1.6 var(--sans); color: var(--ink); transition: transform .25s var(--spring), border-color .15s, background-color .15s; }
+.tagbtn[data-c] { background: color-mix(in srgb, var(--hue) var(--tint), var(--panel)); }
+.tagbtn:hover { border-color: var(--rule); transform: translateY(-1px) rotate(-2deg); }
+.tagbtn.on { background: var(--hue, var(--lime)); border-color: var(--rule); box-shadow: 2px 2px 0 var(--hard); color: #121116; }
+.tagbtn .n { opacity: .55; margin-left: 5px; font-weight: 600; }
+.listhead { display: flex; align-items: center; gap: 8px; padding: 14px 16px 8px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.listhead.tools { gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); letter-spacing: 0; }
+.list { overflow: auto; flex: 1; padding: 6px 0 40px; }
+.empty { padding: 16px; color: var(--muted); }
 
-/* ağaç */
-.row { display: flex; align-items: center; gap: 7px; padding: 5px 6px 5px calc(12px + var(--d, 0) * 16px); cursor: pointer; border-left: 3px solid transparent; }
-.row:hover { background: var(--pool-tint); }
-.row.active { background: var(--pool-tint); border-left-color: var(--pool); }
-.row.active .name { font-weight: 600; }
+/* ---------------------------------------------------------------- ağaç */
+.row { position: relative; display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 1px 8px; padding: 4px 6px 4px calc(8px + var(--d, 0) * 16px); border-radius: 10px; cursor: pointer; transition: background-color .15s; }
+.row:hover, .row[aria-selected="true"] { background: var(--soft); }
+.row:focus-visible { outline: 3px solid var(--focus); outline-offset: -1px; }
+.row.active { background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 2px var(--rule); }
+.row.active .name { font-weight: 750; }
 .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.row.dir .name { color: var(--muted); font-weight: 600; }
-.row .cnt { color: var(--muted); font-size: 12px; }
-.more { opacity: 0; margin-left: auto; border: 0; background: none; color: var(--muted); padding: 0 8px; border-radius: 4px; }
+.row.dir .name { color: var(--muted); font-weight: 650; }
+.row.plugin .name { font-weight: 700; }
+.row .cnt { color: var(--muted); font-size: 11px; font-weight: 700; background: var(--soft); border-radius: 999px; padding: 0 7px; line-height: 18px; }
+.row:hover .cnt { background: var(--panel); }
+.row.active .cnt { background: rgba(255, 255, 255, .55); color: #121116; }
+.row.active .pill { color: #121116; border-color: #121116; background: transparent; }
+.more { opacity: 0; margin-left: auto; border: 0; background: none; color: var(--muted); padding: 0 8px; border-radius: 8px; font-weight: 800; }
 .row:hover .more, .row:focus-within .more, .row.active .more { opacity: 1; }
 @media (hover: none) { .more { opacity: 1; } }
-.caret { flex: none; width: 0; height: 0; border-left: 5px solid var(--muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .12s; margin: 0 3px 0 1px; }
+.caret { flex: none; width: 0; height: 0; border-left: 5px solid var(--muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .3s var(--spring); margin: 0 3px 0 1px; }
 .caret.open { transform: rotate(90deg); }
+.row.active .caret { border-left-color: currentColor; }
 .sect { display: flex; align-items: center; gap: 7px; padding: 12px 12px 4px; color: var(--muted); font-size: 12.5px; cursor: pointer; }
-.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
-.dot.taslak { background: var(--amber); }
-.dot.kararli { background: var(--green); }
-.dot.arsiv { background: var(--muted); opacity: .55; }
-.pill { display: inline-block; font-size: 11.5px; line-height: 1.5; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
-.pill.ok { border-color: var(--green); color: var(--green); }
-.pill.warn { border-color: var(--amber); color: var(--amber); }
-.pill.bad { border-color: var(--red); color: var(--red); }
+/* durum noktaları: renk + biçim (taslak halka, kararlı dolu, arşiv çizik) */
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--field); }
+.dot.taslak { border: 2.5px solid var(--sun); }
+.dot.kararli { background: var(--mint); border-color: var(--mint); }
+.dot.arsiv { border-color: var(--muted); background: linear-gradient(135deg, transparent 40%, var(--muted) 40% 60%, transparent 60%); opacity: .7; }
+.row.active .dot { border-color: #121116; }
+.row.active .dot.kararli { background: #121116; }
+.pill { display: inline-block; font: 700 11px/1.6 var(--sans); padding: 0 8px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pill[data-c] { border-color: transparent; color: var(--ink); background: color-mix(in srgb, var(--hue) var(--tint), var(--card)); }
+.pill.ok { color: var(--green); border-color: color-mix(in srgb, var(--mint) 55%, transparent); background: color-mix(in srgb, var(--mint) 14%, transparent); }
+.pill.warn { color: var(--amber); border-color: color-mix(in srgb, var(--sun) 70%, transparent); background: color-mix(in srgb, var(--sun) 18%, transparent); }
+.pill.bad { color: var(--red); border-color: color-mix(in srgb, var(--tomato) 60%, transparent); background: color-mix(in srgb, var(--tomato) 12%, transparent); }
 
-/* arama sonuçları */
-.res { padding: 8px 12px 9px; border-left: 3px solid transparent; cursor: pointer; border-bottom: 1px solid var(--line2); }
-.res:hover, .res.active { background: var(--pool-tint); }
-.res.active { border-left-color: var(--pool); }
-.res-note { padding: 10px 12px 14px; }
-.rt { display: flex; align-items: center; gap: 7px; font-weight: 600; }
-.rp { color: var(--muted); font-size: 12px; margin-left: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rs { margin: 3px 0 0 15px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.rtags { margin: 4px 0 0 15px; display: flex; flex-wrap: wrap; gap: 4px; }
-mark { background: color-mix(in srgb, var(--pool) 28%, transparent); color: inherit; border-radius: 2px; }
+/* ---------------------------------------------------------------- arama sonuçları */
+.res { margin: 4px 8px; padding: 10px 12px 11px; cursor: pointer; border-radius: 14px; border: 2px solid transparent; transition: background-color .15s, border-color .15s, transform .25s var(--spring); }
+.res:hover, .res[aria-selected="true"] { background: var(--soft); }
+.res.active { background: var(--accent); color: var(--accent-ink); border-color: var(--rule); }
+.res.active .rp, .res.active .rs { color: #121116; opacity: .75; }
+.res.active .dot { border-color: #121116; }
+.res-note { padding: 10px 16px 14px; }
+.rt { display: flex; align-items: center; gap: 8px; font-weight: 750; }
+.rp { color: var(--muted); font-size: 11.5px; margin-left: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs { margin: 4px 0 0 18px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rtags { margin: 7px 0 0 18px; display: flex; flex-wrap: wrap; gap: 4px; }
+mark { background: color-mix(in srgb, var(--lime) 80%, transparent); color: #121116; border-radius: 4px; padding: 0 2px; }
+.res.active mark { background: #121116; color: var(--lime); }
 
-/* kart (editör) */
-.card { max-width: 980px; margin: 0 auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 22px 26px 26px; }
-.crumbs { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; word-break: break-all; }
-.crumbs .sep { margin: 0 5px; opacity: .6; }
-.titlebar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-.title { flex: 1 1 320px; min-width: 0; font: 600 29px/1.2 var(--serif); border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 2px 0 8px; margin: 0; border-radius: 0; }
-.title:focus { outline: 0; border-bottom-color: var(--pool); }
-.title.static { border-bottom-color: transparent; overflow-wrap: anywhere; }
-.tbtns { display: flex; gap: 8px; padding-bottom: 6px; }
-.tabs { display: flex; gap: 2px; margin: 16px 0 0; border-bottom: 1px solid var(--line); }
-.tab { border: 0; background: none; padding: 8px 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tab:hover { color: var(--ink); }
-.tab.on { color: var(--pool-deep); border-bottom-color: var(--pool); font-weight: 600; }
-.pane { padding-top: 16px; }
-.banner { border: 1px solid var(--line); border-left: 3px solid var(--amber); background: var(--code); padding: 8px 12px; border-radius: 5px; margin: 14px 0 0; }
-.banner .btn { margin-left: 8px; }
-.meta { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px 14px; align-items: center; padding-bottom: 14px; }
-.meta > label { color: var(--muted); }
-.meta input:not([type=checkbox]), .meta select, .stack input:not([type=checkbox]), .stack select, .stack textarea,
-.grid2 input:not([type=checkbox]), .grid2 select, .gitleft textarea, .gitleft input:not([type=checkbox]) {
-  width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
+/* ---------------------------------------------------------------- editör kartı */
+.card { position: relative; max-width: 1000px; margin: 0 auto; background: var(--card); border: 2px solid var(--rule); border-top: 12px solid var(--hue, var(--lime)); border-radius: 26px; padding: 26px 38px 34px;
+  box-shadow: 8px 8px 0 var(--hard); }
+.crumbs { color: var(--muted); font-size: 12.5px; font-weight: 600; margin-bottom: 10px; word-break: break-all; }
+.crumbs::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--hue, var(--lime)); border: 1.5px solid var(--rule); margin-right: 9px; vertical-align: -1px; transform: rotate(12deg); }
+.crumbs .sep { margin: 0 6px; opacity: .5; }
+.crumbs .link { font-size: inherit; }
+.titlebar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.title { flex: 1 1 320px; min-width: 0; font: 800 clamp(30px, 3.4vw, 46px)/1.05 var(--display); font-variation-settings: "opsz" 96; letter-spacing: -.04em;
+  border: 0; background: transparent; padding: 6px 10px; margin: 0 0 0 -10px; border-radius: 14px; color: var(--ink); transition: background-color .2s, box-shadow .25s var(--ease); }
+.title::placeholder { color: var(--muted); opacity: .5; }
+.title:hover { background: var(--soft); }
+.title:focus { outline: 0; background: var(--soft); box-shadow: inset 0 -4px 0 var(--hue, var(--lime)); }
+.title.static { overflow-wrap: anywhere; }
+.title.static:hover { background: transparent; }
+.tbtns { display: flex; gap: 10px; }
+/* sekmeler: kayan hap */
+.tabs { display: inline-flex; gap: 2px; margin: 22px 0 0; padding: 4px; background: var(--soft); border-radius: 999px; }
+.tab { border: 0; background: none; padding: 7px 18px; border-radius: 999px; color: var(--muted); font-weight: 700; font-size: 13.5px; transition: background-color .2s, color .2s, transform .25s var(--spring); }
+.tab:hover { color: var(--ink); background: var(--soft2); }
+.tab:active { transform: scale(.96); }
+.tab.on { background: var(--ink); color: var(--card); box-shadow: 0 2px 0 var(--hue, var(--lime)); }
+.pane { padding-top: 22px; }
+.banner { border: 2px solid var(--rule); background: color-mix(in srgb, var(--sun) 22%, var(--card)); padding: 10px 14px; border-radius: 14px; margin: 14px 0 0; }
+.banner .btn { margin-left: 10px; }
+
+/* form: dolgu alanlar, odakta mürekkep çerçeve + kobalt hale */
+.btns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.vcard .btns { margin-top: 4px; }
+:where(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]), select) {
+  padding: 7px 12px; border: 2px solid transparent; border-radius: 12px; background-color: var(--soft); color: var(--ink); transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+:where(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]), select):hover { border-color: var(--field); }
+:where(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]), select):focus { outline: 0; border-color: var(--rule); background-color: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
+.meta { display: grid; grid-template-columns: 126px minmax(0, 1fr); gap: 10px 18px; align-items: center; padding-bottom: 18px; }
+.meta > label { color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.meta input:not([type=checkbox]):not([type=radio]):not(.chip-in), .meta select, .stack input:not([type=checkbox]):not([type=radio]), .stack select,
+.grid2 input:not([type=checkbox]):not([type=radio]), .grid2 select, .gitleft input:not([type=checkbox]), .pkdesc input, .commitbar input, .frow select { width: 100%; }
+.frow select { flex: 1; min-width: 0; width: auto; font-size: 13px; font-weight: 600; padding-top: 6px; padding-bottom: 6px; }
+.stack textarea, .gitleft textarea { width: 100%; padding: 10px 12px; border: 2px solid var(--field); border-radius: 14px; background: var(--card); transition: border-color .2s, box-shadow .25s var(--ease); }
+.stack textarea:focus, .gitleft textarea:focus { outline: 0; border-color: var(--rule); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
 .grid2 label.chk { display: flex; }
-.inline { display: flex; gap: 8px; align-items: center; }
+.inline { display: flex; gap: 10px; align-items: center; }
 .inline input { flex: 1; }
-.commitbar { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.commitbar { display: flex; gap: 12px; align-items: center; margin: 14px 0 4px; }
+.commitbar .hint { font-weight: 650; white-space: nowrap; }
 .commitbar input { flex: 1; }
 #verWarn { margin-left: 8px; }
-.bumpopts { border: 1px solid var(--line); border-radius: 5px; padding: 8px 12px; }
+.bumpopts { border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; }
 .bumpopts label { display: block; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; background: var(--card); min-height: 34px; }
-.chips:focus-within { border-color: var(--pool); }
-.chip { display: inline-flex; align-items: center; background: var(--pool-tint); color: var(--pool-deep); border-radius: 999px; padding: 0 3px 0 10px; font-size: 12.5px; }
-.chip button { border: 0; background: none; color: inherit; padding: 0 6px; line-height: 1.4; font-size: 15px; }
-.meta .chips input.chip-in, .chips input.chip-in { border: 0; outline: 0; background: transparent; flex: 1; min-width: 100px; width: auto; padding: 2px 4px; }
-details.pub { border: 1px solid var(--line2); border-radius: 6px; margin: 4px 0 16px; background: var(--code); }
-details.pub summary { padding: 8px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-details.pub .meta { padding: 8px 12px 12px; margin: 0; }
-.pubfoot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 0 12px 12px; }
-.bodywrap textarea, #fRaw { width: 100%; min-height: 300px; resize: vertical; padding: 14px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); font: 13.5px/1.65 var(--mono); tab-size: 2; }
-.bodywrap textarea:focus, #fRaw:focus { outline: 0; border-color: var(--pool); }
-.bodyinfo { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 12.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border: 2px solid transparent; border-radius: 12px; background: var(--soft); padding: 4px 6px; min-height: 38px; transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+.chips:hover { border-color: var(--field); }
+.chips:focus-within { border-color: var(--rule); background: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
+.chip { display: inline-flex; align-items: center; background: color-mix(in srgb, var(--hue, var(--cobalt)) var(--tint), var(--card)); color: var(--ink); border: 1.5px solid color-mix(in srgb, var(--hue, var(--cobalt)) 55%, transparent); border-radius: 999px; padding: 0 2px 0 10px; font-size: 12.5px; font-weight: 650; }
+.chip button { border: 0; background: none; color: inherit; padding: 0 6px; line-height: 1.5; font-size: 15px; border-radius: 999px; }
+.chip button:hover { background: var(--ink); color: var(--card); }
+.meta .chips input.chip-in, .chips input.chip-in { border: 0; outline: 0; box-shadow: none; background: transparent; flex: 1; min-width: 100px; width: auto; padding: 3px 4px; }
+/* yayın ayarları paneli */
+details.pub { --cc-col: 210px; margin: 6px 0 22px; border: 2px dashed var(--field); border-radius: 20px; background: color-mix(in srgb, var(--cobalt) 5%, var(--card)); transition: border-color .2s, background-color .2s; }
+details.pub[open] { border-style: solid; border-color: var(--rule); }
+details.pub > summary { list-style: none; padding: 13px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 18px; }
+details.pub > summary::-webkit-details-marker { display: none; }
+details.pub > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--rule); border-radius: 50%; background: var(--lime); color: #121116; font: 800 16px/1 var(--sans); transition: transform .45s var(--spring); }
+details.pub[open] > summary::before { transform: rotate(135deg); }
+details.pub summary b { font: 750 17px/1.2 var(--display); font-variation-settings: "opsz" 24; letter-spacing: -.02em; }
+details.pub .meta { grid-template-columns: var(--cc-col) minmax(0, 1fr); padding: 4px 16px 14px 54px; margin: 0; }
+details.pub > .issue { margin: 0 16px 8px 54px; }
+.pubfoot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 0 16px 16px 54px; }
+details.pub .meta.cc { align-items: start; }
+details.pub .meta.cc > label { padding-top: 9px; }
+details.pub .meta > label.cckey { font: 400 12.5px var(--mono); overflow-wrap: anywhere; color: var(--ink); }
+.meta.cc .hint { margin-top: 4px; }
+.meta.cc .hint:empty { display: none; }
+.meta textarea.cclist { width: 100%; min-height: 44px; resize: vertical; padding: 8px 12px; border: 2px solid transparent; border-radius: 12px; background-color: var(--soft); color: var(--ink); font: 400 13px/1.5 var(--mono); transition: border-color .2s, background-color .2s, box-shadow .25s var(--ease); }
+.meta textarea.cclist:hover { border-color: var(--field); }
+.meta textarea.cclist:focus { outline: 0; border-color: var(--rule); background-color: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--cobalt) 22%, transparent); }
+details.ccmore { margin: 4px 16px 12px 54px; border: 2px dashed var(--field); border-radius: 14px; transition: border-color .2s; }
+details.ccmore[open] { border-style: solid; border-color: var(--rule); }
+details.ccmore > summary { list-style: none; padding: 8px 12px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; border-radius: 12px; }
+details.ccmore > summary::-webkit-details-marker { display: none; }
+details.ccmore > summary::before { content: "+" / ""; flex: none; display: grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--rule); border-radius: 50%; background: var(--sun); color: #121116; font: 800 13px/1 var(--sans); transition: transform .45s var(--spring); }
+details.ccmore[open] > summary::before { transform: rotate(135deg); }
+details.pub details.ccmore .meta { grid-template-columns: calc(var(--cc-col) - 14px) minmax(0, 1fr); padding: 4px 12px 12px; }
+.ccnotes { display: grid; gap: 6px; padding: 0 16px 14px 54px; }
+.ccnotes > * { margin: 0; }
+/* gövde editörü */
+.bodywrap { margin-top: 4px; }
+.bodywrap textarea, #fRaw { width: 100%; min-height: 320px; resize: vertical; padding: 22px 26px 26px; border: 2px solid var(--rule); border-radius: 20px; background: var(--code); color: var(--ink);
+  font: 400 14px/1.75 var(--mono); tab-size: 2; transition: box-shadow .3s var(--spring), transform .3s var(--spring); }
+.bodywrap textarea::placeholder, #fRaw::placeholder { color: var(--muted); }
+.bodywrap textarea:focus, #fRaw:focus { outline: 0; background: var(--card); box-shadow: 6px 6px 0 var(--hue, var(--lime)); transform: translate(-2px, -2px); }
+.bodyinfo { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.bodyinfo > * { background: var(--soft); border-radius: 999px; padding: 2px 10px; }
+.bodyinfo:empty { display: none; }
 
-/* geçmiş / fark */
-.hist { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; }
-.commits { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line2); border-radius: 6px; max-height: 60vh; overflow: auto; }
-.commits li { padding: 8px 10px; border-bottom: 1px solid var(--line2); cursor: pointer; }
-.commits li:last-child { border-bottom: 0; }
-.commits li:hover, .commits li.on { background: var(--pool-tint); }
-.commits .s { font-weight: 600; overflow-wrap: anywhere; }
-.diffhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.diff { font: 12.5px/1.55 var(--mono); background: var(--code); border: 1px solid var(--line2); border-radius: 6px; padding: 10px 0; overflow: auto; max-height: 62vh; margin: 0; }
-.dl { display: block; padding: 0 12px; white-space: pre; }
-.dl.add { background: color-mix(in srgb, var(--green) 17%, transparent); }
-.dl.del { background: color-mix(in srgb, var(--red) 17%, transparent); }
-.dl.hunk { color: var(--pool-deep); }
+/* ---------------------------------------------------------------- geçmiş / fark */
+.hist { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 20px; }
+.commits { list-style: none; margin: 0; padding: 6px; border: 2px solid var(--line); border-radius: 18px; max-height: 60vh; overflow: auto; background: var(--card); }
+.commits li { padding: 9px 12px; border-radius: 12px; cursor: pointer; transition: background-color .15s; }
+.commits li + li { margin-top: 2px; }
+.commits li:hover { background: var(--soft); }
+.commits li.on { background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 2px var(--rule); }
+.commits li.on .hint { color: #121116; opacity: .75; }
+.commits .s { font-weight: 750; overflow-wrap: anywhere; }
+.diffhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.diff { font: 12.5px/1.65 var(--mono); background: var(--code); border: 2px solid var(--line); border-radius: 18px; padding: 12px 0; overflow: auto; max-height: 62vh; margin: 0; }
+.dl { display: block; padding: 0 14px; white-space: pre; }
+.dl.add { background: color-mix(in srgb, var(--mint) 22%, transparent); box-shadow: inset 4px 0 0 var(--mint); }
+.dl.del { background: color-mix(in srgb, var(--tomato) 18%, transparent); box-shadow: inset 4px 0 0 var(--tomato); }
+.dl.hunk { color: var(--cobalt-ink); }
 .dl.meta { color: var(--muted); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 0 0 12px; }
-.seg button { border: 0; background: var(--card); padding: 5px 12px; color: var(--muted); }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--pool-tint); color: var(--pool-deep); font-weight: 600; }
+.seg { display: inline-flex; gap: 2px; padding: 4px; background: var(--soft); border-radius: 999px; margin: 0 0 14px; vertical-align: middle; }
+.seg button { border: 0; background: transparent; padding: 5px 14px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 700; transition: background-color .2s, color .2s; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
 .timeline li { padding: 0; cursor: default; }
-.timeline .tl { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; font: inherit; color: inherit; cursor: pointer; }
-.timeline .tl:hover, .timeline .tl[aria-current="true"] { background: var(--pool-tint); }
+.timeline .tl { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 12px; border-radius: 12px; font: inherit; color: inherit; cursor: pointer; transition: background-color .15s; }
+.timeline .tl:hover { background: var(--soft); }
+.timeline .tl[aria-current="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 2px var(--rule); }
+.timeline .tl[aria-current="true"] .hint, .timeline .tl[aria-current="true"] .pill { color: #121116; }
 .timeline .tl .s { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.vbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.vbar label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
-.vcard { border: 1px solid var(--line2); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; display: grid; gap: 6px; }
+.vbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.vbar label { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-weight: 650; }
+.vcard { border: 2px solid var(--rule); border-radius: 18px; padding: 12px 16px; margin-bottom: 14px; display: grid; gap: 6px; background: var(--card); box-shadow: 4px 4px 0 var(--hue, var(--lime)); }
 .vcard .note { white-space: pre-wrap; overflow-wrap: anywhere; }
-.fdiff { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
-.fdiff caption { text-align: left; font-weight: 600; padding: 4px 0; }
-.fdiff th, .fdiff td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--line2); overflow-wrap: anywhere; }
+.fdiff { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
+.fdiff caption { text-align: left; font: 750 16px/1.3 var(--display); padding: 4px 0 6px; }
+.fdiff th, .fdiff td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.fdiff th { color: var(--muted); font-size: 12px; }
 .fdiff .chip { padding: 0 10px; margin: 0 4px 4px 0; }
-ins.wd, ins.chip { text-decoration: none; background: color-mix(in srgb, var(--green) 25%, transparent); color: inherit; }
-del.wd, del.chip { text-decoration: line-through; background: color-mix(in srgb, var(--red) 25%, transparent); color: inherit; }
-ins, del { text-decoration-thickness: 1px; }
+ins.wd, ins.chip { text-decoration: none; background: color-mix(in srgb, var(--mint) 30%, transparent); color: inherit; border-radius: 4px; }
+del.wd, del.chip { text-decoration: line-through; background: color-mix(in srgb, var(--tomato) 24%, transparent); color: inherit; border-radius: 4px; }
+ins, del { text-decoration-thickness: 1.5px; }
 .restorebar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.gfile { border-bottom: 1px solid var(--line2); padding: 6px 8px; }
+.gfile { border-bottom: 1px solid var(--line); padding: 7px 10px; }
 .gfile summary { cursor: pointer; overflow-wrap: anywhere; }
-.gfile .gcs { display: grid; gap: 2px; padding: 6px 0 6px 14px; }
+.gfile .gcs { display: grid; gap: 3px; padding: 6px 0 6px 14px; }
 .gfile .gcs button.link { text-align: left; }
-.gfile .link.on { font-weight: 600; }
-.gfilelist { border: 1px solid var(--line2); border-radius: 6px; max-height: 62vh; overflow: auto; }
+.gfile .link.on { color: var(--ink); background: var(--lime); border-radius: 4px; text-decoration: none; padding: 0 4px; }
+.gfilelist { border: 2px solid var(--line); border-radius: 18px; max-height: 62vh; overflow: auto; background: var(--card); }
 
-/* başlangıç ekranı */
-.start { max-width: 760px; margin: 6vh auto 0; }
-.start h1 { font: 600 34px/1.15 var(--serif); margin-bottom: 8px; }
-.start p { color: var(--muted); max-width: 56ch; }
-.start .btns { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 30px; }
-.start h2 { font-size: 15px; margin-bottom: 8px; }
-.recent { border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
-.recent .res { cursor: pointer; }
-.recent .res:last-child { border-bottom: 0; }
+/* ---------------------------------------------------------------- başlangıç: bento ön sayfa */
+.start { max-width: 760px; margin: 4vh auto 0; }
+.start h1 { font: 800 clamp(34px, 4.4vw, 54px)/1.02 var(--display); font-variation-settings: "opsz" 96; letter-spacing: -.045em; margin-bottom: 14px; text-wrap: balance; }
+.start p { color: var(--muted); max-width: 56ch; font-size: 15px; line-height: 1.6; }
+.start .btns { display: flex; gap: 12px; flex-wrap: wrap; margin: 22px 0 30px; }
+.start h2 { font: 750 18px/1.2 var(--display); letter-spacing: -.02em; margin-bottom: 12px; }
+.start h1:focus { outline: 0; }
+.start.home { max-width: 1180px; margin: 0 auto; }
+.bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
+.tile { position: relative; min-width: 0; border: 2px solid var(--rule); border-radius: 28px; padding: 24px 26px; background: var(--card); box-shadow: 6px 6px 0 var(--hard); overflow: hidden;
+  animation: tile-in .7s var(--spring) backwards; transition: transform .35s var(--spring), box-shadow .35s var(--spring); }
+.tile:hover { transform: translate(-3px, -3px); box-shadow: 9px 9px 0 var(--hard); }
+.tile.hero { grid-column: span 8; grid-row: span 2; background: var(--lime); color: #121116; padding: 40px 42px 36px; display: flex; flex-direction: column; justify-content: flex-end; min-height: 360px; }
+.tile.hero:hover { transform: none; box-shadow: 6px 6px 0 var(--hard); }
+.hero-txt { position: relative; z-index: 1; max-width: 62%; }
+.hero h1 { font-size: clamp(44px, 5.2vw, 84px); line-height: .92; letter-spacing: -.055em; font-variation-settings: "opsz" 96; font-stretch: 88%; margin-bottom: 18px; }
+.hero p { color: #121116; opacity: .78; font-size: 16px; font-weight: 500; }
+.hero .btns { margin: 22px 0 0; }
+.hero .btn.primary { background: #121116; color: var(--lime); border-color: #121116; }
+.hero .btn:not(.primary) { background: #fff; color: #121116; border-color: #121116; }
+.hero .btn { box-shadow: 3px 3px 0 #121116; }
+.hero .btn:hover:not(:disabled) { box-shadow: 5px 5px 0 #121116; }
+/* Memphis şekilleri (süs) */
+/* şekiller karonun sağ %38'inde kalır, başlıkla çakışmaz */
+.shapes { position: absolute; top: 0; right: 0; bottom: 0; width: 38%; pointer-events: none; }
+.shapes i, .shapes svg { position: absolute; display: block; }
+.shapes .s1 { width: 170px; height: 170px; right: -46px; top: -50px; border-radius: 50%; background: var(--tomato); border: 2px solid #121116; animation: float 9s ease-in-out infinite; }
+.shapes .s2 { width: 96px; height: 96px; left: 4%; top: 30%; background: var(--cobalt); border: 2px solid #121116; border-radius: 0 0 0 96px; animation: float 7s ease-in-out infinite reverse; }
+.shapes .s3 { width: 70px; height: 70px; right: 12%; top: 46%; border-radius: 50%; border: 13px solid var(--pink); outline: 2px solid #121116; outline-offset: -2px; animation: spin 18s linear infinite; }
+.shapes .s4 { width: 62px; height: 31px; left: 14%; bottom: 20%; background: var(--sun); border: 2px solid #121116; border-radius: 62px 62px 0 0; animation: float 6s ease-in-out infinite 1s; }
+.shapes .s5 { right: 8%; bottom: 10%; width: 120px; height: 24px; fill: none; stroke: #121116; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; animation: wiggle 4s ease-in-out infinite; }
+.shapes .s6 { width: 16px; height: 16px; left: 44%; top: 14%; background: #121116; border-radius: 50%; animation: float 5s ease-in-out infinite .5s; }
+.tile.stat { grid-column: span 4; background: var(--tomato); color: #121116; animation-delay: .08s; }
+.tile.types { grid-column: span 4; background: var(--cobalt); color: var(--on-cobalt); animation-delay: .16s; }
+.tile .big { font: 800 clamp(64px, 7vw, 104px)/.85 var(--display); font-variation-settings: "opsz" 96; letter-spacing: -.06em; font-feature-settings: "tnum"; }
+.bar { display: flex; height: 16px; margin: 16px 0 12px; border: 2px solid #121116; border-radius: 999px; overflow: hidden; background: #fff; }
+.bar > span { min-width: 6px; border-right: 2px solid #121116; animation: grow .9s var(--spring) backwards .4s; transform-origin: left; }
+.bar > span:last-child { border-right: 0; }
+.bar .b-kararli { background: var(--mint); } .bar .b-taslak { background: var(--sun); } .bar .b-arsiv { background: #8F8B96; } .bar .b-bos { background: #fff; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 13px; font-weight: 650; }
+.legend li { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.legend b { margin-left: auto; font-weight: 800; }
+.legend .dot { border-color: #121116; background: #fff; }
+.legend .dot.kararli { background: var(--mint); } .legend .dot.taslak { background: var(--sun); border-width: 2px; } .legend .dot.arsiv { background: #8F8B96; opacity: 1; }
+.types ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.types li { display: grid; gap: 2px; }
+.types li b { font: 800 44px/.9 var(--display); letter-spacing: -.05em; }
+.types li span { font-size: 13px; font-weight: 700; opacity: .85; }
+.tile.tags { grid-column: span 4; animation-delay: .24s; }
+.tile.front { grid-column: span 8; animation-delay: .3s; }
+.tile.tags h2, .tile.front h2 { display: flex; align-items: center; gap: 10px; }
+.tile.tags h2::before, .tile.front h2::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--rule); flex: none; }
+.tile.tags h2::before { background: var(--pink); border-radius: 50%; }
+.tile.front h2::before { background: var(--sun); border-radius: 4px; transform: rotate(45deg); }
+.tagcloud { display: flex; flex-wrap: wrap; gap: 8px; }
+.tagcloud .tagbtn { font-size: 13.5px; padding: 4px 13px; border: 2px solid var(--rule); }
+.tagcloud .tagbtn:hover { box-shadow: 3px 3px 0 var(--hard); transform: translate(-1px, -2px) rotate(-3deg); }
+.recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.recent .res { margin: 0; padding: 10px 12px 11px 14px; border: 2px solid var(--line); border-radius: 16px; border-left: 8px solid var(--hue, var(--field)); }
+.recent .res:hover { border-color: var(--rule); border-left-color: var(--hue, var(--field)); background: var(--card); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--hard); }
+.recent .rt { font-size: 14.5px; }
+.recent .rp { margin-left: 18px; white-space: normal; overflow-wrap: anywhere; }
 
-/* modal */
-.overlay { position: fixed; inset: 0; background: rgba(8, 20, 26, .55); display: flex; align-items: flex-start; justify-content: center; padding: 5vh 14px; z-index: 50; overflow: auto; }
-.modal { background: var(--card); border: 1px solid var(--line); border-radius: 10px; width: min(640px, 100%); box-shadow: 0 24px 70px rgba(0, 0, 0, .38); }
+/* ---------------------------------------------------------------- pencere (modal) */
+.overlay { position: fixed; inset: 0; z-index: 50; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px;
+  background: var(--scrim); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: fade .2s ease backwards; }
+.modal { background: var(--card); border: 2px solid var(--rule); border-radius: 26px; width: min(640px, 100%); box-shadow: 10px 10px 0 var(--hard); animation: modal-in .45s var(--spring) backwards; }
 .modal.wide { width: min(1080px, 100%); }
-.mhead { display: flex; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line2); }
-.mhead h2 { font: 600 20px/1.2 var(--serif); flex: 1; }
-.mbody { padding: 18px 20px 20px; }
-.stack { display: grid; gap: 12px; }
-.stack label, .grid2 label { display: grid; gap: 4px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.mhead { display: flex; align-items: center; gap: 12px; padding: 20px 24px 12px 26px; }
+.mhead h2 { flex: 1; font: 800 25px/1.12 var(--display); font-variation-settings: "opsz" 48; letter-spacing: -.035em; }
+.mhead h2::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 10px; border-radius: 50%; background: var(--lime); border: 2px solid var(--rule); vertical-align: 3px; }
+.mhead .btn.ghost { border-radius: 999px; background: var(--soft); }
+.mbody { padding: 8px 26px 26px; }
+.stack { display: grid; gap: 14px; }
+.stack label, .grid2 label { display: grid; gap: 5px; font-weight: 650; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
 .span2 { grid-column: 1 / -1; }
-.foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .foot-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.mbody h3 { font-size: 15px; margin: 22px 0 8px; }
+.mbody h3 { display: flex; align-items: center; gap: 10px; font: 750 17px/1.25 var(--display); letter-spacing: -.02em; margin: 26px 0 10px; }
+.mbody h3::after { content: ""; flex: 1; height: 2px; border-radius: 2px; background: var(--line); }
 .mbody h3:first-child { margin-top: 0; }
-.ftable { border: 1px solid var(--line2); border-radius: 6px; max-height: 38vh; overflow: auto; }
-.frowi { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line2); }
+.ftable { border: 2px solid var(--line); border-radius: 16px; max-height: 38vh; overflow: auto; }
+.frowi { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .frowi:last-child { border-bottom: 0; }
 .frowi .pv { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mkrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 14px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line2); }
+.mkrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px 14px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .mkrow:last-child { border-bottom: 0; }
-.mklist { border: 1px solid var(--line2); border-radius: 6px; }
-.mkbtns { display: flex; gap: 6px; }
-.issue { font-size: 12.5px; }
+.mklist { border: 2px solid var(--line); border-radius: 18px; overflow: hidden; }
+.mkbtns { display: flex; gap: 8px; }
+.issue { font-size: 12.5px; font-weight: 600; }
 .issue.error { color: var(--red); } .issue.warn { color: var(--amber); } .issue.info { color: var(--muted); }
-.cmd { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-.cmd code { flex: 1; background: var(--code); border: 1px solid var(--line2); border-radius: 5px; padding: 5px 10px; overflow-x: auto; white-space: nowrap; }
-.gitgrid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 18px; }
-.gitleft { display: grid; gap: 10px; align-content: start; }
-.gf { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid var(--line2); }
+.cmd { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.cmd code { flex: 1; background: var(--code); border: 2px solid var(--line); border-radius: 12px; padding: 7px 12px; overflow-x: auto; white-space: nowrap; }
+.gitgrid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 20px; }
+.gitleft { display: grid; gap: 12px; align-content: start; min-width: 0; overflow-wrap: anywhere; }
+.gf { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .gf:last-child { border-bottom: 0; }
 .gf .link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gf.on { background: var(--pool-tint); }
+.gf.on { background: color-mix(in srgb, var(--lime) 40%, var(--card)); }
 details summary { cursor: pointer; }
+fieldset { border: 2px solid var(--line); border-radius: 16px; padding: 8px 14px 12px; margin: 0; min-width: 0; }
+legend { padding: 0 6px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
 
-/* açılır menü, bildirimler */
-.menu { position: fixed; z-index: 60; background: var(--card); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); padding: 4px; min-width: 190px; }
-.menu .mi { display: block; width: 100%; border: 0; background: none; text-align: left; padding: 6px 12px; border-radius: 4px; }
-.menu .mi:hover { background: var(--pool-tint); }
+/* ---------------------------------------------------------------- açılır menü, bildirimler */
+.menu { position: fixed; z-index: 60; background: var(--card); border: 2px solid var(--rule); border-radius: 16px; box-shadow: 5px 5px 0 var(--hard); padding: 6px; min-width: 210px; animation: pop .25s var(--spring) backwards; transform-origin: top left; }
+.menu .mi { display: block; width: 100%; border: 0; background: none; text-align: left; padding: 8px 12px; border-radius: 10px; font-weight: 600; }
+.menu .mi:hover, .menu .mi:focus { background: var(--lime); color: #121116; outline: 0; }
 .menu .mi.danger { color: var(--red); }
-#toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 70; max-width: min(420px, calc(100vw - 32px)); }
-.toast { background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); transition: opacity .25s, transform .25s; }
-.toast.error { background: var(--red); color: #fff; }
-.toast.warn { background: var(--amber); color: #fff; }
+.menu .mi.danger:hover, .menu .mi.danger:focus { background: var(--tomato); color: #fff; }
+#toasts { position: fixed; right: 22px; bottom: 22px; display: grid; justify-items: end; gap: 10px; z-index: 70; max-width: min(440px, calc(100vw - 44px)); }
+.toast { background: var(--lime); color: #121116; border: 2px solid #121116; border-radius: 999px; padding: 10px 20px; font-weight: 750; box-shadow: 4px 4px 0 #121116;
+  transition: opacity .3s, transform .3s var(--ease); animation: toast-in .55s var(--spring) backwards; }
+.toast.error { background: var(--tomato); color: #fff; border-radius: 18px; }
+.toast.warn { background: var(--sun); color: #121116; border-radius: 18px; }
+.toast.out { opacity: 0; transform: translateY(14px) scale(.96); }
 .reslist { margin: 4px 0 10px; padding-left: 18px; }
 .reslist li { margin-bottom: 6px; }
-.toast.out { opacity: 0; transform: translateY(6px); }
+.fab { position: fixed; left: 14px; bottom: 16px; z-index: 40; border-radius: 999px; }
 
-.fab { position: fixed; left: 12px; bottom: 14px; z-index: 40; background: var(--pool); color: var(--pool-ink); border-color: var(--pool); font-weight: 600; box-shadow: 0 4px 14px rgba(0, 0, 0, .28); }
-@media (max-width: 900px) {
-  .only-narrow { display: inline-block; }
-  .top { position: static; }
-  .shell { display: block; height: auto; }
-  aside { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 90vw); z-index: 30; transform: translateX(-102%); transition: transform .18s; box-shadow: 0 0 40px rgba(0, 0, 0, .3); visibility: hidden; }
-  body.side-open aside { transform: none; visibility: visible; }
-  body.side-open .fab { display: none; }
-  main { overflow: visible; padding: 14px 12px 90px; }
-  .card { padding: 16px 14px 20px; }
-  .hist, .gitgrid, .grid2 { grid-template-columns: 1fr; }
-  .meta { grid-template-columns: 1fr; gap: 4px; }
-  .meta > label { margin-top: 8px; }
-  .mkrow { grid-template-columns: 1fr; }
-}
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-
-/* kurulum, ayarlar */
-#mkCur { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------------------------------------------------------------- ağaç ayrıntıları, kurulum, paket */
 .sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
 .ic .dash { stroke-dasharray: 2 2; }
-.row.mp { font-weight: 600; padding-top: 6px; padding-bottom: 6px; }
-.row.mp.etkin { border-left-color: var(--pool); }
-.row.mp.etkin .name { font-weight: 700; }
-.row.mp.etkin .ic { color: var(--pool); }
-.row.soft { opacity: .75; }
+.row.active .ic { color: inherit; }
+.row.plugin[data-c] .ic { color: var(--ink); fill: var(--hue); }
+.row.plugin.active .ic { fill: #fff; }
+/* marketplace satırı: baş harfli renkli avatar */
+.av { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: var(--hue, var(--lime)); color: #121116; border: 2px solid var(--rule); font: 800 12.5px/1 var(--display); transition: transform .35s var(--spring); }
+.row.mp:hover .av { transform: rotate(-8deg) scale(1.08); }
+.row.mp { min-height: 40px; margin-top: 8px; font: 750 15px/1.2 var(--display); font-variation-settings: "opsz" 24; letter-spacing: -.02em; }
+.list > .row.mp:first-child { margin-top: 2px; }
+.row.mp.etkin .name { font-weight: 800; }
+.row.mp .pill.ok { color: #121116; background: var(--mint); border-color: var(--rule); font-family: var(--sans); letter-spacing: 0; }
+.row.soft { opacity: .7; }
 .row.note, .empty.note { padding-left: calc(30px + var(--d, 0) * 16px); }
+.empty.note { font-size: 13px; }
 .row .pill { flex: none; }
-.row .plus { border: 0; background: none; color: var(--muted); padding: 0 6px; border-radius: 4px; font-weight: 700; }
-.row .plus:hover, .row .more:hover { color: var(--pool-deep); background: var(--pool-tint); }
+.row .plus { border: 0; background: none; color: var(--muted); padding: 0 7px; border-radius: 8px; font-weight: 800; font-size: 15px; }
+.row .plus:hover, .row .more:hover { color: #121116; background: var(--lime); }
+.row.active .plus, .row.active .more { color: inherit; }
+.row.active .plus:hover, .row.active .more:hover { background: #121116; color: var(--lime); }
 .row .acts { margin-left: auto; display: flex; flex: none; opacity: 0; }
 .row:hover .acts, .row:focus-within .acts, .row.active .acts { opacity: 1; }
 @media (hover: none) { .row .acts { opacity: 1; } }
 .row .acts .more { margin-left: 0; opacity: 1; }
-.row[aria-selected="true"] { background: var(--pool-tint); }
 .tools { display: flex; gap: 2px; }
-.res[aria-selected="true"] { background: var(--pool-tint); }
-.menu .mi:focus { background: var(--pool-tint); outline: 0; }
-.crumbs .link { font-size: inherit; }
 .ptable { width: 100%; border-collapse: collapse; font-size: 13px; }
-.ptable th, .ptable td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.ptable caption { text-align: left; font-weight: 600; padding: 4px 0; }
-.pkrel { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.ptable th, .ptable td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ptable th { color: var(--muted); font-size: 12px; }
+.ptable caption { text-align: left; font: 750 16px/1.3 var(--display); padding: 4px 0 6px; }
+.pkrel { border: 2px solid var(--rule); border-radius: 20px; padding: 14px 16px; background: var(--card); box-shadow: 4px 4px 0 var(--hard); }
 /* Paket sayfası: ".stack label" (grid) ve ".stack input" (width:100%) kuralları radyo/onay kutusu satırlarını bozmasın */
 .pkrel .stack label.inline { display: flex; gap: 8px; align-items: center; }
 .pkrel .stack label.inline input { flex: none; }
 .pkrel .stack input[type=radio] { width: auto; padding: 0; border: revert; border-radius: revert; background: revert; margin: 0; }
-.pkdesc { display: flex; gap: 8px; align-items: center; min-width: 0; }
-.pkdesc input { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
-.warnband { display: flex; align-items: flex-start; gap: 10px; max-width: 980px; margin: 0 auto 14px; padding: 8px 12px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
+.pkdesc { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.pkdesc input { flex: 1; min-width: 0; }
+.warnband { display: flex; align-items: flex-start; gap: 10px; max-width: 1000px; margin: 0 auto 20px; padding: 10px 14px; border: 2px solid var(--rule); border-radius: 16px; background: color-mix(in srgb, var(--sun) 24%, var(--card)); }
 .warnband ul { margin: 0; padding: 0; list-style: none; flex: 1; }
-.setup-list { list-style: none; margin: 16px 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
-.setup-list li { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line2); }
-.setup-list li:last-child { border-bottom: 0; }
+.setup-list { list-style: none; margin: 18px 0; padding: 6px; border: 2px solid var(--rule); border-radius: 20px; background: var(--card); box-shadow: 5px 5px 0 var(--hard); }
+.setup-list li { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; }
+.setup-list li + li { border-top: 1px solid var(--line); }
 .setup-list .msg { flex: 1 1 280px; overflow-wrap: anywhere; }
-.start h1:focus { outline: 0; }
 #fmWarn { margin: 0 0 12px; }
-.lostedit { margin: 18px 0; padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; background: var(--code); }
-.lostedit h2 { font-size: 15px; margin: 0 0 6px; }
+.lostedit { margin: 18px 0; padding: 14px 16px; border: 2px solid var(--rule); border-radius: 18px; background: color-mix(in srgb, var(--sun) 22%, var(--card)); }
+.lostedit h2 { font: 750 16px/1.3 var(--display); margin: 0 0 6px; }
 .start .lostedit p { max-width: none; color: var(--ink); }
-.lostedit textarea { width: 100%; box-sizing: border-box; min-height: 140px; max-height: 40vh; font: 12.5px/1.5 var(--mono); padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--card); }
-.lostbtns { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.lostedit textarea { width: 100%; box-sizing: border-box; min-height: 140px; max-height: 40vh; font: 12.5px/1.5 var(--mono); padding: 8px 10px; border: 2px solid var(--field); border-radius: 12px; background: var(--card); }
+.lostbtns { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; }
 .mkrow.dim { opacity: .6; }
-.fieldset-plain { border: 0; margin: 0; padding: 0; min-width: 0; }
+.fieldset-plain { border: 0; margin: 0; padding: 0; min-width: 0; border-radius: 0; }
+.consq { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.row.dragging { opacity: .45; outline: 2px dashed var(--rule); outline-offset: -2px; }
+.row.drop-ok { background: var(--hue, var(--lime)); color: #121116; box-shadow: inset 0 0 0 2px var(--rule), 3px 3px 0 var(--hard);
+  transform: translate(-2px, -2px); transition: transform .25s var(--spring), box-shadow .25s var(--spring); }
+.row.drop-ok .cnt, .row.drop-ok .pill { color: #121116; border-color: #121116; background: transparent; }
+.row.drop-ok[data-c="2"], .row.drop-ok[data-c="2"] .cnt, .row.drop-ok[data-c="2"] .pill { color: var(--on-cobalt); border-color: var(--on-cobalt); }
+.row.drop-no { cursor: no-drop; box-shadow: inset 0 0 0 2px var(--tomato-ink);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tomato) 16%, transparent) 0 6px, transparent 6px 12px); }
+.dnd-hint { flex: none; display: flex; gap: 8px; align-items: center; margin: 6px 12px 10px; padding: 7px 12px; border: 2px solid var(--rule);
+  border-radius: 12px; background: var(--card); box-shadow: 3px 3px 0 var(--hard); font-weight: 700; font-size: 13px; animation: pop .25s var(--spring) backwards; }
+.dnd-hint .ic { color: inherit; }
+.dnd-hint.ok { background: color-mix(in srgb, var(--lime) 30%, var(--card)); }
+.dnd-hint.no { background: color-mix(in srgb, var(--tomato) 18%, var(--card)); }
+
+/* ---------------------------------------------------------------- hareket */
+@keyframes shape-pop { from { opacity: 0; transform: scale(0) rotate(-90deg); } to { opacity: 1; transform: none; } }
+@keyframes tile-in { from { opacity: 0; transform: translateY(26px) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(20px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(24px) scale(.8) rotate(-4deg); } to { opacity: 1; transform: none; } }
+@keyframes chip-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-12px) rotate(6deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes wiggle { 0%, 100% { transform: translateX(0) skewX(0); } 50% { transform: translateX(-10px) skewX(-8deg); } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+
+/* ---------------------------------------------------------------- dar ekran */
+@media (max-width: 1180px) {
+  .tile.hero { grid-column: 1 / -1; grid-row: auto; }
+  .tile.stat, .tile.types { grid-column: span 6; }
+  .tile.tags, .tile.front { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  body { display: block; height: auto; }
+  .only-narrow { display: inline-block; }
+  .top { padding: 10px 14px; }
+  .shell { display: block; height: auto; }
+  aside { position: fixed; top: 0; bottom: 0; left: 0; width: min(340px, 90vw); z-index: 30; transform: translateX(-102%); transition: transform .3s var(--ease); box-shadow: 8px 0 0 var(--hard); visibility: hidden; }
+  body.side-open aside { transform: none; visibility: visible; }
+  body.side-open .fab { display: none; }
+  main { overflow: visible; padding: 20px 14px 96px; }
+  .card { padding: 18px 16px 22px; border-radius: 20px; box-shadow: 4px 4px 0 var(--hard); }
+  .hist, .gitgrid, .grid2 { grid-template-columns: 1fr; }
+  .meta { grid-template-columns: 1fr; gap: 4px; }
+  .meta > label { margin-top: 10px; }
+  details.pub .meta, details.pub > .issue, .pubfoot, .ccnotes { padding-left: 16px; margin-left: 0; }
+  details.pub .meta, details.pub details.ccmore .meta { grid-template-columns: 1fr; }
+  details.pub .meta.cc { gap: 4px; }
+  details.pub .meta.cc > label { padding-top: 0; }
+  details.ccmore { margin-left: 16px; }
+  .mkrow { grid-template-columns: 1fr; }
+  .tile.stat, .tile.types { grid-column: 1 / -1; }
+  .tile.hero { padding: 28px 22px 24px; min-height: 0; }
+  .hero-txt { max-width: none; padding-top: 70px; }
+  .shapes { width: 60%; bottom: auto; height: 120px; }
+  .shapes .s2, .shapes .s4, .shapes .s5 { display: none; }
+  .shapes .s1 { width: 120px; height: 120px; right: -40px; top: -40px; }
+  .shapes .s3 { right: 110px; top: 22px; width: 50px; height: 50px; border-width: 10px; }
+  .shapes .s6 { left: 20%; top: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 </style>
 </head>
 <body>
 <header class="top">
   <div class="brand">
-    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 12c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0M3 20c3.3-3.4 6.7-3.4 10 0s6.7 3.4 10 0 6-3 9 0" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg>
+    <svg class="mark" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><circle class="m1" cx="8.5" cy="8.5" r="7"/><path class="m2" d="M17 16V2a14 14 0 0 1 14 14z"/><rect class="m3" x="2" y="18" width="13" height="13" rx="3"/><path class="m4" d="M17 30a7 7 0 0 1 14 0z"/></svg>
     <span data-i18n="ui.static.brand"></span>
   </div>
   <button class="btn" id="mkCur" type="button" data-act="goto-active" aria-live="polite" data-i18n-title="ui.static.goActive"></button>
@@ -351,7 +610,7 @@ details summary { cursor: pointer; }
           <option value="" data-i18n="ui.static.allStatuses"></option><option value="taslak" data-i18n="ui.static.statusDraft"></option><option value="kararlı" data-i18n="ui.static.statusStable"></option><option value="arşiv" data-i18n="ui.static.statusArchived"></option>
         </select>
         <select id="fTur" data-i18n-aria-label="ui.static.filterTypeLabel">
-          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.notPublished"></option>
+          <option value="" data-i18n="ui.static.allTypes"></option><option value="komut" data-i18n="ui.static.typeCommand"></option><option value="ajan" data-i18n="ui.static.typeAgent"></option><option value="skill" data-i18n="ui.static.typeSkill"></option><option value="yok" data-i18n="ui.static.typePrompt"></option>
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="fScope"><span data-i18n="ui.static.searchInFiles"></span></label>
@@ -368,6 +627,7 @@ details summary { cursor: pointer; }
       <span id="why-mp" class="sr"></span><span id="why-plugin" class="sr"></span><span id="why-prompt" class="sr"></span>
     </div>
     <div id="list" class="list" role="tree" data-i18n-aria-label="ui.static.library"></div>
+    <div id="dndHint" class="dnd-hint" role="status" aria-live="polite" hidden></div>
   </aside>
   <main id="main"></main>
 </div>
@@ -408,6 +668,14 @@ const base = (p) => p.split('/').pop();
 const stem = (p) => base(p).replace(/\.[^.]+$/, '');
 const normTur = Rules.normTur;
 const durumClass = (d) => { const f = fold(d || ''); return f === 'taslak' ? 'taslak' : f === 'kararli' ? 'kararli' : f === 'arsiv' ? 'arsiv' : ''; };
+
+/** Summary: Ad -> 0..5 renk kodu (data-c). Aynı marketplace/plugin/etiket her yerde aynı renkte görünür; yalnızca görünüm içindir. */
+function hueOf(s) {
+  let h = 2166136261; // FNV-1a
+  for (const ch of String(s || '').toLowerCase()) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); }
+  h ^= h >>> 15;
+  return (h >>> 0) % 6;
+}
 
 /** Summary: Çeviri işlevi (düz metin); HTML için I18n.th kullanılır. */
 const tx = I18n.tx;
@@ -528,7 +796,7 @@ function hl(text, tokens) {
   return out + esc(text.slice(pos));
 }
 
-function autosize(el) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(300, el.scrollHeight + 4) + 'px'; }
+function autosize(el, min = 300) { if (!el) return; el.style.height = 'auto'; el.style.height = Math.max(min, el.scrollHeight + 4) + 'px'; }
 
 /* --------------------------------------------------------------------- durum */
 const S = {
@@ -543,6 +811,7 @@ const S = {
   results: null, resultsInfo: null, // resultsInfo: { total, limit, truncated } (sunucu 300'de keser)
   cur: null, git: null, tagsAll: false, recent: [], gitSel: null, mk: null,
   warnHidden: false,
+  drag: null,
   openSeq: 0,             // openFile çağrı sayacı: yavaş eski yanıt yenisini ezmesin
   lostEdit: null          // kurulum bozulunca kurtarılan kaydedilmemiş metin: { mp, path, raw, commitMsg }
 };
@@ -559,7 +828,7 @@ const activeMp = () => { const m = mpByName(activeName()); return m && m.state =
 const pluginsOf = (mp) => { const m = typeof mp === 'string' ? mpByName(mp) : mp; return m ? m.plugins : []; };
 const libDirOf = (mp) => {
   const m = mpByName(mp || activeName());
-  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || 'library';
+  return (m && m.libraryDir) || (S.info && S.info.config && S.info.config.libraryDir) || Rules.LIBRARY_DIR;
 };
 const pathSep = () => ((S.lib && S.lib.libraryRoot) || (S.info && S.info.libraryRoot) || '').includes('\\') ? '\\' : '/';
 
@@ -641,7 +910,7 @@ async function refreshAll() {
 function renderFilters() {
   const tags = S.facets.tags;
   const shown = S.tagsAll ? tags : tags.slice(0, 14);
-  let h = shown.map((t) => `<button class="tagbtn ${S.f.tags.some((x) => fold(x) === fold(t.name)) ? 'on' : ''}" data-act="tag" data-tag="${esc(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('');
+  let h = shown.map((t) => `<button class="tagbtn ${S.f.tags.some((x) => fold(x) === fold(t.name)) ? 'on' : ''}" data-act="tag" data-tag="${esc(t.name)}" data-c="${hueOf(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('');
   if (tags.length > 14) h += `<button class="tagbtn" data-act="tags-all">${esc(S.tagsAll ? tx('ui.filters.showLess') : tx('ui.filters.allTags', { count: tags.length }))}</button>`;
   $('#tagbar').innerHTML = h;
   const opt = (arr) => arr.map((x) => `<option value="${esc(x)}">`).join('');
@@ -723,15 +992,16 @@ function rowHtml(it, focusKey) {
     return `<div class="empty note" style="--d:${d}" data-note>${esc(it.text)}${it.action ? ` <button class="btn sm" data-act="${it.action}" data-mp="${esc(it.mp)}">${esc(it.actionLabel)}</button>` : ''}</div>`;
   }
   const cur = S.cur && isFileKind(it.kind) && S.cur.mp === it.mp && S.cur.path === it.path;
-  const selected = cur || (S.sel && S.sel.key === it.key);
+  const selected = S.sel && S.modelMap && S.modelMap.has(S.sel.key) ? S.sel.key === it.key : cur;
   const isEtkin = it.kind === 'mp' && it.node.active;
-  let icon = ICON[it.kind] || ''; let label = ''; let pills = ''; let sr = ''; let acts = ''; let cls = '';
+  let icon = ICON[it.kind] || ''; let label = ''; let pills = ''; let sr = ''; let acts = ''; let cls = ''; let hue = null;
   const btn = (act, txt, aria) => `<button class="${act === 'plus' ? 'plus' : 'more'}" data-act="${act}" data-key="${esc(it.key)}" tabindex="-1" aria-label="${esc(aria)}">${txt}</button>`;
   const cnt = (n) => `<span class="cnt">${n}</span>`;
   switch (it.kind) {
     case 'mp': {
       const m = it.node; const bad = m.state !== 'hazir';
-      label = esc(m.name); cls = ' mp' + (isEtkin ? ' etkin' : '');
+      label = esc(m.name); cls = ' mp' + (isEtkin ? ' etkin' : ''); hue = hueOf(m.name);
+      icon = `<span class="av" aria-hidden="true">${esc((Array.from(m.name)[0] || '?').toUpperCase())}</span>`;
       pills = (isEtkin ? `<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>` : '') + (bad ? `<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: m.reason || '' }))}</span>` : cnt(m.count))
         + (m.yayinUyari ? `<span class="pill warn" title="${esc(tx('ui.common.wontPublish', { count: Number(m.yayinUyari) }))}">${esc(tx('ui.tree.warningCount', { count: Number(m.yayinUyari) }))}</span>` : '');
       sr = isEtkin ? tx('ui.tree.srMarketplaceActive') : tx('ui.tree.srMarketplace');
@@ -740,7 +1010,7 @@ function rowHtml(it, focusKey) {
       break;
     }
     case 'plugin': {
-      const p = it.node; label = esc(p.name);
+      const p = it.node; label = esc(p.name); hue = hueOf(p.name);
       pills = cnt(p.count);
       if (p.nameIssue) pills += p.nameIssue.level === 'error' ? `<span class="pill bad" title="${esc(p.nameIssue.message)}">!</span>` : `<span class="pill" title="${esc(p.nameIssue.message)}">${esc(p.nameIssue.message.toLocaleLowerCase(I18n.locale()))}</span>`;
       sr = tx('ui.tree.srPlugin');
@@ -758,7 +1028,7 @@ function rowHtml(it, focusKey) {
       acts = `<button class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(it.node.name)}" tabindex="-1">${th('ui.tree.initGit')}</button>`; break;
     case 'tfile': label = esc(it.node.name); icon = ''; cls = ' soft'; acts = menuItemsFor(it).length ? btn('menu', '⋯', tx('ui.tree.actionsFor', { name: it.node.name })) : ''; break;
     default: { // file
-      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name;
+      const m = it.node.meta; const txt = m && m.baslik ? m.baslik : it.node.name.replace(/\.(md|markdown)$/i, '');
       label = esc(txt);
       icon = `<span class="dot ${m ? durumClass(m.durum) : ''}"></span>`;
       pills = (m && m.tur ? `<span class="pill">${esc(turLabel(m.tur))}</span>` : '')
@@ -772,7 +1042,7 @@ function rowHtml(it, focusKey) {
   const caret = it.expandable ? `<span class="caret ${it.expanded ? 'open' : ''}"></span>` : '<span class="caret" style="visibility:hidden"></span>';
   const title = it.kind === 'loose' ? tx('ui.tree.looseTitle', { plugin: (it.mpNode && it.mpNode.defaultPlugin) || (mpByName(it.mp) || {}).defaultPlugin || '' })
     : isFileKind(it.kind) ? it.path : it.kind === 'plugin' ? (it.node.description || it.node.name) : '';
-  return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node" tabindex="${it.key === focusKey ? 0 : -1}"
+  return `<div class="row ${it.kind}${cls}${cur ? ' active' : ''}${S.drag && S.drag.key === it.key ? ' dragging' : ''}" role="treeitem" data-key="${esc(it.key)}" data-act="node"${it.kind === 'plugin' || (it.kind === 'file' && /\.(md|markdown)$/i.test(it.path)) ? ' draggable="true"' : ''}${hue === null ? '' : ` data-c="${hue}"`} tabindex="${it.key === focusKey ? 0 : -1}"
     aria-level="${it.level}" aria-posinset="${it.posinset}" aria-setsize="${it.setsize}" ${it.expandable ? `aria-expanded="${it.expanded}"` : ''} ${selected ? 'aria-selected="true"' : ''}
     style="--d:${d}" ${title ? `title="${esc(title)}"` : ''}>${it.expandable || it.level > 1 ? caret : caret}${icon}<span class="name">${label}${sr ? `<span class="sr">${esc(sr)}</span>` : ''}</span>${pills}${acts ? `<span class="acts">${acts}</span>` : ''}</div>`;
 }
@@ -804,7 +1074,7 @@ function resultsHtml() {
     <div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${hl(r.baslik, tokens)}</span>${r.tur ? `<span class="pill">${esc(turLabel(r.tur))}</span>` : ''}</div>
     <div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div>
     ${r.snippet ? `<div class="rs">${hl(r.snippet, tokens)}</div>` : ''}
-    ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}</div>`;
+    ${r.etiketler.length ? `<div class="rtags">${r.etiketler.map((t) => `<span class="pill" data-c="${hueOf(t)}">${esc(t)}</span>`).join('')}</div>` : ''}</div>`;
   }).join('');
 }
 
@@ -847,7 +1117,9 @@ function renderList() {
     if (fri != null) { const el = list.querySelector('[data-ri="' + fri + '"]'); if (el) el.focus(); }
   } else {
     list.setAttribute('role', 'tree'); list.setAttribute('aria-label', tx('ui.static.library'));
+    const keep = S.drag ? rowEl(S.drag.key) : null;
     list.innerHTML = treeHtml();
+    if (S.drag) keepDragSource(keep);
     $('#listTitle').textContent = tx('ui.tree.listTitle', { count: S.facets.total || 0 });
     if (fk) { const el = rowEl(fk); if (el) el.focus(); }
   }
@@ -1007,9 +1279,9 @@ function showMenu(x, y, items, returnKey) {
   const first = $('.mi', m); if (first) first.focus();
 }
 
-// Marketplace yapısının parçası olan yollar (pp.config.json, plugins/, .claude-plugin/, libraryDir ...) silinemez ya da taşınamaz:
+// Marketplace yapısının parçası olan yollar (plugins/, .claude-plugin/, prompts/ ...) silinemez ya da taşınamaz:
 // sunucu 403 korunanYol döner, menüde de bu işlemler gösterilmez. Kural Rules.isProtectedPath'te (sunucuyla ortak).
-const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-delete-plugin'];
+const PROTECTED_ACTS = ['rename', 'delete', 'm-rename-file', 'm-move', 'm-rename-plugin', 'm-move-plugin', 'm-delete-plugin'];
 const isProtectedItem = (it) => !!it.path && Rules.isProtectedPath(it.path, libDirOf(it.mp));
 
 // Düğüm türüne göre bağlam menüsü öğeleri.
@@ -1024,15 +1296,15 @@ function menuItemsFor(it) {
       break;
     case 'plugin':
       items.push(mk(tx('ui.menu.newPrompt'), 'm-new-prompt', { name: it.node.name }), mk(tx('ui.menu.openPackage'), 'open-package', { name: it.node.name }), mk(tx('ui.menu.editDescription'), 'm-desc', { name: it.node.name }),
-        mk(tx('ui.menu.rename'), 'm-rename-plugin', { name: it.node.name }), mk(tx('ui.menu.deleteToTrash'), 'm-delete-plugin', { name: it.node.name, danger: true }));
+        mk(tx('ui.menu.rename'), 'm-rename-plugin', { name: it.node.name }), mk(tx('ui.menu.movePlugin'), 'm-move-plugin', { name: it.node.name }),
+        mk(tx('ui.menu.deleteToTrash'), 'm-delete-plugin', { name: it.node.name, danger: true }));
       break;
     case 'dir':
       items.push(mk(tx('ui.menu.renameOrMove'), 'rename'), mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
     case 'file': {
       if (/\.(md|markdown)$/i.test(it.path)) {
-        const loose = Rules.classifyPromptPath(it.path, libDirOf(it.mp)).kind === 'klasorsuz';
-        items.push(mk(loose ? tx('ui.menu.moveToPlugin') : tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
+        items.push(mk(tx('ui.menu.move'), 'm-move'), mk(tx('ui.menu.rename'), 'm-rename-file'));
       } else items.push(mk(tx('ui.menu.renameOrMove'), 'rename'));
       items.push(mk(tx('ui.menu.deleteToTrash'), 'delete', { danger: true }));
       break;
@@ -1165,7 +1437,7 @@ function closeSide() { document.body.classList.remove('side-open'); }
 
 /* --------------------------------------------------------------------- ana alan */
 function chipsHtml(key, list, ph) {
-  return `<div class="chips" data-chips="${key}">${list.map((t) => `<span class="chip">${esc(t)}<button type="button" data-act="chip-x" data-key="${key}" data-val="${esc(t)}" aria-label="${esc(tx('ui.edit.chipRemove', { value: t }))}">×</button></span>`).join('')}<input class="chip-in" data-chip-in="${key}" list="dl-${key}" placeholder="${esc(ph)}" autocomplete="off" aria-label="${esc(ph)}"></div>`;
+  return `<div class="chips" data-chips="${key}">${list.map((t) => `<span class="chip" data-c="${hueOf(t)}">${esc(t)}<button type="button" data-act="chip-x" data-key="${key}" data-val="${esc(t)}" aria-label="${esc(tx('ui.edit.chipRemove', { value: t }))}">×</button></span>`).join('')}<input class="chip-in" data-chip-in="${key}" list="dl-${key}" placeholder="${esc(ph)}" autocomplete="off" aria-label="${esc(ph)}"></div>`;
 }
 
 function curCheck() {
@@ -1194,9 +1466,17 @@ function pubPill() {
   return `<span class="pill warn">${esc(tx('ui.edit.pillNotYetPublished'))}</span>`;
 }
 
+/** Summary: "Claude Code'da çağır" kullanım satırı (HTML); sunucu yayın bilgisi yoksa ya da seçili tür yayınlanmayan bir değerdeyse (prompt, boş) boş döner. */
+function pubUsageHtml() {
+  const c = S.cur; const p = c && c.publish;
+  if (!p || !normTur(FM.meta(c.parsed).tur)) return '';
+  return p.tur === 'ajan' ? th('ui.edit.usageAgent', { name: p.ad }) : th('ui.edit.usageCommand', { paket: p.paket, name: p.ad });
+}
+
 function editPaneHtml() {
   const c = S.cur; const m = FM.meta(c.parsed);
   const tur = normTur(m.tur);
+  const turShown = Rules.turOf(m.tur);
   const shownBody = c.parsed.body.slice(c.lead.length);
   const chk = curCheck();
   const nt = curNotice();
@@ -1207,9 +1487,6 @@ function editPaneHtml() {
   const dOpt = [['taslak', tx('ui.static.statusDraft')], ['kararlı', tx('ui.static.statusStable')], ['arşiv', tx('ui.static.statusArchived')]];
   const known = dOpt.some((d) => fold(d[0]) === durumVal);
   const mk = S.info.config.marketplace;
-  const usage = c.publish ? (c.publish.tur === 'ajan'
-    ? th('ui.edit.usageAgent', { name: c.publish.ad })
-    : th('ui.edit.usageCommand', { paket: c.publish.paket, name: c.publish.ad })) : '';
   // Aynı anahtar birden fazla yazılmışsa sonuncusu geçerlidir; yayını engellemez, yalnızca uyarır.
   const dup = FM.duplicateKeys(c.parsed);
   const dupWarn = dup.length ? `<div id="fmWarn" class="issue warn" role="status">${esc(Rules.MSG.anahtarTekrar(dup))}</div>` : '';
@@ -1233,23 +1510,110 @@ function editPaneHtml() {
     <div class="meta">
       <label for="pTur">${esc(tx('ui.fields.type'))}</label>
       <select id="pTur" data-f="tur">
-        <option value="">${esc(tx('ui.static.notPublished'))}</option>
-        ${rawTur && !tur ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        ${rawTur ? '' : `<option value="" selected hidden>${esc(tx('ui.edit.turImplicitPrompt'))}</option>`}
+        ${rawTur && !turShown ? `<option value="${esc(rawTur)}" selected>${th('ui.edit.turUnrecognized', { value: rawTur })}</option>` : ''}
+        <option value="prompt" ${rawTur && turShown === 'prompt' ? 'selected' : ''}>${esc(tx('ui.edit.turPromptOption'))}</option>
         <option value="komut" ${tur === 'komut' ? 'selected' : ''}>${esc(tx('ui.edit.turCommandOption'))}</option>
         <option value="ajan" ${tur === 'ajan' ? 'selected' : ''}>${esc(tx('ui.edit.turAgentOption'))}</option>
         <option value="skill" ${tur === 'skill' ? 'selected' : ''}>${esc(tx('ui.static.typeSkill'))}</option>
       </select>
-      <label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>
-      <label for="pAd">${esc(tx('ui.fields.name'))}</label><input id="pAd" data-f="komut_adi" value="${esc(str(m.komut_adi))}" placeholder="${esc(FM.slug(stem(c.path)))}">
-      <label for="pAcik">${esc(tx('ui.fields.description'))}</label><input id="pAcik" data-f="aciklama" value="${esc(str(m.aciklama))}" placeholder="${esc(tx('ui.edit.descriptionPlaceholder'))}">
-      <label for="pArg">${esc(tx('ui.fields.argumentHint'))}</label><input id="pArg" data-f="arguman_ipucu" value="${esc(str(m.arguman_ipucu))}" placeholder="${esc(tx('ui.edit.argumentHintPlaceholder'))}">
-      <label for="pArac">${esc(tx('ui.fields.allowedTools'))}</label><input id="pArac" data-f="izinli_araclar" value="${esc(str(m.izinli_araclar))}" placeholder="Bash(git diff:*), Read">
-      <label for="pModel">${esc(tx('ui.fields.model'))}</label><input id="pModel" data-f="model" value="${esc(str(m.model))}" placeholder="sonnet">
     </div>
-    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${usage}</span></div>
+    <div id="pubFields">${pubFieldsHtml()}</div>
+    <div class="pubfoot"><button type="button" class="btn" data-act="open-package" data-name="${esc(pkgCl.paket || FM.slug(mk.plugin))}">${esc(tx('ui.menu.openPackage'))}</button><span class="hint" id="pubUsage">${pubUsageHtml()}</span></div>
   </details>
   <div class="bodywrap"><textarea id="fBody" spellcheck="false" aria-label="${esc(tx('ui.edit.bodyLabel'))}" placeholder="${esc(tx('ui.edit.bodyPlaceholder', { example: '{{' + tx('ui.edit.exampleVar') + '}}' }))}">${esc(shownBody)}</textarea></div>
   <div class="bodyinfo" id="bodyInfo"></div>`;
+}
+
+/** Summary: Claude Code alanı -> ipucu sözlük anahtarı (türe göre değişenler tür başına). */
+const CC_HINT_KEYS = { name: { komut: 'ui.cc.nameCommand', skill: 'ui.cc.nameSkill', ajan: 'ui.cc.nameAgent' }, description: { komut: 'ui.cc.descriptionCommand', skill: 'ui.cc.descriptionCommand', ajan: 'ui.cc.descriptionAgent' }, when_to_use: 'ui.cc.whenToUse', 'argument-hint': 'ui.cc.argumentHint', arguments: 'ui.cc.arguments', 'disable-model-invocation': 'ui.cc.disableModelInvocation', 'user-invocable': 'ui.cc.userInvocable', 'allowed-tools': 'ui.cc.allowedTools', 'disallowed-tools': 'ui.cc.disallowedTools', model: 'ui.cc.model', effort: 'ui.cc.effort', context: 'ui.cc.context', agent: 'ui.cc.agent', background: { komut: 'ui.cc.backgroundSkill', skill: 'ui.cc.backgroundSkill', ajan: 'ui.cc.backgroundAgent' }, paths: 'ui.cc.paths', shell: 'ui.cc.shell', license: 'ui.cc.license', compatibility: 'ui.cc.compatibility', tools: 'ui.cc.tools', disallowedTools: 'ui.cc.agentDisallowedTools', maxTurns: 'ui.cc.maxTurns', autoCompactWindow: 'ui.cc.autoCompactWindow', skills: 'ui.cc.skills', memory: 'ui.cc.memory', omitClaudeMd: 'ui.cc.omitClaudeMd', isolation: 'ui.cc.isolation', color: 'ui.cc.color' };
+
+/** Summary: Claude Code alanının geçerli dildeki ipucu metni; ipucu tanımlı değilse boş döner. */
+function ccHint(key, tur) {
+  const e = Object.prototype.hasOwnProperty.call(CC_HINT_KEYS, key) ? CC_HINT_KEYS[key] : null;
+  const k = e && (typeof e === 'string' ? e : e[tur]);
+  return k ? tx(k) : '';
+}
+
+/** Summary: Claude Code alanı için etiket (gerçek anahtar adı), girdi ve ipucu işaretlemesi. */
+function ccFieldHtml(f, tur) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const id = 'cc-' + f.key;
+  const val = Rules.ccValue(m, f.key, tur);
+  const text = str(val).trim();
+  const attrs = `id="${id}" data-f="${f.key}" aria-describedby="${id}-h"`;
+  const unknown = (v) => `<option value="${esc(v)}" selected>${th('ui.edit.ccUnrecognized', { value: v })}</option>`;
+  const empty = `<option value="">${esc(tx('ui.edit.ccEmptyOption'))}</option>`;
+  let ctl;
+  if (f.kind === 'bool') {
+    const b = Rules.ccBool(val);
+    ctl = `<select ${attrs}>${empty}<option value="true" ${b === true ? 'selected' : ''}>true</option><option value="false" ${b === false ? 'selected' : ''}>false</option>${text && b === null ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'enum') {
+    ctl = `<select ${attrs}>${empty}${f.values.map((v) => `<option value="${esc(v)}" ${text === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}${text && !f.values.includes(text) ? unknown(text) : ''}</select>`;
+  } else if (f.kind === 'list') {
+    ctl = `<textarea ${attrs} class="cclist" rows="2" spellcheck="false" placeholder="${esc(tx('ui.edit.ccListPlaceholder'))}">${esc(Rules.ccList(f, val).join('\n'))}</textarea>`;
+  } else {
+    const ph = f.key === 'name' ? FM.slug(stem(c.path)) : f.key === 'description' ? tx('ui.edit.descriptionPlaceholder') : f.key === 'argument-hint' ? tx('ui.edit.argumentHintPlaceholder')
+      : ({ 'allowed-tools': 'Bash(git diff:*), Read', tools: 'Read, Grep, Glob', model: 'sonnet' })[f.key] || '';
+    ctl = `<input ${attrs} value="${esc(str(val))}" placeholder="${esc(ph)}" autocomplete="off"${f.kind === 'int' ? ' inputmode="numeric"' : ''}${f.maxLength ? ` maxlength="${f.maxLength}"` : ''}${f.key === 'model' ? ' list="dl-cc-model"' : ''}>`;
+  }
+  return `<label for="${id}" class="cckey">${esc(f.key)}</label><div>${ctl}<div id="${id}-h" class="hint">${esc(ccHint(f.key, tur))}</div></div>`;
+}
+
+/** Summary: Türe göre Claude Code alanları bölmesi (paket satırı, temel alanlar, diğer alanlar, notlar); tür yayınlanabilir değilse boş. */
+function pubFieldsHtml(forceOpen) {
+  const c = S.cur; const m = FM.meta(c.parsed);
+  const tur = normTur(m.tur);
+  if (!tur) return '';
+  const mk = S.info.config.marketplace;
+  const pkgCl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  const fields = Rules.ccFieldsFor(tur);
+  const more = fields.filter((f) => f.group === 'diger');
+  const rawKeys = fields.filter((f) => f.group === 'ham').map((f) => f.key);
+  const ignored = Rules.CC_PLUGIN_IGNORED[tur] || [];
+  const unused = Rules.ccUnusedKeys(m, tur);
+  const open = !!forceOpen || more.some((f) => str(Rules.ccValue(m, f.key, tur)).trim() !== '');
+  const pkgRow = `<label for="pPaket">${esc(tx('ui.fields.package'))}</label><div>${pkgCl.kind === 'paket' ? `<span id="pPaket" class="mono" tabindex="0">${esc(tx('ui.edit.packageFromFolder', { name: pkgCl.paket }))}</span>` : `<input id="pPaket" data-f="paket" list="dl-paket" value="${esc(str(m.paket))}" placeholder="${esc(tx('ui.edit.packageDefault', { name: mk.plugin }))}" aria-describedby="paketHint">`}<div id="paketHint" class="issue warn" role="status" hidden></div></div>`;
+  const notes = (rawKeys.length ? `<p class="hint">${esc(tx('ui.edit.ccRawOnly', { keys: rawKeys.join(', ') }))}</p>` : '')
+    + (ignored.length ? `<p class="hint">${esc(tx('ui.edit.ccPluginIgnored', { keys: ignored.join(', ') }))}</p>` : '')
+    + (unused.length ? `<p class="issue info">${esc(tx('ui.edit.ccUnused', { keys: unused.join(', ') }))}</p>` : '');
+  return `<div class="meta cc">${pkgRow}${fields.filter((f) => f.group === 'temel').map((f) => ccFieldHtml(f, tur)).join('')}</div>
+    <details class="ccmore" ${open ? 'open' : ''}><summary>${esc(tx('ui.edit.ccMore'))}</summary><div class="meta cc">${more.map((f) => ccFieldHtml(f, tur)).join('')}</div></details>
+    <datalist id="dl-cc-model">${['inherit', 'sonnet', 'opus', 'haiku', 'fable'].map((v) => `<option value="${v}"></option>`).join('')}</datalist>
+    ${notes ? `<div class="ccnotes">${notes}</div>` : ''}`;
+}
+
+/** Summary: Claude Code alanının tanımı (önce açık dosyanın türünün alanı, yoksa spec'teki kendi tanımı, böylece değer o anki türe bağlı yorumlanmaz); alan değilse null döner. */
+function ccFieldOf(key) {
+  return Rules.ccField(key, Rules.normTur(FM.meta(S.cur.parsed).tur)) || null;
+}
+
+/** Summary: Odaktaki yayın alanı girdisinin değerini, tür değişip bölme yeniden çizilmeden önce açık dosyaya yazar. */
+function flushFocusedField() {
+  const ae = document.activeElement;
+  if (!S.cur || !ae || !ae.dataset || !ae.dataset.f || ae.dataset.f === 'tur' || !ae.closest('#pubFields')) return;
+  setField(ae.dataset.f, ae.value);
+}
+
+/** Summary: Girdi metnini alanın yazılacak değerine çevirir (bool -> boolean, liste -> satır dizisi, diğerleri kırpılmış metin). */
+function ccInputValue(f, raw) {
+  const v = typeof raw === 'string' ? raw : str(raw);
+  if (f.kind === 'bool') return v.trim() === 'true' ? true : v.trim() === 'false' ? false : v.trim();
+  if (f.kind === 'list') return v.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  return v.trim();
+}
+
+/** Summary: Liste alanlarının yüksekliğini içeriğe uydurur. */
+function sizeCcLists(root) { $$('textarea.cclist', root).forEach((t) => autosize(t, 44)); }
+
+/** Summary: Claude Code alanları bölmesini yeniden çizer (tür değişince); "diğer alanlar" açıksa açık kalır. */
+function paintPubFields() {
+  const c = S.cur; const box = $('#pubFields'); if (!c || !box) return;
+  const more = $('details.ccmore', box);
+  box.innerHTML = pubFieldsHtml(!!(more && more.open));
+  sizeCcLists(box);
+  paintPaketHint();
+  const u = $('#pubUsage'); if (u) u.innerHTML = pubUsageHtml();
 }
 
 function bodyInfoText() {
@@ -1349,7 +1713,8 @@ function renderMainInner() {
   if (c.tab === 'edit' && c.isPrompt) pane = editPaneHtml();
   else if (c.tab === 'hist') pane = histPaneHtml();
   else pane = rawPaneHtml();
-  main.innerHTML = `<section class="card">
+  const cl = Rules.classifyPromptPath(c.path, libDirOf(c.mp));
+  main.innerHTML = `<section class="card" data-c="${hueOf(cl.kind === 'paket' ? cl.klasor : c.mp)}">
     <div class="crumbs">${crumbs}</div>
     <div class="titlebar">${title}
       <div class="tbtns">${c.isMd ? `<button class="btn" data-act="copy" title="${esc(tx('ui.main.copyTitle'))}">${esc(tx('ui.main.copy'))}</button>` : ''}<button class="btn primary" id="btnSave" data-act="save" ${c.dirty || (uncommitted(c.path) && c.commitMsg.trim()) ? '' : 'disabled'} title="Ctrl+S">${esc(saveLabel())}</button></div>
@@ -1362,29 +1727,53 @@ function renderMainInner() {
     ${staleBanner}${banner}${ext}${restore}
     <div class="tabs" role="tablist">${tabs.map((t) => `<button class="tab ${c.tab === t[0] ? 'on' : ''}" role="tab" aria-selected="${c.tab === t[0]}" data-act="tab" data-tab="${t[0]}">${esc(t[1])}</button>`).join('')}</div>
     <div class="pane" id="pane">${pane}</div></section>`;
-  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); }
+  if (c.tab === 'edit') { autosize($('#fBody')); $('#bodyInfo').innerHTML = bodyInfoText(); paintPaketHint(); sizeCcLists(); }
   if (c.tab === 'raw') autosize($('#fRaw'));
   if (c.tab === 'hist') paintHist();
   paintVerHint(); paintVerWarn();
 }
 
+// Ön sayfa (bento): başlık karosu (süs şekilleri aria-hidden), durum ve tür sayımları, tıklanabilir etiketler, son değişenler.
+// Sayım etiketleri mevcut sözlük anahtarlarıdır; renkler plugin/etiket adından (hueOf) gelir.
 function startHtml() {
-  const n = S.facets.total;
+  const n = Number(S.facets.total) || 0;
+  const F = S.facets || {};
+  const sum = (list, pick) => (list || []).filter(pick).reduce((a, x) => a + x.count, 0);
   const recent = S.recent.length
-    ? `<h2>${esc(tx('ui.main.recent'))}</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div></div>`).join('')}</div>` : '';
-  return `<div class="start"><h1>${esc(n ? tx('ui.main.startPick') : tx('ui.main.startEmpty'))}</h1>
+    ? `<section class="tile front"><h2>${esc(tx('ui.main.recent'))}</h2><div class="recent">${S.recent.map((r) => `<div class="res" role="button" tabindex="0" data-act="open" data-mp="${esc(r.mp)}" data-path="${esc(r.path)}" data-c="${hueOf(r.plugin || r.mp)}"><div class="rt"><span class="dot ${durumClass(r.durum)}"></span><span>${esc(r.baslik)}</span></div><div class="rp">${esc(r.mp)} › ${esc(whereOf(r))} › ${esc(base(r.path))}</div></div>`).join('')}</div></section>` : '';
+  const shapes = '<div class="shapes" aria-hidden="true"><i class="s1"></i><i class="s2"></i><i class="s3"></i><i class="s4"></i><i class="s6"></i><svg class="s5" viewBox="0 0 130 26"><polyline points="3,20 19,6 35,20 51,6 67,20 83,6 99,20 115,6 127,16"/></svg></div>';
+  const hero = `<section class="tile hero">${shapes}<div class="hero-txt"><h1>${esc(n ? tx('ui.main.startPick') : tx('ui.main.startEmpty'))}</h1>
     <p>${esc(n ? tx('ui.main.startIntro', { count: n }) : tx('ui.main.startEmptyHint'))}</p>
-    <div class="btns"><button class="btn primary" data-act="new-prompt">${esc(tx('ui.static.newPrompt'))}</button><button class="btn" data-act="import">${esc(tx('ui.main.importTxt'))}</button></div>${recent}</div>`;
+    <div class="btns"><button class="btn primary" data-act="new-prompt">${esc(tx('ui.static.newPrompt'))}</button><button class="btn" data-act="import">${esc(tx('ui.main.importTxt'))}</button></div></div></section>`;
+  let stats = '';
+  if (n) {
+    const st = [['kararli', tx('ui.static.statusStable')], ['taslak', tx('ui.static.statusDraft')], ['arsiv', tx('ui.static.statusArchived')]]
+      .map(([k, label]) => [k, label, sum(F.durum, (x) => durumClass(x.name) === k)]);
+    st.push(['bos', tx('ui.mp.statusEmpty'), Math.max(0, n - st.reduce((a, x) => a + x[2], 0))]);
+    const shown = st.filter((x) => x[2] > 0);
+    const types = [['komut', tx('ui.static.typeCommand')], ['ajan', tx('ui.static.typeAgent')], ['skill', tx('ui.static.typeSkill')]]
+      .map(([k, label]) => [label, sum(F.tur, (x) => x.name === k)]);
+    types.push([tx('ui.static.typePrompt'), Math.max(0, n - types.reduce((a, x) => a + x[1], 0))]);
+    stats = `<div class="tile stat"><div class="big">${n}</div><div class="bar" aria-hidden="true">${shown.map((x) => `<span class="b-${x[0]}" style="flex:${x[2]}"></span>`).join('')}</div>
+      <ul class="legend">${shown.map((x) => `<li><span class="dot ${x[0] === 'bos' ? '' : x[0]}"></span>${esc(x[1])}<b>${x[2]}</b></li>`).join('')}</ul></div>
+      <div class="tile types"><ul>${types.map((x) => `<li><b>${x[1]}</b><span>${esc(x[0])}</span></li>`).join('')}</ul></div>`;
+  }
+  const tags = (F.tags || []).slice(0, 18);
+  const tagTile = tags.length ? `<div class="tile tags"><h2>${esc(tx('ui.filters.allTags', { count: (F.tags || []).length }))}</h2><div class="tagcloud">${tags.map((t) => `<button type="button" class="tagbtn" data-act="tag" data-tag="${esc(t.name)}" data-c="${hueOf(t.name)}">${esc(t.name)}<span class="n">${t.count}</span></button>`).join('')}</div></div>` : '';
+  return `<div class="start home"><div class="bento">${hero}${stats}${tagTile}${recent}</div></div>`;
 }
 
 /* ---------------------------------------------------------------- düzenleme */
 function setField(key, value) {
   const c = S.cur;
-  FM.set(c.parsed, key, typeof value === 'string' ? value.trim() : value);
+  const cc = c.isPrompt ? ccFieldOf(key) : null;
+  if (cc) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur), key);
+  FM.set(c.parsed, key, cc ? ccInputValue(cc, value) : (typeof value === 'string' ? value.trim() : value));
   c.lead = c.lead || leadOf(c.parsed);
   updateDirty();
   if (key === 'tur') {
-    c.turClearedExplicitly = !str(value).trim();
+    c.turClearedExplicitly = !Rules.normTur(value);
+    paintPubFields();
   }
   if (c.isPrompt && (key === 'tur' || Rules.PUBLISH_FIELDS.includes(key))) refreshPubWarn();
   if (key === 'paket') paintPaketHint();
@@ -1586,6 +1975,7 @@ async function openBump() {
         if (extra) { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn sm'; bt.dataset.act = extra.act; bt.textContent = extra.label; er.appendChild(document.createTextNode(' ')); er.appendChild(bt); }
       };
       const send = async (force, pick) => {
+        if (c.dirty && c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
         const body = { path: c.path, level: pick.level, note: pick.note,
           raw: c.dirty ? FM.stringify(c.parsed) : undefined, baseMtime: force ? undefined : c.mtime };
         try {
@@ -1633,6 +2023,7 @@ async function save(force) {
   if (!c.dirty && c.commitMsg.trim() && uncommitted(c.path)) return commitOnly();
   const before = c.isPrompt ? Rules.normTur(FM.meta(FM.parse(c.savedRaw)).tur) : '';
   if (!(await confirmTurRemoval(c, force))) return false;
+  if (c.isPrompt) Rules.migrateLegacyKeys(c.parsed, Rules.normTur(FM.meta(c.parsed).tur));
   const raw = FM.stringify(c.parsed);
   const msg = c.commitMsg.trim();
   try {
@@ -1653,6 +2044,7 @@ async function save(force) {
       if (chk && (chk.code === 'turYok' || chk.code === 'turGecersiz')) toast(chk.reason, 'warn', 7000);
     }
     updateDirty();
+    if (!c.isPrompt) refreshSetupState().catch(() => { /* sessiz */ });
     const aw = afterWrite();
     if (needId) { await aw; if (await askIdentity()) await commitOnly(); }
     return true;
@@ -1781,7 +2173,7 @@ function diffHtml(d) {
 }
 
 /** Summary: Frontmatter anahtarı -> görünen etiket sözlük anahtarı. */
-const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package', komut_adi: 'ui.fields.name', aciklama: 'ui.fields.description', arguman_ipucu: 'ui.fields.argumentHint', izinli_araclar: 'ui.fields.allowedTools', model: 'ui.fields.model' };
+const FIELD_LABEL_KEYS = { baslik: 'ui.fields.title', etiketler: 'ui.fields.tags', projeler: 'ui.fields.projects', durum: 'ui.fields.status', versiyon: 'ui.fields.version', olusturma: 'ui.fields.created', tur: 'ui.fields.type', paket: 'ui.fields.package' };
 
 /** Summary: Frontmatter anahtarının görünen etiketi; bilinmeyen anahtar için boş döner. */
 function fieldLabel(key) {
@@ -1992,8 +2384,8 @@ function templates() {
   return {
     bos: { label: tx('ui.templates.blankLabel'), meta: {}, body: '' },
     rgc: { label: tx('ui.templates.rgcLabel'), meta: {}, body: tx('ui.templates.rgcBody') },
-    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', arguman_ipucu: '[argüman]' }, body: tx('ui.templates.commandBody') },
-    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', izinli_araclar: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
+    komut: { label: tx('ui.templates.commandLabel'), meta: { tur: 'komut', 'argument-hint': '[argüman]' }, body: tx('ui.templates.commandBody') },
+    ajan: { label: tx('ui.templates.agentLabel'), meta: { tur: 'ajan', tools: 'Read, Grep, Glob', model: 'sonnet' }, body: tx('ui.templates.agentBody') }
   };
 }
 
@@ -2160,24 +2552,24 @@ function openNewPrompt(o) {
     title: tx('ui.menu.newPrompt'),
     html: `<form class="stack" id="newForm">
       <p class="hint" style="margin:0">${th('ui.newPrompt.marketplace', { name: m.name })}</p>
-      <label>${esc(tx('ui.fields.title'))}<input name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off"></label>
+      <label>${esc(tx('ui.fields.name'))}<input id="npTitle" name="title" required autofocus placeholder="${esc(tx('ui.newPrompt.titlePlaceholder'))}" autocomplete="off" aria-describedby="npFile"></label>
+      <p class="hint" id="npFile" style="margin:0"></p>
       <label>${esc(tx('ui.newPrompt.plugin'))}<select name="plugin" required>${names.map((n) => `<option value="${esc(n)}" ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
       <label>${esc(tx('ui.newPrompt.tagsLabel'))}<input name="tags" list="dl-etiketler" placeholder="${esc(tx('ui.newPrompt.tagsPlaceholder'))}" autocomplete="off"></label>
       <label>${esc(tx('ui.newPrompt.template'))}<select name="tpl">${Object.keys(tpls).map((k) => `<option value="${k}">${esc(tpls[k].label)}</option>`).join('')}</select></label>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.common.create'))}</button></div></form>`,
     onMount: (b) => {
+      $('#npTitle', b).addEventListener('input', (e) => { $('#npFile', b).textContent = hasWord(e.target.value) ? tx('ui.newPrompt.filePreview', { file: FM.slug(e.target.value) + '.md' }) : ''; });
       $('#newForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = new FormData(e.target);
         const title = String(f.get('title')).trim(); if (!title) return;
         const plugin = String(f.get('plugin'));
         const p = FM.parse('');
-        FM.set(p, 'baslik', title);
         const tags = toList(f.get('tags')); if (tags.length) FM.set(p, 'etiketler', tags);
-        FM.set(p, 'durum', 'taslak'); FM.set(p, 'olusturma', today());
         const t = tpls[f.get('tpl')] || tpls.bos;
         Object.keys(t.meta).forEach((k) => FM.set(p, k, t.meta[k]));
-        p.body = '\n' + t.body;
+        FM.setBody(p, t.body);
         closeModal();
         if (activeName() !== m.name) { toast(tx('ui.newPrompt.activeChanged'), 'error'); return; }
         if (!(await confirmDiscard())) return;
@@ -2194,72 +2586,304 @@ function openNewPrompt(o) {
   });
 }
 
-// Prompt taşı: aynı marketplace'te /api/rename, başka marketplace'e /api/prompts/transfer.
+/** Summary: Taşıma hedefinin ağaç anahtarı: plugin satırı, Klasörsüz ya da Gelen kutusu düğümü. */
+function moveTargetKey(mp, to) {
+  if (to.kind === 'paket') return nodeKey(mp, libDirOf(mp) + '/' + to.plugin);
+  return nodeKey(mp, to.kind === 'gelenKutusu' ? '#gelen' : '#klasorsuz');
+}
+
+/** Summary: Hedef kapsayıcının marketplace'e göreli klasör yolu. */
+function moveTargetDir(to) {
+  const lib = libDirOf(to.mp);
+  return to.kind === 'paket' ? lib + '/' + to.plugin : to.kind === 'gelenKutusu' ? lib + '/' + Rules.INBOX_DIR : lib;
+}
+
+/** Summary: Kaynak (src) ve hedeften (to) taşıma planı üretir; geçerliyse { ok: true, op, fromMp, toMp, same, path, name, to, targetKey }, değilse { ok: false, code, params }. */
+function movePlan(src, to) {
+  const same = src.mp === to.mp;
+  if (src.op === 'plugin') {
+    if (same) return { ok: false, code: 'pluginSameMp', params: {} };
+    const slug = FM.slug(src.name);
+    if (pluginsOf(to.mp).some((p) => p.slug === slug || p.name.toLowerCase() === src.name.toLowerCase())) return { ok: false, code: 'pluginExists', params: { name: src.name } };
+    return { ok: true, op: 'plugin', fromMp: src.mp, toMp: to.mp, same: false, path: src.path, name: src.name, slug, count: src.count, hasDesc: src.hasDesc, to: { kind: 'mp', plugin: null, name: null }, targetKey: nodeKey(to.mp, '') };
+  }
+  const dir = src.path.split('/').slice(0, -1).join('/');
+  if (same && dir === moveTargetDir(to) && (!to.name || to.name === src.name)) return { ok: false, code: 'same', params: {} };
+  return { ok: true, op: 'prompt', fromMp: src.mp, toMp: to.mp, same, path: src.path, name: src.name, to: { kind: to.kind, plugin: to.plugin || null, name: to.name || null }, targetKey: moveTargetKey(to.mp, to) };
+}
+
+/** Summary: Sürüklenen kaynağın bırakıldığı ağaç öğesine (it) göre taşıma planı; kural dışıysa { ok: false, code, params }. */
+function dropPlan(src, it) {
+  const bad = (code) => ({ ok: false, code, params: {} });
+  if (it.kind === 'teknik' || it.kind === 'tdir' || it.kind === 'tfile') return bad('technical');
+  const mp = mpByName(it.mp);
+  if (!mp || mp.state !== 'hazir') return bad('unavailable');
+  if (src.op === 'plugin') return movePlan(src, { mp: it.mp });
+  switch (it.kind) {
+    case 'mp': case 'loose': return movePlan(src, { mp: it.mp, kind: 'klasorsuz' });
+    case 'inbox': return movePlan(src, { mp: it.mp, kind: 'gelenKutusu' });
+    case 'plugin': return movePlan(src, { mp: it.mp, kind: 'paket', plugin: it.node.name });
+    case 'dir': return bad('subfolder');
+    case 'file': {
+      const cl = Rules.classifyPromptPath(it.path, libDirOf(it.mp));
+      if (cl.kind === 'paket') return movePlan(src, { mp: it.mp, kind: 'paket', plugin: cl.klasor });
+      if (cl.kind === 'klasorsuz' || cl.kind === 'gelenKutusu') return movePlan(src, { mp: it.mp, kind: cl.kind });
+      return bad('technical');
+    }
+    default: return bad('unavailable');
+  }
+}
+
+/** Summary: Reddedilen plan kodu -> sözlük anahtarı. */
+const DND_REASON = { same: 'ui.dnd.no.same', technical: 'ui.dnd.no.technical', subfolder: 'ui.dnd.no.subfolder', pluginSameMp: 'ui.dnd.no.pluginSameMp', unavailable: 'ui.dnd.no.unavailable', pluginExists: 'ui.dnd.no.pluginExists' };
+
+/** Summary: Reddedilen planın nedeni, geçerli dilde. */
+function dropReason(plan) {
+  const k = DND_REASON[plan.code];
+  return tx(k, plan.params);
+}
+
+/** Summary: Taşıma konumunun kısa adı: plugin adı, Klasörsüz ya da Gelen kutusu. */
+function placeLabel(kind, plugin) {
+  return kind === 'paket' ? plugin : kind === 'gelenKutusu' ? tx('ui.tree.inbox') : tx('ui.tree.loose');
+}
+
+/** Summary: Hedef etiketi "marketplace › konum"; plugin taşımada yalnızca marketplace adı. */
+function dropLabel(plan) {
+  return plan.op === 'plugin' ? plan.toMp : tx('ui.move.place', { mp: plan.toMp, place: placeLabel(plan.to.kind, plan.to.plugin) });
+}
+
+/** Summary: Kaynak etiketi "marketplace › konum" (plugin taşımada "marketplace › plugin"). */
+function moveFromLabel(plan) {
+  if (plan.op === 'plugin') return tx('ui.move.place', { mp: plan.fromMp, place: plan.name });
+  const cl = Rules.classifyPromptPath(plan.path, libDirOf(plan.fromMp));
+  return tx('ui.move.place', { mp: plan.fromMp, place: placeLabel(cl.kind, cl.klasor) });
+}
+
+/** Summary: Planın sonuç maddeleri (her biri tam cümle), geçerli dilde. */
+function moveConsequences(plan) {
+  const out = [];
+  const from = plan.fromMp;
+  if (plan.op === 'plugin') {
+    out.push(tx('ui.move.c.pluginCount', { count: plan.count }), tx('ui.move.c.pluginTags', { slug: plan.slug, from }), tx('ui.move.c.pluginOutput', { slug: plan.slug }));
+    if (plan.hasDesc) out.push(tx('ui.move.c.pluginDesc'));
+    out.push(tx('ui.move.c.sourceTrash', { from }), tx('ui.move.c.noCommitCross'));
+  } else {
+    const kind = plan.to.kind;
+    if (kind !== 'gelenKutusu') out.push(tx('ui.move.c.paketField'));
+    out.push(plan.same ? tx('ui.move.c.tagsStay') : tx('ui.move.c.historyStays', { from }));
+    if (!plan.same) out.push(tx('ui.move.c.sourceTrash', { from }));
+    out.push(tx('ui.move.c.outputOrphan'));
+    if (kind === 'klasorsuz') out.push(tx('ui.move.c.looseDefault', { plugin: (mpByName(plan.toMp) || {}).defaultPlugin || '' }));
+    if (kind === 'gelenKutusu') out.push(tx('ui.move.c.inbox'));
+    out.push(plan.same ? tx('ui.move.c.noCommit') : tx('ui.move.c.noCommitCross'));
+  }
+  if (from !== activeName()) out.push(tx('ui.move.c.activate', { mp: from }));
+  return out;
+}
+
+/** Summary: Sonuç maddelerinin <li> işaretlemesi. */
+function consequencesHtml(plan) {
+  return moveConsequences(plan).map((x) => `<li>${esc(x)}</li>`).join('');
+}
+
+/** Summary: Onay penceresi gövdesi: öğe adı, kaynak → hedef ve sonuç maddeleri. */
+function moveSummaryHtml(plan) {
+  return `<p><strong>${esc(plan.name)}</strong></p><p>${th('ui.move.route', { from: moveFromLabel(plan), to: dropLabel(plan) })}</p><ul class="consq">${consequencesHtml(plan)}</ul>`;
+}
+
+/** Summary: Taşıma onay penceresini açar; "Taşı" seçilirse true, vazgeçilirse false çözer. */
+function confirmMove(plan) {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    openModal({
+      title: plan.op === 'plugin' ? tx('ui.move.confirmPluginTitle') : tx('ui.move.confirmPromptTitle'),
+      html: `${moveSummaryHtml(plan)}<div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button type="button" class="btn primary" data-go autofocus>${esc(tx('ui.move.submit'))}</button></div>`,
+      onMount: (b) => { $('[data-go]', b).addEventListener('click', () => { fin(true); closeModal(); }); },
+      onClose: () => fin(false)
+    });
+  });
+}
+
+/** Summary: Taşıma, açık dosyayı etkiliyor mu (taşınan prompt ya da taşınan plugin'in içindeki dosya). */
+function moveTouchesOpenFile(plan) {
+  const c = S.cur;
+  if (!c || c.mp !== plan.fromMp) return false;
+  return plan.op === 'plugin' ? c.path.startsWith(plan.path + '/') : c.path === plan.path;
+}
+
+/** Summary: Kaynak marketplace'in "son açılan" kaydı taşınan yolu gösteriyorsa yeni yola (aynı marketplace) günceller, başka marketplace'e gidiyorsa siler. */
+function moveLastOpened(plan, r) {
+  const key = lsKey('last', plan.fromMp);
+  const last = ls.get(key, null);
+  if (typeof last !== 'string') return;
+  const hit = plan.op === 'plugin' ? last.startsWith(plan.path + '/') : last === plan.path;
+  if (hit) ls.set(key, plan.same ? r.to.path : null);
+}
+
+/** Summary: Taşıma yanıtını arayüze işler: açık dosya, açık düğümler, son açılan ve son plugin kaydı, seçim ve bildirimler. */
+async function applyMoveResult(plan, r) {
+  const { fromMp, toMp } = plan;
+  const touched = moveTouchesOpenFile(plan);
+  if (!touched) moveLastOpened(plan, r);
+  const tab = touched ? S.cur.tab : undefined;
+  let reopen = false; let key;
+  if (plan.op === 'plugin') {
+    const old = plan.path; const src = expOf(fromMp); const dst = expOf(toMp);
+    Array.from(src).filter((k) => k === old || k.startsWith(old + '/')).forEach((k) => { src.delete(k); dst.add(r.plugin.path + k.slice(old.length)); });
+    dst.add(r.plugin.path);
+    saveExp(fromMp); saveExp(toMp);
+    if (ls.get(lsKey('sonPlugin', fromMp), '') === plan.name) ls.set(lsKey('sonPlugin', fromMp), '');
+    if (touched) clearCur();
+    S.mpOpen.add(toMp); saveMpOpen();
+    key = nodeKey(toMp, r.plugin.path);
+  } else {
+    if (touched && plan.same) { S.cur.path = r.to.path; ls.set(lsKey('last'), r.to.path); reopen = true; }
+    else if (touched) clearCur();
+    if (S.lostEdit && plan.same && S.lostEdit.mp === fromMp && S.lostEdit.path === plan.path) S.lostEdit.path = r.to.path;
+    expandParents(r.to.path, toMp);
+    key = nodeKey(toMp, r.to.path);
+  }
+  S.sel = { mp: toMp, key }; S.focusKey = key;
+  await afterWrite();
+  if (reopen) await openFile(r.to.path, { reload: true, quiet: true, tab });
+  if (!S.cur) renderMain();
+  focusKey(key);
+  if (plan.op === 'plugin') { toast(tx('ui.move.donePlugin', { name: plan.name, mp: toMp, count: r.moved }), 'ok', 6000); return; }
+  const to = dropLabel(plan);
+  const name = base(r.to.path);
+  const msg = plan.same
+    ? (r.renamed ? tx('ui.move.doneRenamed', { to, name }) : tx('ui.move.done', { to }))
+    : (r.renamed ? tx('ui.move.doneRenamedCross', { to, name }) : tx('ui.move.doneCross', { to }));
+  toast(msg, 'ok', plan.same ? 4500 : 6000);
+  if (r.paket && r.paket.action === 'set') toast(tx('ui.move.paketSet', { value: r.paket.value }), 'ok', 5000);
+  else if (r.paket && r.paket.action === 'remove') toast(tx('ui.move.paketRemoved'), 'ok', 5000);
+}
+
+/** Summary: Taşımanın tek yürütücüsü (pencereler ve sürükle-bırak): onay, kaynağı etkinleştirme, açık dosya kararı, API çağrısı, sonuç. Başarılıysa true. */
+async function runMove(plan, o) {
+  if (!(o && o.confirmed) && !(await confirmMove(plan))) return false;
+  if (plan.fromMp !== activeName() && !(await activateMarketplace(plan.fromMp, { quiet: true }))) return false;
+  if (moveTouchesOpenFile(plan) && !(await confirmDiscard())) return false;
+  let r;
+  try {
+    r = plan.op === 'plugin'
+      ? await api('POST', '/api/package/move', { name: plan.name, fromMp: plan.fromMp, toMp: plan.toMp })
+      : await api('POST', '/api/prompts/move', { path: plan.path, fromMp: plan.fromMp, to: { mp: plan.toMp, kind: plan.to.kind, plugin: plan.to.plugin || undefined, name: plan.to.name || undefined } });
+  } catch (e) { fail(e); return false; }
+  await applyMoveResult(plan, r);
+  return true;
+}
+
+/** Summary: Formdaki seçim listelerinde Enter'a basınca (liste kapalıyken) formun varsayılan düğmesine basar; tarayıcı bunu kendiliğinden yapmaz. Düğme pasifse hiçbir şey olmaz. */
+function submitOnEnter(form) {
+  $$('select', form).forEach((sel) => sel.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' || ev.isComposing || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    ev.preventDefault();
+    const go = $('button:not([type="button"])', form);
+    if (go && !go.disabled) go.click();
+  }));
+}
+
 async function openMove(path) {
   const m = activeMp(); if (!m) return;
   const from = m.name;
+  const src = { op: 'prompt', mp: from, path, name: base(path) };
   const mps = S.lib.marketplaces.filter((x) => x.state === 'hazir');
   const cl = Rules.classifyPromptPath(path, m.libraryDir);
-  const targetOpts = (name) => {
-    const mm = mpByName(name); const opts = mm.plugins.map((p) => ({ v: 'p:' + p.name, label: p.name }));
-    if (name === from) { opts.push({ v: 'i:', label: tx('ui.tree.inbox') }, { v: 'l:', label: tx('ui.tree.loose') }); }
-    return opts;
-  };
+  const targetOpts = (name) => mpByName(name).plugins.map((p) => ({ v: 'p:' + p.name, label: p.name })).concat([{ v: 'i:', label: tx('ui.tree.inbox') }, { v: 'l:', label: tx('ui.tree.loose') }]);
   const defTarget = cl.kind === 'paket' ? 'p:' + cl.klasor : cl.kind === 'gelenKutusu' ? 'i:' : 'l:';
+  const toOf = (name, tv) => ({ mp: name, kind: tv.charAt(0) === 'p' ? 'paket' : tv.charAt(0) === 'i' ? 'gelenKutusu' : 'klasorsuz', plugin: tv.charAt(0) === 'p' ? tv.slice(2) : null });
   openModal({
     title: tx('ui.move.title', { name: base(path) }),
     html: `<form class="stack" id="moveForm">
       <label>${esc(tx('ui.static.marketplace'))}<select id="mvMp">${mps.map((x) => `<option value="${esc(x.name)}" ${x.name === from ? 'selected' : ''}>${esc(x.name === from ? tx('ui.move.mpActive', { name: x.name }) : x.name)}</option>`).join('')}</select></label>
       <label>${esc(tx('ui.common.target'))}<select id="mvTarget"></select></label>
       <label>${esc(tx('ui.move.fileName'))}<input id="mvName" value="${esc(base(path))}" autocomplete="off"></label>
-      <p class="hint" id="mvNote" style="margin:0"></p>
+      <ul class="consq" id="mvConsq" aria-live="polite" style="margin:0"></ul>
       <div id="mvErr" class="issue error" role="alert" hidden></div>
       <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary">${esc(tx('ui.move.submit'))}</button></div></form>`,
     onMount: (b) => {
+      const planNow = () => {
+        const tv = $('#mvTarget', b).value; if (!tv) return null;
+        const name = $('#mvMp', b).value; const to = toOf(name, tv);
+        if (name === from) {
+          let file = $('#mvName', b).value.trim() || base(path);
+          if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
+          if (file !== base(path)) to.name = file;
+        }
+        return movePlan(src, to);
+      };
+      const paint = () => {
+        const plan = planNow();
+        $('#mvConsq', b).innerHTML = plan && plan.ok ? consequencesHtml(plan) : '';
+        $('#mvErr', b).hidden = true;
+      };
       const fill = () => {
         const name = $('#mvMp', b).value; const cross = name !== from;
         const opts = targetOpts(name);
         const keep = $('#mvTarget', b).value;
-        $('#mvTarget', b).innerHTML = opts.length ? opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('') : `<option value="">${esc(tx('ui.move.noPlugins'))}</option>`;
+        $('#mvTarget', b).innerHTML = opts.map((o) => `<option value="${esc(o.v)}">${esc(o.label)}</option>`).join('');
         const want = cross ? keep : (keep || defTarget);
         if (opts.some((o) => o.v === want)) $('#mvTarget', b).value = want;
         else if (!cross && opts.some((o) => o.v === defTarget)) $('#mvTarget', b).value = defTarget;
         $('#mvName', b).disabled = cross;
         if (cross) $('#mvName', b).value = base(path);
-        $('#mvNote', b).textContent = cross ? tx('ui.move.noteCross', { name, from }) : tx('ui.move.noteSame');
+        paint();
       };
       fill();
       $('#mvMp', b).addEventListener('change', fill);
+      $('#mvTarget', b).addEventListener('change', paint);
+      $('#mvName', b).addEventListener('input', paint);
+      submitOnEnter($('#moveForm', b));
       $('#moveForm', b).addEventListener('submit', async (e) => {
         e.preventDefault();
-        const toMp = $('#mvMp', b).value; const tv = $('#mvTarget', b).value; const er = $('#mvErr', b);
+        const er = $('#mvErr', b);
         const showErr = (msg) => { er.textContent = msg; er.hidden = false; };
-        if (!tv) { showErr(tx('ui.move.pickTarget')); return; }
+        const plan = planNow();
+        if (!plan) { showErr(tx('ui.move.pickTarget')); return; }
+        if (!plan.ok) { showErr(dropReason(plan)); return; }
         if (activeName() !== from) { showErr(tx('ui.common.activeChangedRetry')); return; }
-        if (S.cur && S.cur.path === path && !(await confirmDiscard())) return;
-        try {
-          if (toMp !== from) {
-            await api('POST', '/api/prompts/transfer', { path, toMp, toPlugin: tv.slice(2) });
-            closeModal();
-            if (S.cur && S.cur.path === path) clearCur();
-            S.mpOpen.add(toMp); saveMpOpen();
-            await afterWrite(); renderMain();
-            toast(tx('ui.move.movedCross', { toMp, from }), 'ok', 7000);
-            return;
-          }
-          const kind = tv.charAt(0); const nm = tv.slice(2);
-          const dir = kind === 'p' ? m.libraryDir + '/' + nm : kind === 'i' ? m.libraryDir + '/' + Rules.INBOX_DIR : m.libraryDir;
-          let file = $('#mvName', b).value.trim() || base(path);
-          if (!/\.[^.]+$/.test(file)) file += (path.match(/\.[^.]+$/) || ['.md'])[0];
-          const to = dir + '/' + file;
-          if (to === path) { closeModal(); return; }
-          const r = await api('POST', '/api/rename', { from: path, to });
-          closeModal();
-          if (S.cur && S.cur.path === path) { S.cur.path = r.path; ls.set(lsKey('last'), r.path); }
-          expandParents(r.path);
-          await afterWrite(); renderMain();
-          toast(tx('ui.move.movedSame'), 'ok', 6000);
-        } catch (err) { showErr(err.message); }
+        closeModal();
+        await runMove(plan, { confirmed: true });
+      });
+    }
+  });
+}
+
+function openMovePlugin(name) {
+  const m = activeMp(); if (!m) return;
+  const pl = m.plugins.find((p) => p.name === name); if (!pl) return;
+  const title = tx('ui.movePlugin.title', { name: pl.name });
+  const targets = S.lib.marketplaces.filter((x) => x.state === 'hazir' && x.name !== m.name);
+  if (!targets.length) {
+    openModal({ title, html: `<p>${esc(tx('ui.movePlugin.noTarget'))}</p><div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.static.close'))}</button></div>` });
+    return;
+  }
+  const src = { op: 'plugin', mp: m.name, name: pl.name, path: pl.path, count: pl.count, hasDesc: !!pl.description };
+  const planFor = (mpName) => movePlan(src, { mp: mpName });
+  const firstOk = targets.find((x) => planFor(x.name).ok);
+  openModal({
+    title,
+    html: `<form class="stack" id="movePlForm">
+      <label>${esc(tx('ui.static.marketplace'))}<select id="mpvTarget" autofocus>${targets.map((x) => { const plan = planFor(x.name); return `<option value="${esc(x.name)}"${plan.ok ? '' : ' disabled'}${firstOk && firstOk.name === x.name ? ' selected' : ''}>${esc(plan.ok ? x.name : `${x.name} (${dropReason(plan)})`)}</option>`; }).join('')}</select></label>
+      <ul class="consq" id="mpvConsq" aria-live="polite" style="margin:0"></ul>
+      <div class="foot"><button type="button" class="btn" data-act="close">${esc(tx('ui.common.cancel'))}</button><button class="btn primary" id="mpvGo"${firstOk ? '' : ' disabled'}>${esc(tx('ui.move.submit'))}</button></div></form>`,
+    onMount: (b) => {
+      const paint = () => {
+        const plan = planFor($('#mpvTarget', b).value);
+        $('#mpvConsq', b).innerHTML = plan.ok ? consequencesHtml(plan) : '';
+        $('#mpvGo', b).disabled = !plan.ok;
+      };
+      paint();
+      $('#mpvTarget', b).addEventListener('change', paint);
+      submitOnEnter($('#movePlForm', b));
+      $('#movePlForm', b).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const plan = planFor($('#mpvTarget', b).value);
+        if (!plan.ok) return;
+        closeModal();
+        await runMove(plan, { confirmed: true });
       });
     }
   });
@@ -2547,9 +3171,6 @@ async function gitCommit() {
 /* -------------------------------------------------------------- marketplace */
 const cmdLine = (t) => `<div class="cmd"><code>${esc(t)}</code><button class="btn sm" data-act="copy-text" data-text="${esc(t)}">${esc(tx('ui.main.copy'))}</button></div>`;
 
-/** Summary: Dışa aktarma durumu seçenekleri: [kanonik durum değeri, görünen etiket anahtarı]. */
-const DURUM_OPTS = [['kararlı', 'ui.static.statusStable'], ['taslak', 'ui.static.statusDraft'], ['arşiv', 'ui.static.statusArchived'], ['', 'ui.mp.statusEmpty']];
-
 function mkListHtml(st) {
   const skipped = st.skipped || [];
   const stPill = (s) => s === 'guncel' ? `<span class="pill ok">${esc(tx('ui.mp.stateCurrent'))}</span>` : s === 'eski' ? `<span class="pill warn">${esc(tx('ui.mp.stateStale'))}</span>` : `<span class="pill warn">${esc(tx('ui.mp.stateMissing'))}</span>`;
@@ -2604,23 +3225,15 @@ function mkStateText(st) {
 
 function marketHtml(st) {
   const c = st.config;
-  const mpn = mpByName(activeName());
-  const noCfg = mpn && mpn.hasPpConfig === false;
   const cfgIssues = (st.configIssues || []).map((x) => `<div class="issue ${esc(x.level)}" role="status">${esc(x.message)}</div>`).join('');
-  const ex = st.export || { durumlar: ['kararlı', ''] };
-  return `${noCfg ? `<div class="issue warn" role="status">${th('ui.mp.noPpConfig')} <button class="btn sm" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(tx('ui.common.createPpConfig'))}</button></div>` : ''}
-    <h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
+  return `<h3>${esc(tx('ui.static.settings'))}</h3>${cfgIssues}
     <form class="grid2" id="mkForm">
       <label>${esc(tx('ui.mp.fieldName'))}<input name="name" value="${esc(st.marketplaceName)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.fieldOwner'))}<input name="owner" value="${esc(c.owner)}" placeholder="${esc(tx('ui.mp.ownerPlaceholder'))}" autocomplete="off"></label>
-      <label>${esc(tx('ui.mp.fieldLoosePackage'))}<input name="plugin" value="${esc(c.plugin)}" autocomplete="off"></label>
       <label>${esc(tx('ui.mp.catalogVersion'))}<input name="version" required value="${esc(c.version)}" placeholder="1.0.0" inputmode="decimal" autocomplete="off" aria-describedby="mkVerErr mkVerHint">
         <div id="mkVerHint" class="hint">${esc(tx('ui.mp.catalogVersionHint'))}</div>
         <div id="mkVerErr" class="issue error" role="alert" hidden></div></label>
       <label class="span2">${esc(tx('ui.fields.description'))}<input name="description" value="${esc(c.description)}" autocomplete="off"></label>
-      <fieldset class="span2" aria-describedby="mkExpErr"><legend>${esc(tx('ui.mp.exportStatuses'))}</legend>
-        <div class="inline">${DURUM_OPTS.map(([v, k]) => `<label class="inline"><input type="checkbox" name="exdurum" value="${esc(v)}" ${Rules.durumAllowed(v, ex.durumlar) ? 'checked' : ''}> ${esc(tx(k))}</label>`).join(' ')}</div>
-        <div id="mkExpErr" class="issue error" role="alert" hidden></div></fieldset>
       <div class="span2 foot-left"><button class="btn primary" data-act="mk-init">${esc(tx('ui.mp.writeFiles'))}</button>
         <span class="hint" id="mkState">${esc(mkStateText(st))}</span></div>
     </form>
@@ -3012,30 +3625,33 @@ function paintRemoteBand() {
   $('#main').prepend(band);
 }
 
-/* klonlama sonucu ve pp.config.json oluşturma */
-async function mkCreatePpConfig(name) {
-  try {
-    await api('POST', '/api/marketplaces/pp-config', { name });
-    S.info = await get('/api/info');
-    toast(tx('ui.clone.ppConfigCreated'), 'ok', 5000);
-    await refreshAll(); applySetupUi();
-    if (!$('#overlay').hidden && $('#mkForm')) await openMarket();
-    paintWarnBand();
-  } catch (e) { fail(e); }
+/** Summary: Kurulum durumunu (/api/info) sunucudan yeniden okuyup düğmeleri ve uyarı bandını günceller; teknik/ayar dosyası değişince kullanılır. Etkin marketplace bu arada değiştiyse dokunmaz (geçişi yeniden eşleme akışları yapar). */
+async function refreshSetupState() {
+  const info = await get('/api/info');
+  if (info.activeMarketplace !== activeName()) return;
+  S.info = info;
+  applySetupUi();
+  paintWarnBand();
+}
+
+/** Summary: Eski ayar dosyasını onay sonrası çöp kutusuna taşır ve kurulum uyarılarını yeniler. */
+async function removeLegacyConfig() {
+  await deleteItem('pp.config.json');
+  try { await refreshSetupState(); } catch (e) { fail(e); }
 }
 
 function cloneResultModal(r) {
   openModal({
     title: tx('ui.clone.doneTitle'),
     html: `<p>${th('ui.clone.added', { name: r.marketplace ? r.marketplace.name : '' })}</p>
-      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)} ${w.code === 'ppConfigYok' && r.marketplace ? `<button class="btn sm" data-act="mk-ppconfig" data-name="${esc(r.marketplace.name)}">${esc(tx('ui.common.createPpConfig'))}</button>` : ''}</div>`).join('')}
+      ${r.warnings.map((w) => `<div class="issue warn" role="status">${esc(w.message)}</div>`).join('')}
       <div class="foot"><button class="btn primary" data-act="close" autofocus>${esc(tx('ui.common.ok'))}</button></div>`
   });
 }
 
 /* ------------------------------------------------- kurulum durumu, marketplace geçişi */
 /** Summary: Kurulum sorunu eylem kodu -> düğme etiketi sözlük anahtarı. */
-const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigOlustur: 'ui.common.createPpConfig' };
+const ACTION_LABEL_KEYS = { ayarlar: 'ui.common.openSettings', yeniMarketplace: 'ui.tree.newMarketplace', marketplaceSec: 'ui.setup.pickFromTree', gitBaslat: 'ui.common.initGit', ppConfigSil: 'ui.menu.deleteToTrash' };
 
 /** Summary: Kurulum sorunu eylem kodunun düğme etiketi; bilinmeyen kod için boş döner. */
 function actionLabel(code) {
@@ -3050,7 +3666,7 @@ function issueButton(i) {
   if (i.action === 'yeniMarketplace') return '<button class="btn sm primary" data-act="new-mp">' + label + '</button>';
   if (i.action === 'marketplaceSec') return '<button class="btn sm primary" data-act="pick-mp">' + label + '</button>';
   if (i.action === 'gitBaslat') return `<button class="btn sm primary" data-act="mk-git-init" data-confirm data-name="${esc(S.info.activeMarketplace)}">${label}</button>`;
-  if (i.action === 'ppConfigOlustur') return '<button class="btn sm" data-act="mk-ppconfig" data-name="' + esc(S.info.activeMarketplace) + '">' + label + '</button>';
+  if (i.action === 'ppConfigSil') return '<button class="btn sm" data-act="mk-ppconfig-sil">' + label + '</button>';
   return '';
 }
 
@@ -3081,7 +3697,7 @@ function paintWarnBand() {
   if (!warns.length) return;
   const band = document.createElement('div');
   band.id = 'warnBand'; band.className = 'warnband'; band.setAttribute('role', 'status');
-  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigOlustur' ? `<button class="link" data-act="mk-ppconfig" data-name="${esc(activeName())}">${esc(actionLabel('ppConfigOlustur'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
+  band.innerHTML = `<ul>${warns.map((i) => `<li><span class="pill warn">${esc(tx('ui.setup.levelWarn'))}</span> ${esc(i.message)} ${i.action === 'ayarlar' ? `<button class="link" data-act="settings">${esc(actionLabel('ayarlar'))}</button>` : ''}${i.action === 'ppConfigSil' ? `<button class="link" data-act="mk-ppconfig-sil">${esc(actionLabel('ppConfigSil'))}</button>` : ''}</li>`).join('')}</ul><button class="btn sm ghost" data-act="warn-close" aria-label="${esc(tx('ui.setup.warnCloseLabel'))}">${esc(tx('ui.static.close'))}</button>`;
   $('#main').prepend(band);
 }
 
@@ -3256,12 +3872,10 @@ function mkRowHtml(i, kind) {
     if (i.active) pills.push(`<span class="pill ok">${esc(tx('ui.tree.pillActive'))}</span>`);
     if (!i.valid) pills.push(`<span class="pill bad">${esc(tx('ui.tree.pillInvalid', { reason: i.reason || '' }))}</span>`);
     if (!i.hasManifest) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoManifest'))}</span>`);
-    if (i.valid && i.hasPpConfig === false) pills.push(`<span class="pill warn">${esc(tx('ui.settings.pillNoPpConfig'))}</span>`);
   } else pills.push(`<span class="pill ${tool ? '' : 'warn'}">${esc(i.reason)}</span>`);
   const btns = [];
   if (!tool && !i.active) btns.push(`<button type="button" class="btn sm" data-act="mk-activate" data-name="${esc(i.name)}">${esc(tx('ui.menu.activate'))}</button>`);
   // Geçerli olmayan ama .git içeren klasörde sunucu git başlatmayı reddeder; yalnızca git deposu olmayanlarda göster.
-  if (kind === 'item' && i.valid && i.hasPpConfig === false) btns.push(`<button type="button" class="btn sm" data-act="mk-ppconfig" data-name="${esc(i.name)}">${esc(tx('ui.common.createPpConfig'))}</button>`);
   if (kind === 'ignored' && !tool) btns.push(`<button type="button" class="btn sm" data-act="mk-git-init" data-confirm data-name="${esc(i.name)}">${esc(tx('ui.common.initGit'))}</button>`);
   return `<div class="mkrow ${tool ? 'dim' : ''}"><div><b>${esc(i.name)}</b> ${pills.join(' ')}<div class="hint mono">${esc(i.path)}</div></div><div></div><div class="mkbtns">${btns.join('')}</div></div>`;
 }
@@ -3443,6 +4057,132 @@ function listKey(ev, t) {
   }
 }
 
+/** Summary: Sürükleme olayı dışarıdan dosya taşıyor mu (tarayıcının dosyayı açıp sayfadan ayrılmasını önlemek için). */
+function dragHasFiles(ev) {
+  return !!ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files');
+}
+
+/** Summary: Kapalı marketplace satırında bu kadar ms beklenince sürükleme sırasında açılır. */
+const DND_OPEN_MS = 700;
+
+/** Summary: Bırakma vurgularını, ipucunu ve bekleyen otomatik açma zamanlayıcısını temizler. */
+function clearDropMarks() {
+  if (S.drag) { clearTimeout(S.drag.timer); S.drag.timer = null; }
+  $$('#list .drop-ok, #list .drop-no').forEach((e) => e.classList.remove('drop-ok', 'drop-no'));
+  const h = $('#dndHint');
+  if (h) { h.hidden = true; h.textContent = ''; h.className = 'dnd-hint'; }
+}
+
+/** Summary: Sürüklemeyi bitirir: vurgular, soluk görünüm ve durum temizlenir. */
+function endTreeDrag() {
+  clearDropMarks();
+  $$('#list .dragging').forEach((e) => e.classList.remove('dragging'));
+  S.drag = null;
+}
+
+/** Summary: Üzerine gelinen satırı plana göre boyar (geçerliyse kapsayıcı satır, geçersizse satırın kendisi) ve ipucunu yazar. */
+function paintDrop(row, plan) {
+  $$('#list .drop-ok, #list .drop-no').forEach((e) => e.classList.remove('drop-ok', 'drop-no'));
+  const hint = $('#dndHint');
+  if (plan.ok) {
+    (rowEl(plan.targetKey) || row).classList.add('drop-ok');
+    hint.className = 'dnd-hint ok';
+    hint.innerHTML = `${ICON.plugin}<span>${esc(tx('ui.dnd.hintTarget', { target: dropLabel(plan) }))}</span>`;
+  } else {
+    row.classList.add('drop-no');
+    hint.className = 'dnd-hint no';
+    hint.innerHTML = `${ICON.warn}<span>${esc(dropReason(plan))}</span>`;
+  }
+  hint.hidden = false;
+}
+
+/** Summary: Sürükleme sürerken kapalı marketplace düğümünü açar. */
+function autoOpenMp(name) {
+  const d = S.drag;
+  if (!d || d.overKey !== nodeKey(name, '')) return;
+  S.mpOpen.add(name); saveMpOpen();
+  renderList();
+}
+
+/** Summary: Sürükleme sürerken liste yeniden çizilirse sürüklenen satır DOM'da korunur (dragend kaybolmasın) ve hedef vurgusu yeniden çizilir. */
+function keepDragSource(keep) {
+  const d = S.drag;
+  const fresh = keep ? rowEl(d.key) : null;
+  if (fresh) fresh.replaceWith(keep);
+  const over = d.overKey && d.plan ? rowEl(d.overKey) : null;
+  if (over) paintDrop(over, d.plan);
+}
+
+/** Summary: Ağaçta sürüklemeyi başlatır; yalnızca sürüklenebilir satırlarda, arama sonuçları ve açık pencere yokken. */
+function onTreeDragStart(ev) {
+  const row = ev.target.closest ? ev.target.closest('#list [draggable="true"]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  if (!it || S.results || !$('#overlay').hidden) { ev.preventDefault(); return; }
+  closeMenu();
+  const src = it.kind === 'plugin'
+    ? { op: 'plugin', mp: it.mp, name: it.node.name, path: it.path, count: it.node.count, hasDesc: !!it.node.description }
+    : { op: 'prompt', mp: it.mp, path: it.path, name: base(it.path) };
+  S.drag = { ...src, key: it.key, overKey: null, plan: null, timer: null };
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('application/x-pp-node', it.key);
+  ev.dataTransfer.setData('text/plain', src.name);
+  row.classList.add('dragging');
+}
+
+/** Summary: Sürükleme sürerken hedef satırı çözer, vurgular; yalnızca geçerli hedefte bırakmaya izin verir ve liste kenarlarında kaydırır. */
+function onTreeDragOver(ev) {
+  const d = S.drag;
+  if (!d) {
+    if (dragHasFiles(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'none'; }
+    return;
+  }
+  const row = ev.target.closest ? ev.target.closest('#list [data-key]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  const list = $('#list');
+  const box = list.getBoundingClientRect();
+  if (ev.clientY < box.top + 24) list.scrollTop -= 12;
+  else if (ev.clientY > box.bottom - 24) list.scrollTop += 12;
+  if (!it) {
+    if (d.overKey !== null) { d.overKey = null; d.plan = null; clearDropMarks(); }
+    ev.dataTransfer.dropEffect = 'none';
+    return;
+  }
+  if (d.overKey !== it.key) {
+    clearTimeout(d.timer);
+    d.overKey = it.key; d.plan = dropPlan(d, it); paintDrop(row, d.plan);
+    d.timer = it.kind === 'mp' && it.expandable && !it.expanded ? setTimeout(() => autoOpenMp(it.mp), DND_OPEN_MS) : null;
+  }
+  if (d.plan.ok) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; } else ev.dataTransfer.dropEffect = 'none';
+}
+
+/** Summary: İmleç ağaçtan çıkınca vurguyu temizler. */
+function onTreeDragLeave(ev) {
+  const d = S.drag; if (!d) return;
+  if (ev.relatedTarget && $('#list').contains(ev.relatedTarget)) return;
+  d.overKey = null; d.plan = null; clearDropMarks();
+}
+
+/** Summary: Bırakmayı işler: hedefi yeniden çözer, sürüklemeyi bitirir, plan geçerliyse onaylı taşımayı başlatır. */
+async function onTreeDrop(ev) {
+  const d = S.drag;
+  if (!d) { if (dragHasFiles(ev)) ev.preventDefault(); return; }
+  ev.preventDefault();
+  const row = ev.target.closest ? ev.target.closest('#list [data-key]') : null;
+  const it = row ? S.modelMap.get(row.dataset.key) : null;
+  const plan = it ? dropPlan(d, it) : null;
+  endTreeDrag();
+  if (plan && plan.ok) await runMove(plan);
+}
+
+const treeList = $('#list');
+treeList.addEventListener('dragstart', onTreeDragStart);
+treeList.addEventListener('dragenter', onTreeDragOver);
+treeList.addEventListener('dragover', onTreeDragOver);
+treeList.addEventListener('dragleave', onTreeDragLeave);
+treeList.addEventListener('drop', onTreeDrop);
+treeList.addEventListener('dragend', endTreeDrag);
+document.addEventListener('pointerdown', () => { if (S.drag) endTreeDrag(); });
+
 const resetFilters = () => { S.f = { q: '', tags: [], durum: '', tur: '', scope: S.f.scope }; $('#q').value = ''; $('#fDurum').value = ''; $('#fTur').value = ''; };
 
 document.addEventListener('click', async (ev) => {
@@ -3490,6 +4230,7 @@ document.addEventListener('click', async (ev) => {
       break;
     }
     case 'm-move': await openMove(p); break;
+    case 'm-move-plugin': openMovePlugin(el.dataset.name); break;
     case 'm-rename-file': await renameFile(p); break;
     case 'rename': await renameItem(p); break;
     case 'delete': await deleteItem(p); break;
@@ -3543,7 +4284,7 @@ document.addEventListener('click', async (ev) => {
     case 'pk-esitle': await pkAlignField(p); break;
     case 'pk-git': closeModal(); openGit(); break;
     case 'mk-update': await mkUpdate(); break;
-    case 'mk-ppconfig': await mkCreatePpConfig(el.dataset.name || activeName()); break;
+    case 'mk-ppconfig-sil': await removeLegacyConfig(); break;
     case 'remote-add': ev.preventDefault(); await remoteAdd(); break;
     case 'remote-edit': await remoteEdit(el.dataset.name, el.dataset.url); break;
     case 'remote-push': await remotePush(); break;
@@ -3579,13 +4320,7 @@ document.addEventListener('click', async (ev) => {
       verBox.hidden = true; verBox.textContent = ''; verIn.removeAttribute('aria-invalid');
       const verErr = Rules.checkVersion(f.get('version'));
       if (verErr) { showVerErr(verErr); break; }
-      const durumlar = f.getAll('exdurum');
-      showFieldErr('mkExpErr', '');
-      if (!durumlar.length) { showFieldErr('mkExpErr', tx('ui.mp.statusRequired')); break; }
-      const cfgBody = Object.fromEntries(f.entries()); delete cfgBody.exdurum;
-      const oldEx = (S.mk && S.mk.export) || { durumlar: [] };
-      const extra = oldEx.durumlar.filter((d) => !DURUM_OPTS.some(([v]) => fold(v).trim() === fold(d).trim()));
-      cfgBody.export = { durumlar: durumlar.concat(extra), haricKlasorler: oldEx.haricKlasorler };
+      const cfgBody = { name: f.get('name'), owner: f.get('owner'), version: f.get('version'), description: f.get('description') };
       try { const r = await api('POST', '/api/marketplace/init', { config: cfgBody }); S.info = await get('/api/info'); toast(tx('ui.mp.filesWritten', { packages: r.packages.join(', ') })); await mkReload(); }
       catch (e) { if (e.status === 400 && e.data && e.data.field === 'version') showVerErr(e.message); else fail(e); }
       break;
@@ -3610,7 +4345,7 @@ document.addEventListener('input', (ev) => {
   if (S.pk && t.closest && t.closest('.pkrel')) { pkValidate(); return; }
   if (!S.cur) return;
   if (t.id === 'commitMsg') { S.cur.commitMsg = t.value; updateDirty(); return; }
-  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); return; }
+  if (t.dataset && t.dataset.f) { setField(t.dataset.f, t.value); if (t.tagName === 'TEXTAREA') autosize(t, 44); return; }
   if (t.id === 'fBody') {
     S.cur.parsed.body = S.cur.lead + t.value;
     autosize(t); updateDirty();
@@ -3628,10 +4363,16 @@ document.addEventListener('change', (ev) => {
   else if (t.id === 'verA' || t.id === 'verB') verSelChange();
   else if (t.id === 'fScope') { S.f.scope = t.checked ? 'all' : 'library'; runSearch(); }
   else if (t.dataset && t.dataset.gsel !== undefined) { S.gitSelTouched = true; t.checked ? S.gitSel.add(t.dataset.gsel) : S.gitSel.delete(t.dataset.gsel); }
-  else if (t.dataset && t.dataset.f && S.cur) setField(t.dataset.f, t.value);
+  else if (t.dataset && t.dataset.f && S.cur) {
+    if (t.dataset.f === 'tur') flushFocusedField();
+    setField(t.dataset.f, t.value);
+  }
 });
 
-document.addEventListener('toggle', (ev) => { if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open); }, true);
+document.addEventListener('toggle', (ev) => {
+  if (ev.target.id === 'pubBox') ls.set('pp.pubOpen', ev.target.open);
+  if (ev.target.open && ev.target.matches && ev.target.matches('#pubBox, details.ccmore')) sizeCcLists(ev.target);
+}, true);
 
 document.addEventListener('keydown', (ev) => {
   const t = ev.target;

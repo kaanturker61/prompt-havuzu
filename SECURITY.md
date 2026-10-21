@@ -20,4 +20,4 @@ You can expect an acknowledgement and a follow-up on the fix. Please allow reaso
 
 ## Scope
 
-Prompt havuzu is a local tool. By design the server listens on `127.0.0.1` only, checks the `Host` header, requires the `X-PP: 1` header and a matching `Origin` for non-GET API requests, serves only three static files, and confines file access to the active marketplace folder. Reports about bypassing these protections, path traversal, command injection through git calls, or leaking data off the machine are in scope.
+Prompt havuzu is a local tool. By design the server listens on `127.0.0.1` only, checks the `Host` header, requires the `X-PP: 1` header and a matching `Origin` for non-GET API requests, serves only an explicit allowlist of static files (no remote assets), and confines file access to the active marketplace folder. Reports about bypassing these protections, path traversal, command injection through git calls, or leaking data off the machine are in scope.

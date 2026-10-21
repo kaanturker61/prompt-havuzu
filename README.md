@@ -27,7 +27,8 @@
 
 ## Features
 
-- **Marketplace, Plugin, Prompt tree** across several marketplaces at once, with keyboard navigation and context menus.
+- **Home dashboard:** prompt counts by status and by type, a clickable tag cloud that filters the list, and recent changes.
+- **Marketplace, Plugin, Prompt tree** across several marketplaces at once, with keyboard navigation and context menus. Each marketplace, plugin and tag keeps the same color everywhere, so you can spot them at a glance.
 - **Search** that ignores case and Turkish diacritics, plus filters (press `Ctrl+K`).
 - **Frontmatter editor** that preserves unknown keys and formatting, so git diffs stay small.
 - **Save and commit in one step:** fill the commit message box (**Commit mesajı**) and save; only that file is committed. A Git panel handles the rest.
@@ -59,16 +60,17 @@ On first run the app shows a setup screen (**Kuruluma devam et**, continue setup
 2. **Create a marketplace** with **+ Marketplace**. This runs `git init` (branch `main`) and writes the skeleton. No commit is made automatically. The same dialog can clone from a remote instead (**Uzak depodan klonla**).
 3. **Add a plugin and prompts** with **+ Plugin** and **+ Prompt**. A plugin is a folder under `prompts/` and becomes a plugin of the same name when published.
 4. **Edit, commit, version.** Edit the frontmatter and body, write a commit message, press the save button (**Kaydet**, `Ctrl+S`). Use **+1** to cut a prompt version and the **Geçmiş** tab to review history.
-5. **Publish and install.** Set `tur` (type) to `komut`, `ajan` or `skill`, open the package page, and press **Yayınla** (Publish). Then add the marketplace in Claude Code (next section).
+5. **Publish and install.** In the editor's Claude Code publishing settings set the type (`tur`) to command, agent or skill and fill in the fields you need, open the package page, and press **Yayınla** (Publish). Then add the marketplace in Claude Code (next section).
 
 <details>
 <summary>Tree details</summary>
 
 - The tree has three levels: **Marketplace**, **Plugin**, **Prompt**. Clicking a node makes that marketplace the **active** one. The editor, Git panel, versions, import and publishing act on the active marketplace; the tree, search and filters cover all of them.
-- Special nodes: **Klasörsüz promptlar** (loose prompts directly in `prompts/`), **Gelen kutusu** (inbox, `prompts/gelen-kutusu`, never published) and **Teknik dosyalar** (technical files such as `plugins/`, `.claude-plugin/` and `pp.config.json`).
+- Special nodes: **Klasörsüz promptlar** (loose prompts directly in `prompts/`), **Gelen kutusu** (inbox, `prompts/gelen-kutusu`, never published) and **Teknik dosyalar** (technical files such as `plugins/`, `.claude-plugin/` and `README.md`).
 - Plugin names cannot start with reserved prefixes such as `claude-` or `anthropic-`.
 - Folders without a git repository are listed separately and can be initialized with **Git'i başlat** (Initialize git).
-- Moving a prompt to another marketplace leaves its history and tags in the source repository; the target sees a new, uncommitted file.
+- **Drag and drop:** drag a prompt onto a plugin, a marketplace (its loose prompts), **Gelen kutusu** or **Klasörsüz promptlar**, in the same or another marketplace; drag a plugin onto another marketplace. A hint under the tree tells you where the item will go or why it cannot be dropped there, and a confirmation lists the consequences before anything moves. The same moves are available from the context menu (**Taşı…**, and **Başka marketplace'e taşı…** for plugins), with the keyboard (Shift+F10) or on touch screens.
+- Moving never commits. Only the `paket` field of a prompt is adjusted to its new plugin; everything else stays byte for byte the same. A plugin's description moves with its folder. Moving to another marketplace puts the source in that marketplace's trash (`.pp/trash`) and leaves its history, version tags and any published output in the source repository; the target sees new, uncommitted files.
 
 </details>
 
@@ -107,43 +109,47 @@ A prompt that cannot be published is never dropped silently. Reasons shown in th
 | Code | Meaning |
 |---|---|
 | `turYok` | Publish fields are filled but `tur` is missing |
-| `turGecersiz` | `tur` is not `komut`, `ajan` or `skill` |
+| `turGecersiz` | `tur` is not `prompt`, `komut`, `ajan` or `skill` |
 | `onYuzKapanmamis` | Frontmatter is not closed (no second `---`) |
 | `dosyaBuyuk` | File is larger than 2 MB |
-| `yayinDisi` | No `tur`: intentionally not published |
-| `durumHaric` | `durum` (status) is not in the marketplace's `export.durumlar` list |
+| `yayinDisi` | `tur: prompt` or no `tur`: intentionally not published |
+| `durumHaric` | `durum` (status) is set to something other than `kararlı` (only stable or empty status is exported) |
 | `paketDisiKlasor` | Folder is not part of a package (inbox or excluded folder) |
 
 </details>
 
 ## Prompt files
 
-Every prompt is a Markdown file. All fields are optional and unknown keys are left untouched. Example:
+Every prompt is a Markdown file. All fields are optional and unknown keys are left untouched. A field is written only when you give it a value: new prompts and imported files get no `baslik`, `durum` or `olusturma` automatically, and a prompt without a title is shown by its file name. Example:
 
 ```markdown
 ---
-baslik: Code review
 etiketler: [review, git]
 durum: kararlı
 versiyon: 1.0.0
 tur: komut
-paket: ornek
-komut_adi: review
-aciklama: Review the staged changes
-izinli_araclar: Bash(git diff:*), Read
+name: review
+description: Review the staged changes
+argument-hint: "[focus]"
+allowed-tools: Bash(git diff:*), Read
 model: sonnet
 ---
-Review the staged changes with this focus: {{focus}}
+Review the staged changes with this focus: $ARGUMENTS
 ```
+
+Prompt Havuzu's own fields keep their Turkish names:
 
 | Field | Purpose |
 |---|---|
 | `baslik`, `etiketler`, `projeler`, `olusturma` | Title, tags, projects it is used in, creation date |
 | `durum` | Status: `taslak` (draft), `kararlı` (stable), `arşiv` (archive) |
 | `versiyon` | Last released version as `X.Y.Z`; set by **+1** (an empty field becomes `1.0.0` on the first bump) |
-| `tur` | `komut` (command), `ajan` (agent) or `skill`; required to publish |
-| `paket` | Plugin the prompt belongs to; new prompts get their folder name |
-| `komut_adi`, `aciklama`, `arguman_ipucu`, `izinli_araclar`, `model` | Converted to Claude Code frontmatter (for example `izinli_araclar` becomes `allowed-tools` or `tools`) |
+| `tur` | `prompt` (plain prompt, not published), `komut` (command), `ajan` (agent) or `skill`; a prompt without `tur` counts as `prompt` |
+| `paket` | Only for loose prompts (directly in `prompts/`): the plugin to publish into |
+
+Claude Code fields use their real names, and the editor's **Claude Code publishing settings** shows every field that is valid for the selected type, labeled with that name. Commands and skills accept fields such as `description`, `argument-hint`, `allowed-tools`, `model`, `effort`, `disable-model-invocation`, `user-invocable`, `context` and `paths` (skills only); agents accept fields such as `name`, `description`, `tools`, `disallowedTools`, `model`, `maxTurns`, `skills`, `memory` and `color`. See the Claude Code docs for [skills and commands](https://code.claude.com/docs/en/skills) and [subagents](https://code.claude.com/docs/en/sub-agents). Nested fields (`hooks`, `metadata`, `experimental`) are written by hand in the **Ham metin** (raw text) tab and published as written; run `claude plugin validate` after editing them. Plugin agents ignore `permissionMode`, `mcpServers`, `hooks` and `initialPrompt`, so these are never published for agents.
+
+Publishing writes only the Claude Code fields that have a value. For commands, `name` only sets the file (and so the command) name. Older prompts that use the Turkish keys `komut_adi`, `aciklama`, `arguman_ipucu` and `izinli_araclar` keep working; the editor renames them to `name`, `description`, `argument-hint` and `allowed-tools` (or `tools` for agents) when you save, and their published output stays byte for byte the same.
 
 ## Configuration
 
@@ -163,7 +169,13 @@ User settings (`libraryRoot`, `activeMarketplace`, `remoteCheck`, `language`) li
 
 The old `--root` flag and `PROMPT_ROOT` variable were removed; choose the library root in **Ayarlar**. That dialog also has "Uzak depoyu kontrol et" (check the remote): on startup (at most once per hour) or manually only. The `language` setting is `auto` (follow the browser language: Turkish for `tr*`, English otherwise), `tr` or `en`; changing it reloads the page.
 
-Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (new marketplaces use `prompts`), `marketplace` (`name`, `owner`, `plugin`, `description`, `version`), `packages`, and `export` (`durumlar`, `haricKlasorler`).
+Marketplaces need no extra settings file. The tool reads what Claude Code already uses:
+
+- Marketplace name, owner, description and catalog version come from `.claude-plugin/marketplace.json` (edit them in the **Marketplace** panel). Loose prompts are published into a plugin named after the marketplace.
+- A plugin's description is kept in `prompts/<plugin>/.claude-plugin/plugin.json`, written only when you enter a description.
+- Prompts always live in `prompts/`. Only prompts with an empty or `kararlı` status are exported.
+
+Older versions kept these settings in `pp.config.json`. That file is no longer read or written; if a marketplace still has one, the UI shows a warning with a button to move it to the trash.
 
 <details>
 <summary>Marketplace folder layout</summary>
@@ -171,13 +183,13 @@ Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (n
 ```text
 <library root>/
   <marketplace>/            # its own git repository
-    prompts/                # source of truth (libraryDir)
+    prompts/                # source of truth
       <plugin>/*.md
+      <plugin>/.claude-plugin/plugin.json   # optional plugin description
       gelen-kutusu/         # inbox, never published
     plugins/                # generated by publishing
-    .claude-plugin/         # generated marketplace.json
+    .claude-plugin/         # marketplace.json (name, owner, catalog version)
     .pp/trash/              # deleted files, not tracked by git
-    pp.config.json
 ```
 
 </details>
@@ -186,7 +198,7 @@ Each marketplace has a `pp.config.json`, written by the UI, with `libraryDir` (n
 
 - The server binds to `127.0.0.1` only and rejects requests whose `Host` is not `127.0.0.1`, `localhost` or `[::1]`.
 - Every non-GET request to `/api/*` needs the `X-PP: 1` header, and an `Origin` header, if present, must match the host.
-- The served page carries a strict Content-Security-Policy (`default-src 'self'`, no framing); only three static files are served.
+- The served page carries a strict Content-Security-Policy (`default-src 'self'`, no framing); only an explicit allowlist of static files is served (the page, its scripts, the two language files and the bundled fonts). Fonts are local, so the page loads nothing from other hosts.
 - File access is confined to the active marketplace and refuses `.git`. Git runs via `execFile` without a shell.
 - There is no telemetry and no HTTP client in the code. The only network traffic is git talking to remotes **you** configure: clone, check, push and update. The startup remote check only runs when a remote exists and can be switched to manual.
 
@@ -219,7 +231,9 @@ This runs `node --test` with no dependencies. Tests use temporary folders and `P
 tools/ui/
   server.js       HTTP server and routes
   lib/            server-side services
-  public/         index.html, fm.js, rules.js
+  public/         index.html, fm.js, rules.js, i18n.js
+    lang/         tr.js, en.js (dictionaries)
+    fonts/        bundled OFL fonts (see OFL.txt)
   test/           node:test suites
 start.bat, start.sh     launchers
 ```

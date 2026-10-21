@@ -56,7 +56,6 @@ class MarketplaceFactory {
       ['.gitignore', this.t.GITIGNORE],
       ['.gitattributes', this.t.GITATTRIBUTES],
       ['.claude-plugin/marketplace.json', this.t.marketplaceJson(meta)],
-      ['pp.config.json', this.t.ppConfig(meta)],
       ['prompts/.gitkeep', ''],
       ['README.md', this.t.readme(meta.name)]
     ];
@@ -115,7 +114,6 @@ class MarketplaceFactory {
       throw err;
     }
     const warnings = [];
-    if (!(await exists(path.join(dir, 'pp.config.json')))) warnings.push({ code: 'ppConfigYok', message: tx('mp.warn.ppConfigYok') });
     if (!(await exists(path.join(dir, '.claude-plugin', 'marketplace.json')))) warnings.push({ code: 'manifestYok', message: tx('mp.warn.manifestYok') });
     if (!(await this.git.hasCommits(dir))) warnings.push({ code: 'bosDepo', message: tx('mp.warn.bosDepo') });
     return { name: slug, dir, url: n.url, warnings };

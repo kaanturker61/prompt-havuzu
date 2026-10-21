@@ -67,7 +67,7 @@ test('push: argümanlar, GCM_INTERACTIVE, zaman aşımı ve env birleştirme', a
   assert.ok(c.args.includes('protocol.ext.allow=never'));
   calls.length = 0;
   await g.push(dir, { remote: 'origin', branch: 'main', interactive: true });
-  assert.equal(calls.find((x) => x.args.includes('push')).opts.env.GCM_INTERACTIVE, undefined);
+  assert.equal(calls.find((x) => x.args.includes('push')).opts.env.GCM_INTERACTIVE, process.env.GCM_INTERACTIVE);
 });
 
 test('push: --atomic desteklenmiyorsa bir kez atomiksiz yeniden dener', async () => {

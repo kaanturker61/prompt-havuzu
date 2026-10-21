@@ -25,7 +25,7 @@ test('discover: items / ignored / valid / reason', { skip: !gitAvailable && 'git
     assert.deepEqual(r.items.map((i) => i.name), ['a', 'c']);
     const ia = r.items[0]; const ic = r.items[1];
     assert.equal(ia.valid, true); assert.equal(ia.reason, null); assert.equal(ia.active, true);
-    assert.equal(ia.hasManifest, true); assert.equal(ia.hasPpConfig, false);
+    assert.equal(ia.hasManifest, true); assert.equal('hasPpConfig' in ia, false);
     assert.equal(ic.valid, false); assert.ok(ic.reason); assert.equal(ic.active, false);
     assert.deepEqual(r.ignored.map((i) => [i.name, i.reason]), [['arac', 'Araç reposu'], ['b', 'Git deposu değil']]);
     assert.equal(await reg.hasAnyGitChild(lib), true);
