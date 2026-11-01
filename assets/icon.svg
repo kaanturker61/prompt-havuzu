@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Prompt havuzu">
+  <!-- Pop Stüdyo: paper karo, mürekkep hattı ve sert gölge; dört Memphis şekli -->
+  <rect x="22" y="22" width="220" height="220" rx="44" fill="#121116"/>
+  <rect x="12" y="12" width="220" height="220" rx="44" fill="#F1F0EA" stroke="#121116" stroke-width="8"/>
+  <g transform="translate(29.2 29.2) scale(5.8)" stroke="#121116" stroke-width="1.1" stroke-linejoin="round">
+    <circle cx="8.5" cy="8.5" r="7" fill="#C6F135"/>
+    <path d="M17 16V2a14 14 0 0 1 14 14z" fill="#FF5B37"/>
+    <rect x="2" y="18" width="13" height="13" rx="3" fill="#3D63FF"/>
+    <path d="M17 30a7 7 0 0 1 14 0z" fill="#FFC233"/>
+  </g>
+</svg>
